@@ -1,0 +1,1020 @@
+     1→'use client'
+     2→
+     3→import { useState, useMemo } from 'react'
+     4→import { useFetch } from '@/hooks/use-fetch'
+     5→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Label } from '@/components/ui/label'
+     9→import { Badge } from '@/components/ui/badge'
+    10→import { Skeleton } from '@/components/ui/skeleton'
+    11→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    12→import {
+    13→  FileDown, FileSpreadsheet, FileText, Plus, Trash2, Receipt, BookOpen,
+    14→  ClipboardList, BarChart3, BookCheck, BookMarked, Printer,
+    15→} from 'lucide-react'
+    16→import { toast } from 'sonner'
+    17→import { formatEUR, formatDate, EXPENSE_CATEGORIES } from '@/lib/constants'
+    18→import { cn } from '@/lib/utils'
+    19→import type { Sale } from './sales-module'
+    20→
+    21→interface Expense {
+    22→  id: string
+    23→  date: string
+    24→  category: string
+    25→  label: string
+    26→  amount: number
+    27→}
+    28→
+    29→type Tab = 'synthese' | 'recettes' | 'achats'
+    30→
+    31→export function TaxesModule() {
+    32→  const [activeTab, setActiveTab] = useState<Tab>('synthese')
+    33→  const [year, setYear] = useState(new Date().getFullYear())
+    34→
+    35→  const tabs = [
+    36→    { id: 'synthese' as Tab, label: 'Synthèse', icon: BarChart3, description: 'Vue d\'ensemble + dépenses' },
+    37→    { id: 'recettes' as Tab, label: 'Livre des recettes', icon: BookOpen, description: 'Recettes chronologiques (légal)' },
+    38→    { id: 'achats' as Tab, label: 'Registre des achats', icon: ClipboardList, description: 'Achats par article (légal)' },
+    39→  ]
+    40→
+    41→  return (
+    42→    <div className="space-y-5">
+    43→      {/* Tabs */}
+    44→      <div className="flex flex-wrap gap-2">
+    45→        {tabs.map(t => {
+    46→          const Icon = t.icon
+    47→          const active = activeTab === t.id
+    48→          return (
+    49→            <button
+    50→              key={t.id}
+    51→              onClick={() => setActiveTab(t.id)}
+    52→              className={cn(
+    53→                'px-4 py-2 rounded-lg text-sm font-medium transition-all border flex items-center gap-2',
+    54→                active
+    55→                  ? 'bg-foreground text-background border-foreground'
+    56→                  : 'bg-card hover:bg-muted border-border'
+    57→              )}
+    58→            >
+    59→              <Icon className="h-4 w-4" />
+    60→              <span>{t.label}</span>
+    61→            </button>
+    62→          )
+    63→        })}
+    64→      </div>
+    65→
+    66→      {/* Year selector (commun) */}
+    67→      <Card>
+    68→        <CardContent className="p-4 flex items-center justify-between">
+    69→          <div className="flex items-center gap-2">
+    70→            <Receipt className="h-4 w-4 text-amber-600" />
+    71→            <span className="text-sm font-medium">Année fiscale :</span>
+    72→            <Select value={String(year)} onValueChange={v => setYear(parseInt(v))}>
+    73→              <SelectTrigger className="w-[110px] h-8">
+    74→                <SelectValue />
+    75→              </SelectTrigger>
+    76→              <SelectContent>
+    77→                {[2024, 2025, 2026, 2027].map(y => (
+    78→                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+    79→                ))}
+    80→              </SelectContent>
+    81→            </Select>
+    82→          </div>
+    83→          <p className="text-xs text-muted-foreground hidden sm:block">
+    84→            {tabs.find(t => t.id === activeTab)?.description}
+    85→          </p>
+    86→        </CardContent>
+    87→      </Card>
+    88→
+    89→      {activeTab === 'synthese' && <SyntheseTab year={year} />}
+    90→      {activeTab === 'recettes' && <RecettesTab year={year} />}
+    91→      {activeTab === 'achats' && <AchatsTab year={year} />}
+    92→    </div>
+    93→  )
+    94→}
+    95→
+    96→// ═══════════════════════════════════════════════════════════════════════════
+    97→// ONGLET 1 — SYNTHÈSE (le module Fiscalité existant)
+    98→// ═══════════════════════════════════════════════════════════════════════════
+    99→
+   100→function SyntheseTab({ year }: { year: number }) {
+   101→  const { data: sales, loading: salesLoading } = useFetch<Sale[]>('/api/sales')
+   102→  const { data: expenses, loading: expLoading, refresh } = useFetch<Expense[]>('/api/expenses')
+   103→  const [showForm, setShowForm] = useState(false)
+   104→  const [form, setForm] = useState({
+   105→    date: new Date().toISOString().split('T')[0],
+   106→    category: 'frais_port',
+   107→    label: '',
+   108→    amount: '',
+   109→  })
+   110→  const [saving, setSaving] = useState(false)
+   111→
+   112→  const yearSales = useMemo(() =>
+   113→    (sales || []).filter(s => new Date(s.saleDate).getFullYear() === year),
+   114→    [sales, year]
+   115→  )
+   116→
+   117→  const yearExpenses = useMemo(() =>
+   118→    (expenses || []).filter(e => new Date(e.date).getFullYear() === year),
+   119→    [expenses, year]
+   120→  )
+   121→
+   122→  const totalCA = yearSales.reduce((s, x) => s + x.salePrice, 0)
+   123→  const totalPurchases = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost, 0)
+   124→  const totalPlatformFees = yearSales.reduce((s, x) => s + (x.platformFees || 0) + (x.platformFixedFees || 0), 0)
+   125→  const totalShipping = yearSales.reduce((s, x) => s + x.shippingCost, 0)
+   126→  const totalOtherExpenses = yearExpenses.reduce((s, e) => s + e.amount, 0)
+   127→  const totalProfit = yearSales.reduce((s, x) => s + x.profit, 0) - totalOtherExpenses
+   128→
+   129→  const exportCSV = () => {
+   130→    const rows: string[][] = []
+   131→    rows.push(['Type', 'Date', 'Plateforme', 'Article', 'Description', 'CA', 'Coût', 'Frais plateforme', 'Frais port', 'Profit', 'Marge %'])
+   132→    yearSales.forEach(s => {
+   133→      rows.push([
+   134→        'Vente', formatDate(s.saleDate), s.platform, s.stockItem.sku,
+   135→        `${s.stockItem.brand} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim(),
+   136→        s.salePrice.toFixed(2), s.stockItem.purchaseCost.toFixed(2),
+   137→        ((s.platformFees || 0) + (s.platformFixedFees || 0)).toFixed(2),
+   138→        s.shippingCost.toFixed(2), s.profit.toFixed(2), s.margin.toString(),
+   139→      ])
+   140→    })
+   141→    yearExpenses.forEach(e => {
+   142→      rows.push(['Dépense', formatDate(e.date), '', '', e.label, '', '', '', '', (-e.amount).toFixed(2), ''])
+   143→    })
+   144→    rows.push([])
+   145→    rows.push(['TOTAUX', '', '', '', '', totalCA.toFixed(2), totalPurchases.toFixed(2), totalPlatformFees.toFixed(2), totalShipping.toFixed(2), totalProfit.toFixed(2), ''])
+   146→
+   147→    const csv = rows.map(r => r.map(c => `"${(c || '').replace(/"/g, '""')}"`).join(',')).join('\n')
+   148→    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+   149→    const url = URL.createObjectURL(blob)
+   150→    const a = document.createElement('a')
+   151→    a.href = url
+   152→    a.download = `reseller-os-fiscalite-${year}.csv`
+   153→    a.click()
+   154→    URL.revokeObjectURL(url)
+   155→    toast.success('Export CSV téléchargé')
+   156→  }
+   157→
+   158→  const exportExcel = () => {
+   159→    const rows: string[][] = []
+   160→    rows.push(['Type', 'Date', 'Plateforme', 'SKU', 'Description', 'CA (€)', 'Coût (€)', 'Frais plateforme (€)', 'Frais port (€)', 'Profit (€)', 'Marge (%)'])
+   161→    yearSales.forEach(s => {
+   162→      rows.push([
+   163→        'Vente', formatDate(s.saleDate), s.platform, s.stockItem.sku,
+   164→        `${s.stockItem.brand} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim(),
+   165→        s.salePrice.toFixed(2), s.stockItem.purchaseCost.toFixed(2),
+   166→        ((s.platformFees || 0) + (s.platformFixedFees || 0)).toFixed(2),
+   167→        s.shippingCost.toFixed(2), s.profit.toFixed(2), s.margin.toString(),
+   168→      ])
+   169→    })
+   170→    yearExpenses.forEach(e => {
+   171→      rows.push(['Dépense', formatDate(e.date), '', '', e.label, '', '', '', '', (-e.amount).toFixed(2), ''])
+   172→    })
+   173→    const tsv = rows.map(r => r.join('\t')).join('\n')
+   174→    const blob = new Blob(['\ufeff' + tsv], { type: 'application/vnd.ms-excel;charset=utf-8' })
+   175→    const url = URL.createObjectURL(blob)
+   176→    const a = document.createElement('a')
+   177→    a.href = url
+   178→    a.download = `reseller-os-fiscalite-${year}.xls`
+   179→    a.click()
+   180→    URL.revokeObjectURL(url)
+   181→    toast.success('Export Excel téléchargé')
+   182→  }
+   183→
+   184→  const exportPDF = () => {
+   185→    const win = window.open('', '_blank')
+   186→    if (!win) {
+   187→      toast.error('Bloqueur de pop-up : autorisez les pop-ups pour exporter en PDF')
+   188→      return
+   189→    }
+   190→    win.document.write(`
+   191→      <!DOCTYPE html>
+   192→      <html lang="fr"><head><meta charset="utf-8">
+   193→      <title>Reseller OS — Fiscalité ${year}</title>
+   194→      <style>
+   195→        * { box-sizing: border-box; }
+   196→        body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; margin: 40px; color: #1a1a1a; }
+   197→        h1 { font-size: 24px; margin: 0 0 4px; }
+   198→        .subtitle { color: #666; margin-bottom: 24px; font-size: 13px; }
+   199→        .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
+   200→        .summary div { background: #f7f7f7; padding: 14px; border-radius: 8px; }
+   201→        .summary .label { font-size: 11px; color: #666; text-transform: uppercase; }
+   202→        .summary .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+   203→        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 28px; }
+   204→        th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; }
+   205→        th { background: #f7f7f7; font-weight: 600; text-transform: uppercase; font-size: 10px; color: #666; }
+   206→        .total { font-weight: 700; background: #f0fdf4 !important; }
+   207→        .profit { color: #10b981; font-weight: 600; }
+   208→        h2 { font-size: 16px; margin-top: 24px; }
+   209→      </style></head>
+   210→      <body>
+   211→        <h1>Reseller OS — Rapport fiscal ${year}</h1>
+   212→        <p class="subtitle">Généré le ${new Date().toLocaleDateString('fr-FR')}</p>
+   213→        <div class="summary">
+   214→          <div><div class="label">CA</div><div class="value">${formatEUR(totalCA)}</div></div>
+   215→          <div><div class="label">Achats</div><div class="value">${formatEUR(totalPurchases)}</div></div>
+   216→          <div><div class="label">Frais plateforme</div><div class="value">${formatEUR(totalPlatformFees)}</div></div>
+   217→          <div><div class="label">Frais port</div><div class="value">${formatEUR(totalShipping)}</div></div>
+   218→          <div><div class="label">Autres dépenses</div><div class="value">${formatEUR(totalOtherExpenses)}</div></div>
+   219→          <div><div class="label">Bénéfice net</div><div class="value profit">${formatEUR(totalProfit)}</div></div>
+   220→          <div><div class="label">Marge</div><div class="value">${totalCA > 0 ? ((totalProfit / totalCA) * 100).toFixed(1) : 0}%</div></div>
+   221→          <div><div class="label">Nb ventes</div><div class="value">${yearSales.length}</div></div>
+   222→        </div>
+   223→        <h2>Ventes</h2>
+   224→        <table><thead><tr><th>Date</th><th>Plateforme</th><th>Article</th><th>CA</th><th>Coût</th><th>Frais</th><th>Profit</th></tr></thead>
+   225→        <tbody>
+   226→          ${yearSales.map(s => `
+   227→            <tr>
+   228→              <td>${formatDate(s.saleDate)}</td>
+   229→              <td>${s.platform}</td>
+   230→              <td>${s.stockItem.brand} (${s.stockItem.sku})</td>
+   231→              <td>${formatEUR(s.salePrice)}</td>
+   232→              <td>${formatEUR(s.stockItem.purchaseCost)}</td>
+   233→              <td>${formatEUR((s.platformFees || 0) + (s.shippingCost || 0) + (s.platformFixedFees || 0))}</td>
+   234→              <td class="profit">${formatEUR(s.profit)}</td>
+   235→            </tr>
+   236→          `).join('')}
+   237→          <tr class="total">
+   238→            <td colspan="3">TOTAUX</td>
+   239→            <td>${formatEUR(totalCA)}</td>
+   240→            <td>${formatEUR(totalPurchases)}</td>
+   241→            <td>${formatEUR(totalPlatformFees + totalShipping)}</td>
+   242→            <td class="profit">${formatEUR(yearSales.reduce((s, x) => s + x.profit, 0))}</td>
+   243→          </tr>
+   244→        </tbody></table>
+   245→        ${yearExpenses.length > 0 ? `
+   246→          <h2>Autres dépenses</h2>
+   247→          <table><thead><tr><th>Date</th><th>Catégorie</th><th>Libellé</th><th>Montant</th></tr></thead>
+   248→          <tbody>
+   249→            ${yearExpenses.map(e => `
+   250→              <tr><td>${formatDate(e.date)}</td><td>${e.category}</td><td>${e.label}</td><td>${formatEUR(e.amount)}</td></tr>
+   251→            `).join('')}
+   252→            <tr class="total"><td colspan="3">TOTAL DÉPENSES</td><td>${formatEUR(totalOtherExpenses)}</td></tr>
+   253→          </tbody></table>
+   254→        ` : ''}
+   255→        <script>window.onload = () => { window.print(); }</script>
+   256→      </body></html>
+   257→    `)
+   258→    win.document.close()
+   259→    toast.success('Export PDF ouvert — utilisez Ctrl/Cmd+P pour enregistrer')
+   260→  }
+   261→
+   262→  const addExpense = async () => {
+   263→    if (!form.label || !form.amount) {
+   264→      toast.error('Libellé et montant requis')
+   265→      return
+   266→    }
+   267→    setSaving(true)
+   268→    try {
+   269→      const res = await fetch('/api/expenses', {
+   270→        method: 'POST',
+   271→        headers: { 'Content-Type': 'application/json' },
+   272→        body: JSON.stringify(form),
+   273→      })
+   274→      if (!res.ok) throw new Error('Erreur')
+   275→      toast.success('Dépense ajoutée')
+   276→      setForm({ date: new Date().toISOString().split('T')[0], category: 'frais_port', label: '', amount: '' })
+   277→      setShowForm(false)
+   278→      refresh()
+   279→    } catch {
+   280→      toast.error('Erreur')
+   281→    } finally {
+   282→      setSaving(false)
+   283→    }
+   284→  }
+   285→
+   286→  const deleteExpense = async (id: string) => {
+   287→    if (!confirm('Supprimer cette dépense ?')) return
+   288→    await fetch(`/api/expenses/${id}`, { method: 'DELETE' })
+   289→    toast.success('Dépense supprimée')
+   290→    refresh()
+   291→  }
+   292→
+   293→  const loading = salesLoading || expLoading
+   294→
+   295→  return (
+   296→    <div className="space-y-5">
+   297→      {/* Hero avec exports */}
+   298→      <Card className="bg-gradient-to-br from-amber-50 via-white to-amber-50/30 dark:from-amber-950/30 dark:via-card dark:to-amber-950/20 border-amber-200 dark:border-amber-900">
+   299→        <CardContent className="p-6">
+   300→          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+   301→            <div>
+   302→              <div className="flex items-center gap-2 mb-2">
+   303→                <Receipt className="h-5 w-5 text-amber-600" />
+   304→                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 hover:bg-amber-100">
+   305→                  Synthèse fiscale {year}
+   306→                </Badge>
+   307→              </div>
+   308→              <p className="text-3xl font-bold tracking-tight">{formatEUR(totalProfit)} <span className="text-base font-normal text-muted-foreground">bénéfice net</span></p>
+   309→              <p className="text-sm text-muted-foreground mt-1">
+   310→                CA {formatEUR(totalCA)} · Marge nette {totalCA > 0 ? ((totalProfit / totalCA) * 100).toFixed(1) : 0}%
+   311→              </p>
+   312→            </div>
+   313→            <div className="flex flex-wrap gap-2">
+   314→              <Button variant="outline" onClick={exportCSV}><FileDown className="h-4 w-4 mr-2" /> CSV</Button>
+   315→              <Button variant="outline" onClick={exportExcel}><FileSpreadsheet className="h-4 w-4 mr-2" /> Excel</Button>
+   316→              <Button onClick={exportPDF}><FileText className="h-4 w-4 mr-2" /> PDF</Button>
+   317→            </div>
+   318→          </div>
+   319→        </CardContent>
+   320→      </Card>
+   321→
+   322→      {/* Summary cards */}
+   323→      {loading ? (
+   324→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   325→          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+   326→        </div>
+   327→      ) : (
+   328→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   329→          <SummaryCard label="Chiffre d'affaires" value={totalCA} />
+   330→          <SummaryCard label="Achats" value={totalPurchases} />
+   331→          <SummaryCard label="Frais plateforme" value={totalPlatformFees} />
+   332→          <SummaryCard label="Frais de port" value={totalShipping} />
+   333→          <SummaryCard label="Autres dépenses" value={totalOtherExpenses} />
+   334→          <SummaryCard label="Bénéfice net" value={totalProfit} highlight />
+   335→          <SummaryCard label="Marge nette" value={totalCA > 0 ? parseFloat(((totalProfit / totalCA) * 100).toFixed(1)) : 0} suffix="%" />
+   336→          <SummaryCard label="Nb ventes" value={yearSales.length} />
+   337→        </div>
+   338→      )}
+   339→
+   340→      {/* Dépenses */}
+   341→      <Card>
+   342→        <CardHeader>
+   343→          <div className="flex items-center justify-between">
+   344→            <div>
+   345→              <CardTitle className="text-base">Dépenses ({yearExpenses.length})</CardTitle>
+   346→              <CardDescription>Abonnements, fournitures, carburant, etc.</CardDescription>
+   347→            </div>
+   348→            <Button size="sm" onClick={() => setShowForm(true)}>
+   349→              <Plus className="h-4 w-4 mr-2" /> Ajouter
+   350→            </Button>
+   351→          </div>
+   352→        </CardHeader>
+   353→        <CardContent>
+   354→          {yearExpenses.length === 0 ? (
+   355→            <p className="text-sm text-muted-foreground py-8 text-center">Aucune dépense enregistrée pour {year}</p>
+   356→          ) : (
+   357→            <div className="overflow-x-auto">
+   358→              <table className="w-full text-sm">
+   359→                <thead>
+   360→                  <tr className="text-left text-xs text-muted-foreground border-b">
+   361→                    <th className="px-2 py-2 font-medium">Date</th>
+   362→                    <th className="px-2 py-2 font-medium">Catégorie</th>
+   363→                    <th className="px-2 py-2 font-medium">Libellé</th>
+   364→                    <th className="px-2 py-2 font-medium text-right">Montant</th>
+   365→                    <th className="px-2 py-2"></th>
+   366→                  </tr>
+   367→                </thead>
+   368→                <tbody>
+   369→                  {yearExpenses.map(e => (
+   370→                    <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30">
+   371→                      <td className="px-2 py-2.5 text-xs text-muted-foreground">{formatDate(e.date)}</td>
+   372→                      <td className="px-2 py-2.5">
+   373→                        <Badge variant="secondary" className="text-[10px]">
+   374→                          {EXPENSE_CATEGORIES.find(c => c.id === e.category)?.label || e.category}
+   375→                        </Badge>
+   376→                      </td>
+   377→                      <td className="px-2 py-2.5">{e.label}</td>
+   378→                      <td className="px-2 py-2.5 text-right font-medium">{formatEUR(e.amount)}</td>
+   379→                      <td className="px-2 py-2.5 text-right">
+   380→                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-rose-600" onClick={() => deleteExpense(e.id)}>
+   381→                          <Trash2 className="h-3 w-3" />
+   382→                        </Button>
+   383→                      </td>
+   384→                    </tr>
+   385→                  ))}
+   386→                </tbody>
+   387→              </table>
+   388→            </div>
+   389→          )}
+   390→        </CardContent>
+   391→      </Card>
+   392→
+   393→      {/* Form dialog */}
+   394→      {showForm && (
+   395→        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowForm(false)}>
+   396→          <Card className="max-w-md w-full" onClick={e => e.stopPropagation()}>
+   397→            <CardHeader><CardTitle className="text-base">Nouvelle dépense</CardTitle></CardHeader>
+   398→            <CardContent className="space-y-3">
+   399→              <div className="grid grid-cols-2 gap-3">
+   400→                <div className="space-y-1.5">
+   401→                  <Label className="text-xs">Date</Label>
+   402→                  <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+   403→                </div>
+   404→                <div className="space-y-1.5">
+   405→                  <Label className="text-xs">Catégorie</Label>
+   406→                  <Select value={form.category} onValueChange={v => setForm({ ...form, category: v })}>
+   407→                    <SelectTrigger><SelectValue /></SelectTrigger>
+   408→                    <SelectContent>
+   409→                      {EXPENSE_CATEGORIES.map(c => <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>)}
+   410→                    </SelectContent>
+   411→                  </Select>
+   412→                </div>
+   413→              </div>
+   414→              <div className="space-y-1.5">
+   415→                <Label className="text-xs">Libellé</Label>
+   416→                <Input value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="Abonnement Vinted Pro" />
+   417→              </div>
+   418→              <div className="space-y-1.5">
+   419→                <Label className="text-xs">Montant (€)</Label>
+   420→                <Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="9.99" />
+   421→              </div>
+   422→              <div className="flex gap-2 pt-2">
+   423→                <Button variant="outline" className="flex-1" onClick={() => setShowForm(false)}>Annuler</Button>
+   424→                <Button className="flex-1" onClick={addExpense} disabled={saving}>
+   425→                  {saving ? 'Ajout...' : 'Ajouter'}
+   426→                </Button>
+   427→              </div>
+   428→            </CardContent>
+   429→          </Card>
+   430→        </div>
+   431→      )}
+   432→    </div>
+   433→  )
+   434→}
+   435→
+   436→function SummaryCard({ label, value, highlight, suffix }: { label: string; value: number; highlight?: boolean; suffix?: string }) {
+   437→  return (
+   438→    <Card className={highlight ? 'border-emerald-200 dark:border-emerald-900' : ''}>
+   439→      <CardContent className="p-4">
+   440→        <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
+   441→        <p className={`text-xl font-bold mt-1 ${highlight ? 'text-emerald-600' : ''}`}>
+   442→          {formatEUR(value)}{suffix}
+   443→        </p>
+   444→      </CardContent>
+   445→    </Card>
+   446→  )
+   447→}
+   448→
+   449→// ═══════════════════════════════════════════════════════════════════════════
+   450→// ONGLET 2 — LIVRE DES RECETTES (format légal)
+   451→// ═══════════════════════════════════════════════════════════════════════════
+   452→
+   453→interface RecetteEntry {
+   454→  numero: number
+   455→  date: string
+   456→  dateEncaissement: string
+   457→  designation: string
+   458→  client: string
+   459→  origine: string
+   460→  modePaiement: string
+   461→  montantHT: number
+   462→  montantTTC: number
+   463→  tva: number
+   464→  sku: string
+   465→}
+   466→
+   467→interface RecettesData {
+   468→  type: string
+   469→  year: number
+   470→  regime: string
+   471→  tvaRegime: string
+   472→  entries: RecetteEntry[]
+   473→  totalTTC: number
+   474→  totalHT: number
+   475→  monthlyTotals: { month: string; monthNum: number; total: number; count: number }[]
+   476→  count: number
+   477→}
+   478→
+   479→function RecettesTab({ year }: { year: number }) {
+   480→  const { data, loading } = useFetch<RecettesData>(`/api/accounting?type=recettes&year=${year}`)
+   481→
+   482→  if (loading || !data) {
+   483→    return (
+   484→      <div className="space-y-4">
+   485→        <Skeleton className="h-32" />
+   486→        <Skeleton className="h-96" />
+   487→      </div>
+   488→    )
+   489→  }
+   490→
+   491→  const exportPDF = () => {
+   492→    const win = window.open('', '_blank')
+   493→    if (!win) {
+   494→      toast.error('Bloqueur de pop-up : autorisez les pop-ups')
+   495→      return
+   496→    }
+   497→    win.document.write(`
+   498→      <!DOCTYPE html>
+   499→      <html lang="fr"><head><meta charset="utf-8">
+   500→      <title>Livre des recettes ${year}</title>
+   501→      <style>
+   502→        * { box-sizing: border-box; }
+   503→        body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; margin: 30px; color: #1a1a1a; font-size: 11px; }
+   504→        h1 { font-size: 18px; margin: 0 0 4px; text-align: center; }
+   505→        h2 { font-size: 13px; margin: 20px 0 8px; }
+   506→        .header { text-align: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #1a1a1a; }
+   507→        .header p { margin: 2px 0; font-size: 11px; color: #555; }
+   508→        .regime { background: #fef3c7; padding: 6px 10px; border-radius: 4px; display: inline-block; font-size: 10px; margin-top: 6px; }
+   509→        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+   510→        th, td { padding: 6px 5px; text-align: left; border: 1px solid #ccc; font-size: 10px; }
+   511→        th { background: #f3f4f6; font-weight: 600; text-transform: uppercase; font-size: 9px; }
+   512→        .total-row td { background: #ecfdf5; font-weight: 700; }
+   513→        .month-row td { background: #fafafa; font-weight: 600; border-top: 2px solid #999; }
+   514→        .right { text-align: right; }
+   515→        .center { text-align: center; }
+   516→        .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10px; color: #666; text-align: center; }
+   517→        .signature { margin-top: 40px; display: flex; justify-content: space-between; }
+   518→        .signature div { width: 45%; border-top: 1px solid #333; padding-top: 6px; font-size: 10px; }
+   519→        @page { margin: 1cm; size: A4 landscape; }
+   520→      </style></head>
+   521→      <body>
+   522→        <div class="header">
+   523→          <h1>LIVRE DES RECETTES</h1>
+   524→          <p>Exercice ${year}</p>
+   525→          <p>Régime : ${data.regime}</p>
+   526→          <div class="regime">${data.tvaRegime}</div>
+   527→        </div>
+   528→
+   529→        <table>
+   530→          <thead>
+   531→            <tr>
+   532→              <th style="width: 30px;">N°</th>
+   533→              <th style="width: 70px;">Date</th>
+   534→              <th style="width: 70px;">Encaiss.</th>
+   535→              <th>Désignation</th>
+   536→              <th>Client</th>
+   537→              <th>Origine</th>
+   538→              <th>Mode paiement</th>
+   539→              <th class="right" style="width: 60px;">HT (€)</th>
+   540→              <th class="right" style="width: 60px;">TVA (€)</th>
+   541→              <th class="right" style="width: 70px;">TTC (€)</th>
+   542→            </tr>
+   543→          </thead>
+   544→          <tbody>
+   545→            ${data.entries.map(e => `
+   546→              <tr>
+   547→                <td class="center">${e.numero}</td>
+   548→                <td>${formatDate(e.date)}</td>
+   549→                <td>${formatDate(e.dateEncaissement)}</td>
+   550→                <td>${e.designation}</td>
+   551→                <td>${e.client}</td>
+   552→                <td>${e.origine}</td>
+   553→                <td>${e.modePaiement}</td>
+   554→                <td class="right">${e.montantHT.toFixed(2)}</td>
+   555→                <td class="right">0,00</td>
+   556→                <td class="right"><strong>${e.montantTTC.toFixed(2)}</strong></td>
+   557→              </tr>
+   558→            `).join('')}
+   559→            <tr class="total-row">
+   560→              <td colspan="7" class="right">TOTAL ANNUEL</td>
+   561→              <td class="right">${data.totalHT.toFixed(2)}</td>
+   562→              <td class="right">0,00</td>
+   563→              <td class="right">${data.totalTTC.toFixed(2)}</td>
+   564→            </tr>
+   565→          </tbody>
+   566→        </table>
+   567→
+   568→        <h2>Récapitulatif par mois</h2>
+   569→        <table>
+   570→          <thead>
+   571→            <tr><th>Mois</th><th class="right">Nombre de recettes</th><th class="right">Montant TTC (€)</th></tr>
+   572→          </thead>
+   573→          <tbody>
+   574→            ${data.monthlyTotals.map(m => `
+   575→              <tr class="month-row">
+   576→                <td>${m.month}</td>
+   577→                <td class="right">${m.count}</td>
+   578→                <td class="right">${m.total.toFixed(2)}</td>
+   579→              </tr>
+   580→            `).join('')}
+   581→            <tr class="total-row">
+   582→              <td>TOTAL</td>
+   583→              <td class="right">${data.count}</td>
+   584→              <td class="right">${data.totalTTC.toFixed(2)}</td>
+   585→            </tr>
+   586→          </tbody>
+   587→        </table>
+   588→
+   589→        <div class="footer">
+   590→          Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')} · Reseller OS
+   591→        </div>
+   592→
+   593→        <div class="signature">
+   594→          <div>Signature de l'exploitant</div>
+   595→          <div>Date</div>
+   596→        </div>
+   597→
+   598→        <script>window.onload = () => { window.print(); }</script>
+   599→      </body></html>
+   600→    `)
+   601→    win.document.close()
+   602→    toast.success('Livre des recettes PDF ouvert')
+   603→  }
+   604→
+   605→  const exportCSV = () => {
+   606→    const rows: string[][] = [
+   607→      ['N°', 'Date', 'Date encaissement', 'Désignation', 'Client', 'Origine', 'Mode paiement', 'Montant HT', 'TVA', 'Montant TTC'],
+   608→    ]
+   609→    data.entries.forEach(e => {
+   610→      rows.push([
+   611→        String(e.numero), formatDate(e.date), formatDate(e.dateEncaissement),
+   612→        e.designation, e.client, e.origine, e.modePaiement,
+   613→        e.montantHT.toFixed(2), '0.00', e.montantTTC.toFixed(2),
+   614→      ])
+   615→    })
+   616→    rows.push([])
+   617→    rows.push(['', '', '', '', '', '', 'TOTAL', data.totalHT.toFixed(2), '0.00', data.totalTTC.toFixed(2)])
+   618→    const csv = rows.map(r => r.map(c => `"${(c || '').replace(/"/g, '""')}"`).join(',')).join('\n')
+   619→    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+   620→    const url = URL.createObjectURL(blob)
+   621→    const a = document.createElement('a')
+   622→    a.href = url
+   623→    a.download = `livre-recettes-${year}.csv`
+   624→    a.click()
+   625→    URL.revokeObjectURL(url)
+   626→    toast.success('CSV téléchargé')
+   627→  }
+   628→
+   629→  return (
+   630→    <div className="space-y-4">
+   631→      {/* Hero */}
+   632→      <Card className="bg-gradient-to-br from-emerald-50 via-white to-emerald-50/30 dark:from-emerald-950/30 dark:via-card dark:to-emerald-950/20 border-emerald-200 dark:border-emerald-900">
+   633→        <CardContent className="p-6">
+   634→          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+   635→            <div>
+   636→              <div className="flex items-center gap-2 mb-2">
+   637→                <BookOpen className="h-5 w-5 text-emerald-600" />
+   638→                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 hover:bg-emerald-100">
+   639→                  Document légal · Article 286 CGI
+   640→                </Badge>
+   641→              </div>
+   642→              <p className="text-3xl font-bold tracking-tight">{formatEUR(data.totalTTC)}</p>
+   643→              <p className="text-sm text-muted-foreground mt-1">
+   644→                {data.count} recettes · {data.regime} · {data.tvaRegime}
+   645→              </p>
+   646→            </div>
+   647→            <div className="flex flex-wrap gap-2">
+   648→              <Button variant="outline" onClick={exportCSV}><FileDown className="h-4 w-4 mr-2" /> CSV</Button>
+   649→              <Button onClick={exportPDF}><Printer className="h-4 w-4 mr-2" /> Imprimer PDF</Button>
+   650→            </div>
+   651→          </div>
+   652→        </CardContent>
+   653→      </Card>
+   654→
+   655→      {/* Info légale */}
+   656→      <Card className="border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20">
+   657→        <CardContent className="p-4 flex gap-3">
+   658→          <BookCheck className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+   659→          <div className="text-sm">
+   660→            <p className="font-medium text-amber-700 dark:text-amber-300 mb-1">À propos du livre des recettes</p>
+   661→            <ul className="text-xs text-amber-700/80 dark:text-amber-300/80 space-y-1 list-disc pl-4">
+   662→              <li>Document <strong>obligatoire</strong> pour les micro-entreprises (art. 286 du CGI)</li>
+   663→              <li>Numérotation <strong>continue et sans rupture</strong> (1, 2, 3…)</li>
+   664→              <li>Tenu <strong>chronologiquement</strong>, au jour le jour</li>
+   665→              <li>Conservation <strong>10 ans</strong> (art. L102B du LPF)</li>
+   666→              <li>En cas de contrôle : amende de 5 000€ en cas d'absence ou de tenue incorrecte</li>
+   667→            </ul>
+   668→          </div>
+   669→        </CardContent>
+   670→      </Card>
+   671→
+   672→      {/* Récap par mois */}
+   673→      {data.monthlyTotals.length > 0 && (
+   674→        <Card>
+   675→          <CardHeader>
+   676→            <CardTitle className="text-base">Récapitulatif mensuel</CardTitle>
+   677→          </CardHeader>
+   678→          <CardContent>
+   679→            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+   680→              {data.monthlyTotals.map(m => (
+   681→                <div key={m.monthNum} className="p-3 rounded-lg bg-muted/40">
+   682→                  <p className="text-xs text-muted-foreground capitalize">{m.month}</p>
+   683→                  <p className="text-lg font-bold mt-0.5">{formatEUR(m.total)}</p>
+   684→                  <p className="text-[10px] text-muted-foreground">{m.count} recette{m.count > 1 ? 's' : ''}</p>
+   685→                </div>
+   686→              ))}
+   687→            </div>
+   688→          </CardContent>
+   689→        </Card>
+   690→      )}
+   691→
+   692→      {/* Tableau légal */}
+   693→      <Card>
+   694→        <CardHeader>
+   695→          <CardTitle className="text-base">Détail des recettes ({data.count})</CardTitle>
+   696→          <CardDescription>Numérotation continue chronologique</CardDescription>
+   697→        </CardHeader>
+   698→        <CardContent className="p-0">
+   699→          {data.entries.length === 0 ? (
+   700→            <p className="text-sm text-muted-foreground py-8 text-center">Aucune recette enregistrée pour {year}</p>
+   701→          ) : (
+   702→            <div className="overflow-x-auto">
+   703→              <table className="w-full text-xs">
+   704→                <thead>
+   705→                  <tr className="text-left text-[10px] text-muted-foreground border-b bg-muted/30 uppercase">
+   706→                    <th className="px-2 py-2 font-medium">N°</th>
+   707→                    <th className="px-2 py-2 font-medium">Date</th>
+   708→                    <th className="px-2 py-2 font-medium">Désignation</th>
+   709→                    <th className="px-2 py-2 font-medium hidden md:table-cell">Client</th>
+   710→                    <th className="px-2 py-2 font-medium hidden lg:table-cell">Origine</th>
+   711→                    <th className="px-2 py-2 font-medium hidden lg:table-cell">Mode paiement</th>
+   712→                    <th className="px-2 py-2 font-medium text-right">HT</th>
+   713→                    <th className="px-2 py-2 font-medium text-right">TTC</th>
+   714→                  </tr>
+   715→                </thead>
+   716→                <tbody>
+   717→                  {data.entries.map(e => (
+   718→                    <tr key={e.numero} className="border-b last:border-0 hover:bg-muted/30">
+   719→                      <td className="px-2 py-2 font-mono text-[10px] text-muted-foreground">{e.numero}</td>
+   720→                      <td className="px-2 py-2 whitespace-nowrap">{formatDate(e.date)}</td>
+   721→                      <td className="px-2 py-2 max-w-[200px] truncate">{e.designation}</td>
+   722→                      <td className="px-2 py-2 hidden md:table-cell text-muted-foreground">{e.client}</td>
+   723→                      <td className="px-2 py-2 hidden lg:table-cell text-muted-foreground">{e.origine}</td>
+   724→                      <td className="px-2 py-2 hidden lg:table-cell text-muted-foreground text-[10px]">{e.modePaiement}</td>
+   725→                      <td className="px-2 py-2 text-right">{formatEUR(e.montantHT)}</td>
+   726→                      <td className="px-2 py-2 text-right font-semibold">{formatEUR(e.montantTTC)}</td>
+   727→                    </tr>
+   728→                  ))}
+   729→                  <tr className="bg-emerald-50 dark:bg-emerald-950/30 border-t-2 border-emerald-200 dark:border-emerald-900">
+   730→                    <td colSpan={6} className="px-2 py-2.5 text-right font-semibold text-xs uppercase">Total annuel</td>
+   731→                    <td className="px-2 py-2.5 text-right font-bold">{formatEUR(data.totalHT)}</td>
+   732→                    <td className="px-2 py-2.5 text-right font-bold text-emerald-600">{formatEUR(data.totalTTC)}</td>
+   733→                  </tr>
+   734→                </tbody>
+   735→              </table>
+   736→            </div>
+   737→          )}
+   738→        </CardContent>
+   739→      </Card>
+   740→    </div>
+   741→  )
+   742→}
+   743→
+   744→// ═══════════════════════════════════════════════════════════════════════════
+   745→// ONGLET 3 — REGISTRE DES ACHATS (format légal)
+   746→// ═══════════════════════════════════════════════════════════════════════════
+   747→
+   748→interface AchatEntry {
+   749→  numero: number
+   750→  date: string
+   751→  designation: string
+   752→  fournisseur: string
+   753→  typeFournisseur: string
+   754→  lotReference: string
+   755→  montant: number
+   756→  sku: string
+   757→  statut: string
+   758→  prixVente: number | null
+   759→}
+   760→
+   761→interface AchatsData {
+   762→  type: string
+   763→  year: number
+   764→  regime: string
+   765→  entries: AchatEntry[]
+   766→  total: number
+   767→  monthlyTotals: { month: string; monthNum: number; total: number; count: number }[]
+   768→  bySupplierType: { type: string; total: number; count: number }[]
+   769→  count: number
+   770→}
+   771→
+   772→function AchatsTab({ year }: { year: number }) {
+   773→  const { data, loading } = useFetch<AchatsData>(`/api/accounting?type=achats&year=${year}`)
+   774→
+   775→  if (loading || !data) {
+   776→    return (
+   777→      <div className="space-y-4">
+   778→        <Skeleton className="h-32" />
+   779→        <Skeleton className="h-96" />
+   780→      </div>
+   781→    )
+   782→  }
+   783→
+   784→  const exportPDF = () => {
+   785→    const win = window.open('', '_blank')
+   786→    if (!win) {
+   787→      toast.error('Bloqueur de pop-up : autorisez les pop-ups')
+   788→      return
+   789→    }
+   790→    win.document.write(`
+   791→      <!DOCTYPE html>
+   792→      <html lang="fr"><head><meta charset="utf-8">
+   793→      <title>Registre des achats ${year}</title>
+   794→      <style>
+   795→        * { box-sizing: border-box; }
+   796→        body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; margin: 30px; color: #1a1a1a; font-size: 11px; }
+   797→        h1 { font-size: 18px; margin: 0 0 4px; text-align: center; }
+   798→        h2 { font-size: 13px; margin: 20px 0 8px; }
+   799→        .header { text-align: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #1a1a1a; }
+   800→        .header p { margin: 2px 0; font-size: 11px; color: #555; }
+   801→        .regime { background: #fef3c7; padding: 6px 10px; border-radius: 4px; display: inline-block; font-size: 10px; margin-top: 6px; }
+   802→        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+   803→        th, td { padding: 6px 5px; text-align: left; border: 1px solid #ccc; font-size: 10px; }
+   804→        th { background: #f3f4f6; font-weight: 600; text-transform: uppercase; font-size: 9px; }
+   805→        .total-row td { background: #ecfdf5; font-weight: 700; }
+   806→        .right { text-align: right; }
+   807→        .center { text-align: center; }
+   808→        .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 10px; color: #666; text-align: center; }
+   809→        .signature { margin-top: 40px; display: flex; justify-content: space-between; }
+   810→        .signature div { width: 45%; border-top: 1px solid #333; padding-top: 6px; font-size: 10px; }
+   811→        @page { margin: 1cm; size: A4 landscape; }
+   812→      </style></head>
+   813→      <body>
+   814→        <div class="header">
+   815→          <h1>REGISTRE DES ACHATS</h1>
+   816→          <p>Exercice ${year}</p>
+   817→          <p>Régime : ${data.regime}</p>
+   818→          <div class="regime">${data.count} articles achetés · Total : ${formatEUR(data.total)}</div>
+   819→        </div>
+   820→
+   821→        <table>
+   822→          <thead>
+   823→            <tr>
+   824→              <th style="width: 30px;">N°</th>
+   825→              <th style="width: 70px;">Date</th>
+   826→              <th>Désignation</th>
+   827→              <th>Fournisseur</th>
+   828→              <th>Type</th>
+   829→              <th>Lot</th>
+   830→              <th>Statut</th>
+   831→              <th class="right" style="width: 60px;">Achat (€)</th>
+   832→              <th class="right" style="width: 60px;">Vente (€)</th>
+   833→            </tr>
+   834→          </thead>
+   835→          <tbody>
+   836→            ${data.entries.map(e => `
+   837→              <tr>
+   838→                <td class="center">${e.numero}</td>
+   839→                <td>${formatDate(e.date)}</td>
+   840→                <td>${e.designation}</td>
+   841→                <td>${e.fournisseur}</td>
+   842→                <td>${e.typeFournisseur}</td>
+   843→                <td>${e.lotReference}</td>
+   844→                <td>${e.statut}</td>
+   845→                <td class="right"><strong>${e.montant.toFixed(2)}</strong></td>
+   846→                <td class="right">${e.prixVente ? e.prixVente.toFixed(2) : '—'}</td>
+   847→              </tr>
+   848→            `).join('')}
+   849→            <tr class="total-row">
+   850→              <td colspan="7" class="right">TOTAL ANNUEL</td>
+   851→              <td class="right">${data.total.toFixed(2)}</td>
+   852→              <td class="right">—</td>
+   853→            </tr>
+   854→          </tbody>
+   855→        </table>
+   856→
+   857→        <h2>Répartition par type de fournisseur</h2>
+   858→        <table>
+   859→          <thead><tr><th>Type</th><th class="right">Articles</th><th class="right">Total (€)</th><th class="right">% du total</th></tr></thead>
+   860→          <tbody>
+   861→            ${data.bySupplierType.map(s => `
+   862→              <tr>
+   863→                <td>${s.type}</td>
+   864→                <td class="right">${s.count}</td>
+   865→                <td class="right">${s.total.toFixed(2)}</td>
+   866→                <td class="right">${data.total > 0 ? ((s.total / data.total) * 100).toFixed(1) : 0}%</td>
+   867→              </tr>
+   868→            `).join('')}
+   869→            <tr class="total-row">
+   870→              <td>TOTAL</td>
+   871→              <td class="right">${data.count}</td>
+   872→              <td class="right">${data.total.toFixed(2)}</td>
+   873→              <td class="right">100%</td>
+   874→            </tr>
+   875→          </tbody>
+   876→        </table>
+   877→
+   878→        <div class="footer">
+   879→          Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')} · Reseller OS
+   880→        </div>
+   881→
+   882→        <div class="signature">
+   883→          <div>Signature de l'exploitant</div>
+   884→          <div>Date</div>
+   885→        </div>
+   886→
+   887→        <script>window.onload = () => { window.print(); }</script>
+   888→      </body></html>
+   889→    `)
+   890→    win.document.close()
+   891→    toast.success('Registre des achats PDF ouvert')
+   892→  }
+   893→
+   894→  return (
+   895→    <div className="space-y-4">
+   896→      {/* Hero */}
+   897→      <Card className="bg-gradient-to-br from-sky-50 via-white to-sky-50/30 dark:from-sky-950/30 dark:via-card dark:to-sky-950/20 border-sky-200 dark:border-sky-900">
+   898→        <CardContent className="p-6">
+   899→          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+   900→            <div>
+   901→              <div className="flex items-center gap-2 mb-2">
+   902→                <ClipboardList className="h-5 w-5 text-sky-600" />
+   903→                <Badge className="bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 hover:bg-sky-100">
+   904→                  Document légal · Article 286 CGI
+   905→                </Badge>
+   906→              </div>
+   907→              <p className="text-3xl font-bold tracking-tight">{formatEUR(data.total)}</p>
+   908→              <p className="text-sm text-muted-foreground mt-1">
+   909→                {data.count} articles achetés · {data.regime}
+   910→              </p>
+   911→            </div>
+   912→            <div className="flex flex-wrap gap-2">
+   913→              <Button onClick={exportPDF}><Printer className="h-4 w-4 mr-2" /> Imprimer PDF</Button>
+   914→            </div>
+   915→          </div>
+   916→        </CardContent>
+   917→      </Card>
+   918→
+   919→      {/* Répartition par type de fournisseur */}
+   920→      {data.bySupplierType.length > 0 && (
+   921→        <Card>
+   922→          <CardHeader>
+   923→            <CardTitle className="text-base">Répartition par type de fournisseur</CardTitle>
+   924→          </CardHeader>
+   925→          <CardContent>
+   926→            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+   927→              {data.bySupplierType.map(s => (
+   928→                <div key={s.type} className="p-3 rounded-lg bg-muted/40">
+   929→                  <p className="text-xs text-muted-foreground">{s.type}</p>
+   930→                  <p className="text-lg font-bold mt-0.5">{formatEUR(s.total)}</p>
+   931→                  <p className="text-[10px] text-muted-foreground">{s.count} article{s.count > 1 ? 's' : ''} · {data.total > 0 ? ((s.total / data.total) * 100).toFixed(0) : 0}%</p>
+   932→                </div>
+   933→              ))}
+   934→            </div>
+   935→          </CardContent>
+   936→        </Card>
+   937→      )}
+   938→
+   939→      {/* Récap mensuel */}
+   940→      {data.monthlyTotals.length > 0 && (
+   941→        <Card>
+   942→          <CardHeader>
+   943→            <CardTitle className="text-base">Récapitulatif mensuel</CardTitle>
+   944→          </CardHeader>
+   945→          <CardContent>
+   946→            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+   947→              {data.monthlyTotals.map(m => (
+   948→                <div key={m.monthNum} className="p-3 rounded-lg bg-muted/40">
+   949→                  <p className="text-xs text-muted-foreground capitalize">{m.month}</p>
+   950→                  <p className="text-lg font-bold mt-0.5">{formatEUR(m.total)}</p>
+   951→                  <p className="text-[10px] text-muted-foreground">{m.count} achat{m.count > 1 ? 's' : ''}</p>
+   952→                </div>
+   953→              ))}
+   954→            </div>
+   955→          </CardContent>
+   956→        </Card>
+   957→      )}
+   958→
+   959→      {/* Tableau légal */}
+   960→      <Card>
+   961→        <CardHeader>
+   962→          <CardTitle className="text-base">Détail des achats ({data.count})</CardTitle>
+   963→          <CardDescription>Numérotation continue chronologique</CardDescription>
+   964→        </CardHeader>
+   965→        <CardContent className="p-0">
+   966→          {data.entries.length === 0 ? (
+   967→            <p className="text-sm text-muted-foreground py-8 text-center">Aucun achat enregistré pour {year}</p>
+   968→          ) : (
+   969→            <div className="overflow-x-auto">
+   970→              <table className="w-full text-xs">
+   971→                <thead>
+   972→                  <tr className="text-left text-[10px] text-muted-foreground border-b bg-muted/30 uppercase">
+   973→                    <th className="px-2 py-2 font-medium">N°</th>
+   974→                    <th className="px-2 py-2 font-medium">Date</th>
+   975→                    <th className="px-2 py-2 font-medium">Désignation</th>
+   976→                    <th className="px-2 py-2 font-medium hidden md:table-cell">Fournisseur</th>
+   977→                    <th className="px-2 py-2 font-medium hidden lg:table-cell">Type</th>
+   978→                    <th className="px-2 py-2 font-medium hidden lg:table-cell">Lot</th>
+   979→                    <th className="px-2 py-2 font-medium hidden xl:table-cell">Statut</th>
+   980→                    <th className="px-2 py-2 font-medium text-right">Achat</th>
+   981→                    <th className="px-2 py-2 font-medium text-right hidden md:table-cell">Vente</th>
+   982→                  </tr>
+   983→                </thead>
+   984→                <tbody>
+   985→                  {data.entries.map(e => (
+   986→                    <tr key={e.numero} className="border-b last:border-0 hover:bg-muted/30">
+   987→                      <td className="px-2 py-2 font-mono text-[10px] text-muted-foreground">{e.numero}</td>
+   988→                      <td className="px-2 py-2 whitespace-nowrap">{formatDate(e.date)}</td>
+   989→                      <td className="px-2 py-2 max-w-[200px] truncate">{e.designation}</td>
+   990→                      <td className="px-2 py-2 hidden md:table-cell text-muted-foreground">{e.fournisseur}</td>
+   991→                      <td className="px-2 py-2 hidden lg:table-cell text-muted-foreground">{e.typeFournisseur}</td>
+   992→                      <td className="px-2 py-2 hidden lg:table-cell font-mono text-[10px] text-muted-foreground">{e.lotReference}</td>
+   993→                      <td className="px-2 py-2 hidden xl:table-cell">
+   994→                        <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
+   995→                          e.statut === 'Vendu' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+   996→                        )}>
+   997→                          {e.statut}
+   998→                        </span>
+   999→                      </td>
+  1000→                      <td className="px-2 py-2 text-right font-semibold">{formatEUR(e.montant)}</td>
+  1001→                      <td className="px-2 py-2 text-right hidden md:table-cell text-emerald-600">
+  1002→                        {e.prixVente ? formatEUR(e.prixVente) : '—'}
+  1003→                      </td>
+  1004→                    </tr>
+  1005→                  ))}
+  1006→                  <tr className="bg-sky-50 dark:bg-sky-950/30 border-t-2 border-sky-200 dark:border-sky-900">
+  1007→                    <td colSpan={7} className="px-2 py-2.5 text-right font-semibold text-xs uppercase">Total annuel</td>
+  1008→                    <td className="px-2 py-2.5 text-right font-bold text-sky-600">{formatEUR(data.total)}</td>
+  1009→                    <td className="px-2 py-2.5 text-right hidden md:table-cell">—</td>
+  1010→                  </tr>
+  1011→                </tbody>
+  1012→              </table>
+  1013→            </div>
+  1014→          )}
+  1015→        </CardContent>
+  1016→      </Card>
+  1017→    </div>
+  1018→  )
+  1019→}
+  1020→

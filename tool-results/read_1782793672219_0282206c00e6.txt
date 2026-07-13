@@ -1,0 +1,1907 @@
+     1→<!DOCTYPE html>
+     2→<html lang="fr">
+     3→<head>
+     4→<meta charset="UTF-8">
+     5→<meta name="viewport" content="width=device-width, initial-scale=1.0">
+     6→<title>Vinted Search Builder</title>
+     7→<style>
+     8→  * { box-sizing: border-box; margin: 0; padding: 0; }
+     9→  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+    10→  .app { display: flex; height: 100vh; overflow: hidden; }
+    11→
+    12→  /* SIDEBAR */
+    13→  .sidebar { width: 300px; min-width: 300px; background: #1a1a2e; color: #eee; display: flex; flex-direction: column; overflow: hidden; }
+    14→  .sidebar-header { padding: 20px; background: #16213e; border-bottom: 1px solid #0f3460; }
+    15→  .sidebar-header h1 { font-size: 18px; color: #e94560; margin-bottom: 4px; }
+    16→  .sidebar-header p { font-size: 12px; color: #888; }
+    17→  .save-section { padding: 16px; border-bottom: 1px solid #0f3460; }
+    18→  .save-section input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #0f3460; background: #16213e; color: #eee; font-size: 13px; margin-bottom: 8px; }
+    19→  .save-section input::placeholder { color: #666; }
+    20→  .btn-save { width: 100%; padding: 9px; background: #e94560; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; transition: background 0.15s; }
+    21→  .btn-save:hover { background: #c73652; }
+    22→  .btn-save.editing { background: #e67e22; }
+    23→  .btn-save.editing:hover { background: #ca6f1e; }
+    24→  .btn-new { width: 100%; padding: 7px; background: transparent; color: #888; border: 1px solid #2a3a5e; border-radius: 8px; cursor: pointer; font-size: 12px; margin-top: 6px; transition: all 0.15s; display: none; }
+    25→  .btn-new:hover { color: #eee; border-color: #eee; }
+    26→  .btn-new.visible { display: block; }
+    27→  .edit-badge { font-size: 11px; font-weight: 400; color: #e67e22; background: rgba(230,126,34,0.12); border-radius: 6px; padding: 2px 8px; margin-left: 8px; }
+    28→  .searches-list { flex: 1; overflow-y: auto; padding: 12px; }
+    29→  .searches-list h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 10px; padding: 0 4px; }
+    30→  .sidebar-footer { padding: 12px 16px; border-top: 1px solid #0f3460; display: flex; gap: 8px; }
+    31→  .btn-io { flex: 1; padding: 7px 0; border-radius: 8px; border: 1px solid #0f3460; background: transparent; color: #888; font-size: 12px; cursor: pointer; text-align: center; }
+    32→  .btn-io:hover { background: #16213e; color: #eee; }
+    33→  .search-item { background: #16213e; border-radius: 8px; padding: 10px 12px 10px 32px; margin-bottom: 6px; cursor: pointer; border: 1px solid transparent; transition: all 0.15s; position: relative; }
+    34→  .search-item:hover { border-color: #e94560; }
+    35→  .search-item.active { border-color: #e94560; background: #1e2d50; }
+    36→  .search-item.dragging { opacity: 0.4; border-style: dashed; }
+    37→  .search-item.drag-over-top { border-top: 2px solid #e94560; }
+    38→  .search-item.drag-over-bottom { border-bottom: 2px solid #e94560; }
+    39→  .search-item-name { font-size: 13px; font-weight: 600; color: #eee; margin-bottom: 3px; }
+    40→  .search-item-desc { font-size: 11px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 48px; }
+    41→  .search-item-actions { position: absolute; top: 6px; right: 8px; display: flex; gap: 6px; align-items: center; }
+    42→  .search-item-del  { color: #444; cursor: pointer; font-size: 16px; line-height: 1; }
+    43→  .search-item-del:hover  { color: #e94560; }
+    44→  .search-item-dup  { color: #555; cursor: pointer; font-size: 13px; line-height: 1; }
+    45→  .search-item-dup:hover  { color: #09af6b; }
+    46→  .drag-handle { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: #333; cursor: grab; font-size: 14px; line-height: 1; user-select: none; }
+    47→  .drag-handle:active { cursor: grabbing; }
+    48→  .search-item:hover .drag-handle { color: #555; }
+    49→  .no-searches { text-align: center; color: #555; font-size: 13px; padding: 30px 0; }
+    50→
+    51→  /* MAIN */
+    52→  .main { flex: 1; overflow-y: auto; padding: 24px; }
+    53→  .main-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    54→  .main-header h2 { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+    55→  .btn-open { padding: 12px 28px; background: #09af6b; color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; transition: background 0.15s; }
+    56→  .btn-open:hover { background: #078055; }
+    57→  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    58→  .card { background: white; border-radius: 14px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    59→  .card.full { grid-column: 1 / -1; }
+    60→  .card h3 { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+    61→  .card h3 .count { background: #e94560; color: white; border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700; }
+    62→  .btn-manage { padding: 5px 12px; border-radius: 6px; border: 1px solid #ddd; background: white; font-size: 12px; cursor: pointer; color: #666; margin-left: auto; }
+    63→  .btn-manage:hover { background: #f5f5f5; }
+    64→
+    65→  /* CATÉGORIES */
+    66→  .cat-grid { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+    67→
+    68→  /* Chip simple (sans enfants) */
+    69→  .cat-chip { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 20px; border: 2px solid #e8e8e8; cursor: pointer; font-size: 13px; color: #555; transition: all 0.15s; user-select: none; }
+    70→  .cat-chip:hover { border-color: #e94560; color: #e94560; }
+    71→  .cat-chip input { display: none; }
+    72→  .cat-chip.selected { border-color: #e94560; background: #fff0f3; color: #e94560; font-weight: 600; }
+    73→
+    74→  /* Catégorie avec sous-catégories */
+    75→  .cat-expandable { display: flex; flex-direction: column; gap: 6px; }
+    76→  .cat-parent-chip { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 20px; border: 2px solid #e8e8e8; cursor: pointer; font-size: 13px; color: #555; transition: all 0.15s; user-select: none; background: white; }
+    77→  .cat-parent-chip:hover { border-color: #0f3460; color: #0f3460; }
+    78→  .cat-parent-chip.has-selected { border-color: #0f3460; background: #f0f4ff; color: #0f3460; font-weight: 600; }
+    79→  .cat-arrow { font-size: 10px; transition: transform 0.2s; color: #aaa; }
+    80→  .cat-arrow.open { transform: rotate(90deg); }
+    81→  .cat-children { display: none; flex-wrap: wrap; gap: 6px; padding: 4px 0 4px 16px; border-left: 2px solid #e8e8e8; margin-left: 8px; }
+    82→  .cat-children.open { display: flex; }
+    83→  .child-chip { display: flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 16px; border: 1.5px solid #e8e8e8; cursor: pointer; font-size: 12px; color: #666; transition: all 0.15s; user-select: none; }
+    84→  .child-chip:hover { border-color: #e94560; color: #e94560; }
+    85→  .child-chip input { display: none; }
+    86→  .child-chip.selected { border-color: #e94560; background: #fff0f3; color: #e94560; font-weight: 600; }
+    87→
+    88→  /* BRANDS */
+    89→  .brand-toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    90→  .brand-search { flex: 1; min-width: 200px; padding: 8px 12px; border-radius: 8px; border: 1px solid #e0e0e0; font-size: 13px; }
+    91→  .brand-filter-cats { display: flex; gap: 6px; flex-wrap: wrap; }
+    92→  .cat-filter-btn { padding: 5px 10px; border-radius: 16px; border: 1px solid #e0e0e0; background: white; font-size: 12px; cursor: pointer; color: #666; transition: all 0.15s; }
+    93→  .cat-filter-btn:hover { border-color: #e94560; color: #e94560; }
+    94→  .cat-filter-btn.active { background: #1a1a2e; border-color: #1a1a2e; color: white; }
+    95→  .brands-container { height: 280px; overflow-y: auto; border: 1px solid #f0f0f0; border-radius: 10px; }
+    96→  .brand-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #f8f8f8; cursor: pointer; transition: background 0.1s; }
+    97→  .brand-item:hover { background: #fafafa; }
+    98→  .brand-item.selected { background: #fff0f3; }
+    99→  .brand-item.used { opacity: 0.45; }
+   100→  .brand-item.used .brand-item-name { text-decoration: line-through; }
+   101→  .brand-item input { cursor: pointer; accent-color: #e94560; width: 15px; height: 15px; }
+   102→  .brand-item-name { font-size: 13px; flex: 1; }
+   103→  .brand-item-cat { font-size: 11px; color: #aaa; padding: 2px 7px; background: #f5f5f5; border-radius: 10px; }
+   104→  .brand-item-used { font-size: 10px; color: #888; padding: 2px 7px; background: #f0f0f0; border-radius: 10px; border: 1px solid #e0e0e0; white-space: nowrap; }
+   105→  .brand-item.hidden { display: none; }
+   106→  .brand-actions { display: flex; gap: 8px; margin-top: 10px; }
+   107→  .btn-toggle-used { padding: 5px 12px; border-radius: 16px; border: 1px solid #e0e0e0; background: white; font-size: 12px; cursor: pointer; color: #666; transition: all 0.15s; white-space: nowrap; }
+   108→  .btn-toggle-used:hover { border-color: #e94560; color: #e94560; }
+   109→  .btn-toggle-used.active { background: #1a1a2e; border-color: #1a1a2e; color: white; }
+   110→  .btn-small { padding: 6px 12px; border-radius: 6px; border: 1px solid #ddd; background: white; font-size: 12px; cursor: pointer; color: #555; }
+   111→  .btn-small:hover { background: #f5f5f5; }
+   112→
+   113→  /* STATUS + TAILLE */
+   114→  .check-group { display: flex; flex-wrap: wrap; gap: 8px; }
+   115→  .check-chip { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 20px; border: 2px solid #e8e8e8; cursor: pointer; font-size: 13px; color: #555; transition: all 0.15s; user-select: none; }
+   116→  .check-chip:hover { border-color: #0f3460; color: #0f3460; }
+   117→  .check-chip input { display: none; }
+   118→  .check-chip.selected { border-color: #0f3460; background: #f0f4ff; color: #0f3460; font-weight: 600; }
+   119→
+   120→  /* PRIX + TRI */
+   121→  .price-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+   122→  .price-row input { flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid #e0e0e0; font-size: 13px; }
+   123→  .price-row span { color: #999; font-size: 13px; }
+   124→  select.tri-select { width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid #e0e0e0; font-size: 13px; background: white; margin-top: 4px; }
+   125→
+   126→  /* URL PREVIEW */
+   127→  .url-preview { margin-top: 20px; background: white; border-radius: 14px; padding: 16px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+   128→  .url-preview h3 { font-size: 13px; color: #999; margin-bottom: 8px; }
+   129→  .url-text { font-size: 12px; color: #555; word-break: break-all; background: #f8f8f8; padding: 10px 12px; border-radius: 8px; font-family: monospace; max-height: 80px; overflow-y: auto; }
+   130→
+   131→  /* MODAL */
+   132→  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+   133→  .modal-overlay.open { display: flex; }
+   134→  .modal { background: white; border-radius: 16px; width: 600px; max-width: 95vw; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+   135→  .modal-header { padding: 18px 24px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; }
+   136→  .modal-header h2 { font-size: 16px; font-weight: 700; color: #1a1a2e; }
+   137→  .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #aaa; }
+   138→  .modal-close:hover { color: #333; }
+   139→  .modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+   140→
+   141→  .cat-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+   142→  .cat-list-item { background: #f8f9fa; border-radius: 12px; border: 1px solid #eee; overflow: hidden; }
+   143→  .cat-list-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+   144→  .cat-list-info { flex: 1; min-width: 0; }
+   145→  .cat-list-name { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+   146→  .cat-list-ids { font-size: 11px; color: #999; font-family: monospace; }
+   147→  .cat-list-actions { display: flex; gap: 5px; align-items: center; }
+   148→  .btn-icon { padding: 5px 8px; border-radius: 6px; border: 1px solid #ddd; background: white; cursor: pointer; font-size: 12px; }
+   149→  .btn-icon:hover { background: #f5f5f5; }
+   150→  .btn-icon.danger:hover { background: #fff0f0; border-color: #ffcccc; }
+   151→  .btn-add-sub { padding: 4px 10px; border-radius: 6px; border: 1px dashed #aaa; background: white; cursor: pointer; font-size: 11px; color: #888; }
+   152→  .btn-add-sub:hover { border-color: #0f3460; color: #0f3460; }
+   153→
+   154→  .sub-list { border-top: 1px solid #eee; padding: 8px 14px 10px 36px; display: flex; flex-direction: column; gap: 6px; }
+   155→  .sub-list-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: white; border-radius: 8px; border: 1px solid #eee; }
+   156→  .sub-list-item-info { flex: 1; min-width: 0; }
+   157→  .sub-list-item-name { font-size: 12px; font-weight: 600; color: #333; }
+   158→  .sub-list-item-ids { font-size: 11px; color: #bbb; font-family: monospace; }
+   159→
+   160→  .sub-add-form { display: none; padding: 8px 14px 12px 36px; border-top: 1px dashed #e0e0e0; background: #fafafa; }
+   161→  .sub-add-form.open { display: block; }
+   162→  .sub-add-form h5 { font-size: 12px; font-weight: 600; color: #888; margin-bottom: 8px; }
+   163→
+   164→  .add-form { background: #f8f9fa; border-radius: 12px; padding: 16px; border: 2px dashed #e0e0e0; }
+   165→  .add-form h4 { font-size: 13px; font-weight: 700; color: #555; margin-bottom: 12px; }
+   166→  .form-row { display: flex; gap: 8px; margin-bottom: 8px; }
+   167→  .form-row input { flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid #e0e0e0; font-size: 13px; }
+   168→  .form-row input.emoji-input { width: 56px; flex: none; text-align: center; font-size: 18px; }
+   169→  .form-hint { font-size: 11px; color: #aaa; margin-bottom: 10px; line-height: 1.5; }
+   170→  .btn-add-cat { padding: 9px 20px; background: #1a1a2e; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+   171→  .btn-add-cat:hover { background: #0f3460; }
+   172→  .btn-add-sub-confirm { padding: 7px 14px; background: #0f3460; color: white; border: none; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 600; }
+   173→  .btn-add-sub-confirm:hover { background: #1a1a2e; }
+   174→  .move-select { padding: 4px 8px; border-radius: 6px; border: 1px solid #ddd; background: white; font-size: 12px; cursor: pointer; color: #555; max-width: 130px; }
+   175→  /* Bulk actions */
+   176→  .bulk-replace { background:#f8f9fa; border-radius:10px; padding:12px 14px; margin-bottom:12px; border:1px solid #eee; }
+   177→  .bulk-replace h5 { font-size:12px; font-weight:700; color:#555; margin-bottom:8px; }
+   178→  .bulk-replace-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+   179→  .bulk-replace-row select { padding:6px 10px; border-radius:7px; border:1px solid #ddd; font-size:12px; background:white; flex:1; min-width:120px; }
+   180→  .bulk-replace-row span { color:#aaa; font-size:14px; }
+   181→  .btn-bulk { padding:6px 14px; border-radius:7px; border:none; background:#0f3460; color:white; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+   182→  .btn-bulk:hover { background:#1a1a2e; }
+   183→  .bm-toolbar { display:none; align-items:center; gap:8px; padding:8px 14px; background:#f0f4ff; border-radius:8px; margin-bottom:8px; flex-wrap:wrap; }
+   184→  .bm-toolbar.visible { display:flex; }
+   185→  .bm-toolbar span { font-size:12px; font-weight:600; color:#0f3460; }
+   186→  .bm-toolbar select { padding:5px 8px; border-radius:6px; border:1px solid #c0cfe0; font-size:12px; background:white; }
+   187→  .bm-item-check { width:16px; height:16px; cursor:pointer; accent-color:#e94560; flex-shrink:0; }
+   188→
+   189→  ::-webkit-scrollbar { width: 5px; height: 5px; }
+   190→  ::-webkit-scrollbar-track { background: transparent; }
+   191→  ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
+   192→
+   193→  .bm-item { display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid #f8f8f8; }
+   194→  .bm-item:last-child { border-bottom:none; }
+   195→  .bm-item:hover { background:#fafafa; }
+   196→  .bm-item-info { flex:1;min-width:0; }
+   197→  .bm-item-name { font-size:13px;font-weight:600;color:#1a1a2e; }
+   198→  .bm-item-id { font-size:11px;color:#bbb;font-family:monospace; }
+   199→  .bm-item-cats { display:flex;flex-wrap:wrap;gap:4px;margin-top:3px; }
+   200→  .bm-cat-badge { font-size:11px;padding:2px 7px;background:#f0f4ff;color:#0f3460;border-radius:8px; }
+   201→  .bm-edit-cats { display:none;flex-wrap:wrap;gap:5px;margin-top:6px; }
+   202→  .bm-edit-cats.open { display:flex; }
+   203→  .bm-cat-toggle { padding:3px 9px;border-radius:12px;border:1.5px solid #ddd;background:white;font-size:11px;cursor:pointer;color:#666; }
+   204→  .bm-cat-toggle.on { border-color:#e94560;background:#fff0f3;color:#e94560;font-weight:600; }
+   205→
+   206→  /* Gestion des étiquettes */
+   207→  .tag-manager-section { background:#f8f9fa; border-radius:10px; padding:12px 14px; margin-bottom:12px; border:1px solid #eee; }
+   208→  .tag-manager-title { font-size:12px; font-weight:700; color:#555; margin:0 0 0; cursor:pointer; display:flex; align-items:center; gap:6px; user-select:none; }
+   209→  .tag-manager-title:hover { color:#0f3460; }
+   210→  .tag-manager-body { display:none; padding-top:10px; }
+   211→  .tag-manager-body.open { display:block; }
+   212→  .tag-chips-list { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; min-height:28px; }
+   213→  .tag-edit-chip { display:inline-flex; align-items:center; gap:3px; padding:4px 6px 4px 10px; background:#e8f0fe; border-radius:14px; font-size:12px; color:#1a1a2e; border:1.5px solid #c5d5f5; }
+   214→  .tag-edit-chip.renaming { background:#fff8e8; border-color:#f0c040; }
+   215→  .tag-edit-chip span { max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+   216→  .tag-edit-chip input { width:100px; border:none; background:transparent; font-size:12px; outline:none; color:#1a1a2e; font-family:inherit; }
+   217→  .tag-chip-btn { background:none; border:none; cursor:pointer; padding:1px 3px; font-size:11px; line-height:1; color:#888; border-radius:4px; }
+   218→  .tag-chip-btn:hover { color:#e94560; background:#fee; }
+   219→  .tag-chip-btn.confirm:hover { color:#2a9d4e; background:#e8f8ee; }
+   220→  .tag-add-row { display:flex; gap:6px; align-items:center; }
+   221→  .tag-add-row input { flex:1; padding:5px 10px; border-radius:7px; border:1px solid #ddd; font-size:12px; }
+   222→
+   223→  /* ── ONGLETS (modes) ── */
+   224→  .tabs { display: flex; gap: 8px; margin-bottom: 22px; }
+   225→  .tab { padding: 10px 22px; border-radius: 10px; border: 2px solid #e0e0e0; background: white; color: #888; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+   226→  .tab:hover { border-color: #e94560; color: #e94560; }
+   227→  .tab.active { border-color: #e94560; background: #e94560; color: white; }
+   228→
+   229→  /* ── VUE MES RECHERCHES ── */
+   230→  .searches-view-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+   231→  .searches-view-header h2 { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+   232→  .btn-new-search { padding: 10px 20px; background: #1a1a2e; color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; transition: background 0.15s; }
+   233→  .btn-new-search:hover { background: #0f3460; }
+   234→  /* Layout maître-détail */
+   235→  .sv-layout { display: flex; gap: 18px; align-items: flex-start; }
+   236→  .sv-list { width: 300px; min-width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+   237→  .sv-item { display: flex; align-items: center; gap: 10px; background: white; border: 2px solid transparent; border-radius: 10px; padding: 11px 12px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.08); transition: all 0.15s; }
+   238→  .sv-item:hover { border-color: #e8e8e8; }
+   239→  .sv-item.active { border-color: #e94560; background: #fff0f3; }
+   240→  .sv-item-name { flex: 1; font-size: 14px; font-weight: 600; color: #1a1a2e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+   241→  .sv-item-go { flex-shrink: 0; width: 34px; height: 34px; border-radius: 8px; border: none; background: #09af6b; color: white; cursor: pointer; font-size: 13px; font-weight: 700; transition: background 0.15s; }
+   242→  .sv-item-go:hover { background: #078055; }
+   243→  .sv-list-empty { text-align: center; color: #999; padding: 30px 10px; font-size: 13px; }
+   244→
+   245→  /* Panneau détail */
+   246→  .sv-detail { flex: 1; min-width: 0; background: white; border-radius: 14px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); min-height: 320px; }
+   247→  .sv-detail-empty { color: #aaa; text-align: center; padding: 90px 20px; font-size: 15px; }
+   248→  .sv-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; flex-wrap: wrap; }
+   249→  .sv-detail-title { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+   250→  .sv-detail-actions { display: flex; gap: 8px; }
+   251→
+   252→  /* Blocs / étiquettes (réutilisés dans le détail) */
+   253→  .scard-block { margin-bottom: 18px; }
+   254→  .scard-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #999; font-weight: 700; margin-bottom: 8px; }
+   255→  .scard-crit-row { display: flex; flex-wrap: wrap; gap: 6px; }
+   256→  .scard-brands { display: flex; flex-wrap: wrap; gap: 6px; }
+   257→  .scard-brands.cols { display: block; column-width: 150px; column-gap: 12px; }
+   258→  .scard-brands.cols .scard-chip { display: block; width: fit-content; margin-bottom: 6px; break-inside: avoid; }
+   259→  .scard-chip { font-size: 13px; background: #fff0f3; color: #e94560; border: 1px solid #f8d5dd; border-radius: 14px; padding: 4px 11px; font-weight: 600; }
+   260→  .scard-chip.crit { background: #f0f4ff; color: #0f3460; border-color: #d6e0f5; }
+   261→  .scard-chip.cat { background: #eef9f2; color: #09af6b; border-color: #cdeedd; }
+   262→  .scard-empty-crit { font-size: 13px; color: #bbb; font-style: italic; }
+   263→  .scard-open { padding: 11px 22px; background: #09af6b; color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 700; transition: background 0.15s; }
+   264→  .scard-open:hover { background: #078055; }
+   265→  .scard-edit { padding: 11px 18px; background: white; color: #666; border: 1px solid #ddd; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.15s; }
+   266→  .scard-edit:hover { background: #f5f5f5; color: #1a1a2e; }
+   267→</style>
+   268→</head>
+   269→<body>
+   270→
+   271→<!-- MODAL GESTION CATÉGORIES -->
+   272→<div class="modal-overlay" id="catModal">
+   273→  <div class="modal">
+   274→    <div class="modal-header">
+   275→      <h2>⚙️ Gérer les catégories</h2>
+   276→      <button class="modal-close" onclick="closeCatModal()">×</button>
+   277→    </div>
+   278→    <div class="modal-body">
+   279→      <div class="cat-list" id="catModalList"></div>
+   280→      <div class="add-form">
+   281→        <h4>➕ Ajouter une catégorie</h4>
+   282→        <div class="form-row">
+   283→          <input type="text" class="emoji-input" id="newCatEmoji" placeholder="📦" maxlength="2">
+   284→          <input type="text" id="newCatName" placeholder="Nom (ex: Robes de soirée)">
+   285→        </div>
+   286→        <div class="form-row">
+   287→          <input type="text" id="newCatIds" placeholder="Catalog IDs séparés par virgules (ex: 10, 1131)">
+   288→        </div>
+   289→        <div class="form-hint">💡 Trouve les IDs dans l'URL Vinted après catalog[]=<br>Laisse vide les IDs si tu veux juste un groupe de sous-catégories.</div>
+   290→        <button class="btn-add-cat" onclick="addCategory()">Ajouter</button>
+   291→      </div>
+   292→    </div>
+   293→  </div>
+   294→</div>
+   295→
+   296→<!-- MODAL GESTION MARQUES -->
+   297→<div class="modal-overlay" id="brandModal">
+   298→  <div class="modal" style="width:680px">
+   299→    <div class="modal-header">
+   300→      <h2>🏷️ Gérer les marques</h2>
+   301→      <button class="modal-close" onclick="closeBrandModal()">×</button>
+   302→    </div>
+   303→    <div class="modal-body">
+   304→      <!-- Remplacement en masse -->
+   305→      <div class="bulk-replace">
+   306→        <h5>🔄 Remplacer une catégorie dans toutes les marques</h5>
+   307→        <div class="bulk-replace-row">
+   308→          <select id="brFrom"><option value="">— Catégorie source —</option></select>
+   309→          <span>→</span>
+   310→          <select id="brTo"><option value="">— Catégorie cible —</option></select>
+   311→          <button class="btn-bulk" onclick="applyBulkReplace()">Appliquer à toutes</button>
+   312→        </div>
+   313→      </div>
+   314→      <!-- Gestion des étiquettes -->
+   315→      <div class="tag-manager-section">
+   316→        <div class="tag-manager-title" onclick="toggleTagManager()">
+   317→          <span id="tagManagerArrow">▶</span> 🏷️ Gérer les étiquettes
+   318→        </div>
+   319→        <div class="tag-manager-body" id="tagManagerBody">
+   320→          <div class="tag-chips-list" id="tagChipsList"></div>
+   321→          <div class="tag-add-row">
+   322→            <input type="text" id="newTagInput" placeholder="Nouvelle étiquette…" onkeydown="if(event.key==='Enter') addBrandTag()">
+   323→            <button class="btn-bulk" onclick="addBrandTag()">+ Créer</button>
+   324→          </div>
+   325→        </div>
+   326→      </div>
+   327→      <!-- Barre de recherche + filtre catégorie -->
+   328→      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+   329→        <input type="text" id="bmSearch" placeholder="Rechercher..." style="flex:1;min-width:160px;padding:8px 12px;border-radius:8px;border:1px solid #e0e0e0;font-size:13px" oninput="renderBrandModalList()">
+   330→        <select id="bmCatFilter" style="padding:8px 12px;border-radius:8px;border:1px solid #e0e0e0;font-size:13px;background:white" onchange="renderBrandModalList()">
+   331→          <option value="">Toutes les catégories</option>
+   332→        </select>
+   333→      </div>
+   334→      <!-- Toolbar multi-sélection -->
+   335→      <div class="bm-toolbar" id="bmToolbar">
+   336→        <span id="bmSelCount">0 sélectionnée(s)</span>
+   337→        <select id="bmBulkCat"><option value="">— Catégorie —</option></select>
+   338→        <button class="btn-bulk" onclick="applyBulkAdd()">➕ Ajouter</button>
+   339→        <button class="btn-bulk" style="background:#e94560" onclick="applyBulkRemove()">➖ Retirer</button>
+   340→        <button class="btn-icon" onclick="clearBmSelection()" title="Désélectionner tout" style="margin-left:auto">✕</button>
+   341→      </div>
+   342→      <!-- Sélectionner tout + liste -->
+   343→      <div style="padding:6px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px">
+   344→        <input type="checkbox" id="bmSelectAll" class="bm-item-check" onchange="toggleBmSelectAll(this)">
+   345→        <label for="bmSelectAll" style="font-size:12px;color:#888;cursor:pointer">Tout sélectionner</label>
+   346→      </div>
+   347→      <div id="brandModalList" style="max-height:280px;overflow-y:auto;border:1px solid #f0f0f0;border-top:none;border-radius:0 0 10px 10px;margin-bottom:18px"></div>
+   348→      <!-- Statut proxy -->
+   349→      <div id="proxyStatusBar" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:#f7f7f7;border:1px solid #e8e8e8;margin-bottom:14px;font-size:13px">
+   350→        <span id="proxyDot" style="font-size:16px">⏳</span>
+   351→        <span id="proxyLabel" style="color:#888">Vérification du proxy…</span>
+   352→        <button id="proxyCopyBtn" onclick="copyProxyCommand()" style="margin-left:auto;padding:4px 10px;font-size:12px;border-radius:6px;border:1px solid #ccc;background:white;cursor:pointer;display:none">📋 Copier la commande</button>
+   353→        <button onclick="checkProxyStatus()" style="padding:4px 10px;font-size:12px;border-radius:6px;border:1px solid #ccc;background:white;cursor:pointer" title="Vérifier à nouveau">↺</button>
+   354→      </div>
+   355→      <!-- Formulaire d'ajout -->
+   356→      <div class="add-form">
+   357→        <h4>➕ Ajouter une marque</h4>
+   358→        <div class="form-row">
+   359→          <input type="text" id="newBrandName" placeholder="Nom de la marque (ex: Maje)">
+   360→          <button class="btn-add-cat" style="white-space:nowrap" onclick="searchVintedBrand()">🔍 Chercher ID</button>
+   361→        </div>
+   362→        <div class="form-row">
+   363→          <input type="number" id="newBrandId" placeholder="ID Vinted (ex: 116)" style="width:160px;flex:none">
+   364→          <input type="text" id="newBrandVintedName" placeholder="Nom Vinted (si différent)">
+   365→        </div>
+   366→        <div style="margin-bottom:10px">
+   367→          <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px">Catégories :</div>
+   368→          <div id="newBrandCats" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+   369→        </div>
+   370→        <div class="form-hint" id="brandSearchStatus"></div>
+   371→        <button class="btn-add-cat" onclick="addBrand()">Ajouter la marque</button>
+   372→      </div>
+   373→    </div>
+   374→  </div>
+   375→</div>
+   376→
+   377→<div class="app">
+   378→  <!-- SIDEBAR -->
+   379→  <div class="sidebar">
+   380→    <div class="sidebar-header">
+   381→      <h1>🔍 Vinted Builder</h1>
+   382→      <p>Construis et sauvegarde tes recherches</p>
+   383→    </div>
+   384→    <div class="save-section">
+   385→      <input type="text" id="searchName" placeholder="Nom de la recherche..." />
+   386→      <button class="btn-save" id="btnSave" onclick="saveSearch()">💾 Sauvegarder</button>
+   387→      <button class="btn-new" id="btnNew" onclick="newSearch()">＋ Nouvelle recherche</button>
+   388→    </div>
+   389→    <div class="searches-list">
+   390→      <h3>Mes recherches</h3>
+   391→      <div id="savedList"></div>
+   392→    </div>
+   393→    <div class="sidebar-footer">
+   394→      <button class="btn-io" onclick="exportData()" title="Exporter toutes les données">📤 Exporter</button>
+   395→      <label class="btn-io" title="Importer des données sauvegardées" style="cursor:pointer">
+   396→        📥 Importer<input type="file" accept=".json" onchange="importData(event)" style="display:none">
+   397→      </label>
+   398→    </div>
+   399→  </div>
+   400→
+   401→  <!-- MAIN -->
+   402→  <div class="main">
+   403→
+   404→    <!-- ONGLETS -->
+   405→    <div class="tabs">
+   406→      <button class="tab active" id="tabSearches" onclick="switchMode('search')">🔍 Mes recherches</button>
+   407→      <button class="tab" id="tabBuilder" onclick="switchMode('build')">✏️ Création</button>
+   408→    </div>
+   409→
+   410→    <!-- VUE MES RECHERCHES -->
+   411→    <div id="viewSearches">
+   412→      <div class="searches-view-header">
+   413→        <h2>Mes recherches</h2>
+   414→        <button class="btn-new-search" onclick="newSearchFromView()">＋ Nouvelle recherche</button>
+   415→      </div>
+   416→      <div class="sv-layout">
+   417→        <div class="sv-list" id="svList"></div>
+   418→        <div class="sv-detail" id="svDetail"></div>
+   419→      </div>
+   420→    </div>
+   421→
+   422→    <!-- VUE CRÉATION -->
+   423→    <div id="viewBuilder" style="display:none">
+   424→    <div class="main-header">
+   425→      <h2 id="mainTitle">Nouvelle recherche</h2>
+   426→      <button class="btn-open" onclick="openSearch()">▶ Ouvrir sur Vinted</button>
+   427→    </div>
+   428→    <div class="grid">
+   429→
+   430→      <!-- CATÉGORIES -->
+   431→      <div class="card full">
+   432→        <h3>📂 Catégories <span class="count" id="catCount">0</span>
+   433→          <button class="btn-manage" onclick="openCatModal()">⚙️ Gérer</button>
+   434→        </h3>
+   435→        <div class="cat-grid" id="catGrid"></div>
+   436→      </div>
+   437→
+   438→      <!-- MARQUES -->
+   439→      <div class="card full">
+   440→        <h3>🏷️ Marques <span class="count" id="brandCount">0</span>
+   441→          <button class="btn-manage" onclick="openBrandModal()">⚙️ Gérer</button>
+   442→        </h3>
+   443→        <div class="brand-toolbar">
+   444→          <input type="text" class="brand-search" id="brandSearch" placeholder="Rechercher une marque..." oninput="filterBrands()">
+   445→          <button class="btn-toggle-used" id="btnToggleUsed" onclick="toggleHideUsed()" title="Masquer les marques déjà utilisées dans une autre recherche sauvegardée">🔒 Déjà utilisées</button>
+   446→          <div class="brand-filter-cats" id="brandFilterCats"></div>
+   447→        </div>
+   448→        <div class="brands-container" id="brandsContainer"></div>
+   449→        <div class="brand-actions">
+   450→          <button class="btn-small" onclick="selectAllVisible()">✓ Sélectionner visibles</button>
+   451→          <button class="btn-small" onclick="deselectAll()">✗ Tout désélectionner</button>
+   452→          <button class="btn-small" onclick="resetBrandFilters()" title="Remettre tous les filtres à zéro" style="margin-left:auto;color:#e94560;border-color:#e94560">↺ Réinitialiser filtres</button>
+   453→        </div>
+   454→      </div>
+   455→
+   456→      <!-- ÉTAT -->
+   457→      <div class="card">
+   458→        <h3>✨ État</h3>
+   459→        <div class="check-group" id="statusGroup">
+   460→          <label class="check-chip"><input type="checkbox" value="1" onchange="updateChip(this)"> Neuf avec étiquette</label>
+   461→          <label class="check-chip"><input type="checkbox" value="6" onchange="updateChip(this)"> Neuf sans étiquette</label>
+   462→          <label class="check-chip"><input type="checkbox" value="2" onchange="updateChip(this)"> Très bon état</label>
+   463→          <label class="check-chip"><input type="checkbox" value="3" onchange="updateChip(this)"> Bon état</label>
+   464→          <label class="check-chip"><input type="checkbox" value="4" onchange="updateChip(this)"> Satisfaisant</label>
+   465→        </div>
+   466→      </div>
+   467→
+   468→      <!-- TAILLE -->
+   469→      <div class="card">
+   470→        <h3>📐 Taille</h3>
+   471→        <div class="check-group" id="sizeGroup">
+   472→          <label class="check-chip"><input type="checkbox" value="2" onchange="updateChip(this)"> XS / 34</label>
+   473→          <label class="check-chip"><input type="checkbox" value="3" onchange="updateChip(this)"> S / 36</label>
+   474→          <label class="check-chip"><input type="checkbox" value="4" onchange="updateChip(this)"> M / 38</label>
+   475→          <label class="check-chip"><input type="checkbox" value="5" onchange="updateChip(this)"> L / 40</label>
+   476→          <label class="check-chip"><input type="checkbox" value="6" onchange="updateChip(this)"> XL / 42</label>
+   477→          <label class="check-chip"><input type="checkbox" value="7" onchange="updateChip(this)"> XXL / 44</label>
+   478→        </div>
+   479→      </div>
+   480→
+   481→      <!-- POINTURE -->
+   482→      <div class="card">
+   483→        <h3>👟 Pointure</h3>
+   484→        <div class="check-group" id="shoeGroup">
+   485→          <label class="check-chip"><input type="checkbox" value="58" onchange="updateChip(this)"> 38</label>
+   486→          <label class="check-chip"><input type="checkbox" value="1198" onchange="updateChip(this)"> 38,5</label>
+   487→          <label class="check-chip"><input type="checkbox" value="59" onchange="updateChip(this)"> 39</label>
+   488→        </div>
+   489→      </div>
+   490→
+   491→      <!-- PRIX -->
+   492→      <div class="card">
+   493→        <h3>💶 Prix</h3>
+   494→        <div class="price-row">
+   495→          <input type="number" id="priceMin" placeholder="Min €" min="0">
+   496→          <span>→</span>
+   497→          <input type="number" id="priceMax" placeholder="Max €" min="0">
+   498→        </div>
+   499→      </div>
+   500→
+   501→      <!-- TRI -->
+   502→      <div class="card">
+   503→        <h3>↕️ Tri</h3>
+   504→        <select class="tri-select" id="orderSelect">
+   505→          <option value="newest_first">Plus récents d'abord</option>
+   506→          <option value="relevance">Pertinence</option>
+   507→          <option value="price_high_to_low">Prix décroissant</option>
+   508→          <option value="price_low_to_high">Prix croissant</option>
+   509→        </select>
+   510→      </div>
+   511→
+   512→    </div>
+   513→    <div class="url-preview">
+   514→      <h3>URL générée</h3>
+   515→      <div class="url-text" id="urlPreview">Sélectionne des filtres pour générer l'URL...</div>
+   516→    </div>
+   517→    </div><!-- /viewBuilder -->
+   518→  </div>
+   519→</div>
+   520→
+   521→<script>
+   522→// ── SUPABASE ──────────────────────────────────────────────────────────
+   523→const SB_URL = 'https://ilgmcxpfqlclvmxdphvg.supabase.co/rest/v1';
+   524→const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsZ21jeHBmcWxjbHZteGRwaHZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxNDU4NjUsImV4cCI6MjA5NTcyMTg2NX0.6ua-ndJekU0zJ0USap2wHd7qRBB0YPI4Onc4BIiJrsU';
+   525→const SB_H   = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+   526→
+   527→async function sbLoad() {
+   528→  try {
+   529→    const r = await fetch(`${SB_URL}/vinted_search_settings?select=key,value`, { headers: SB_H });
+   530→    const rows = await r.json();
+   531→    if (Array.isArray(rows)) {
+   532→      rows.forEach(row => localStorage.setItem(row.key, JSON.stringify(row.value)));
+   533→    }
+   534→  } catch(e) {
+   535→    console.warn('Supabase inaccessible, fallback localStorage', e);
+   536→  }
+   537→}
+   538→
+   539→function sbSave(key, jsonStr) {
+   540→  fetch(`${SB_URL}/vinted_search_settings`, {
+   541→    method: 'POST',
+   542→    headers: { ...SB_H, 'Prefer': 'resolution=merge-duplicates' },
+   543→    body: JSON.stringify({ key, value: JSON.parse(jsonStr) })
+   544→  }).catch(e => console.warn('Supabase sync échoué:', e));
+   545→}
+   546→
+   547→// ── CATÉGORIES (localStorage) ─────────────────────────────────────────
+   548→const DEFAULT_CATEGORIES = [
+   549→  { id: [4],            label: "Vêtements (tous)",           emoji: "👗", children: [] },
+   550→  { id: [12],           label: "Hauts & T-shirts",           emoji: "👕", children: [] },
+   551→  { id: [10],           label: "Robes",                      emoji: "👘", children: [] },
+   552→  { id: [11],           label: "Jupes",                      emoji: "🩳", children: [] },
+   553→  { id: [9, 183, 1131], label: "Pantalons, Jeans & Combi",   emoji: "👖", children: [] },
+   554→  { id: [15, 1132],     label: "Shorts & Combishorts",       emoji: "🩲", children: [] },
+   555→  { id: [1037, 532],    label: "Manteaux, Vestes & Blazers", emoji: "🧥", children: [] },
+   556→  { id: [13],           label: "Sweats & Cardigans",         emoji: "🧶", children: [] },
+   557→  { id: [73],           label: "Vêtements de sport",         emoji: "🏃", children: [] },
+   558→];
+   559→
+   560→function loadCategories() {
+   561→  const saved = localStorage.getItem('vintedCategories2');
+   562→  return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+   563→}
+   564→function saveCategories(cats) {
+   565→  const str = JSON.stringify(cats);
+   566→  localStorage.setItem('vintedCategories2', str);
+   567→  sbSave('vintedCategories2', str);
+   568→}
+   569→
+   570→let CATEGORIES = loadCategories();
+   571→
+   572→// ── DATA MARQUES ──────────────────────────────────────────────────────
+   573→const BRANDS = [{"name": "& Other Stories", "vinted_name": "& Other Stories", "id": 50563, "category": "vetements"}, {"name": "2Two", "vinted_name": "2Two", "id": 3333, "category": "vetements"}, {"name": "Acne Studios", "vinted_name": "Acne Studios", "id": 180798, "category": "vetements"}, {"name": "American Retro", "vinted_name": "American Retro", "id": 781, "category": "vetements"}, {"name": "American Vintage", "vinted_name": "American Vintage", "id": 11, "category": "vetements"}, {"name": "Antik Batik", "vinted_name": "Antik Batik", "id": 744, "category": "vetements"}, {"name": "APC", "vinted_name": "A.P.C.", "id": 251, "category": "vetements"}, {"name": "Armani", "vinted_name": "Armani", "id": 5930015, "category": "vetements"}, {"name": "Armani Jeans", "vinted_name": "Armani Jeans", "id": 5757288, "category": "vetements"}, {"name": "Armed Angels", "vinted_name": "Armedangels", "id": 277665, "category": "vetements"}, {"name": "b.young", "vinted_name": "b.young", "id": 543, "category": "vetements"}, {"name": "Ba&sh", "vinted_name": "Ba&sh", "id": 3697, "category": "vetements"}, {"name": "balzac", "vinted_name": "Balzac", "id": 225238, "category": "vetements"}, {"name": "Balzac Paris", "vinted_name": "Balzac Paris", "id": 130332, "category": "vetements"}, {"name": "BCBG Maxazria", "vinted_name": "BCBGMAXAZRIA", "id": 22221, "category": "vetements"}, {"name": "Bel air", "vinted_name": "Bel-Air", "id": 108, "category": "vetements"}, {"name": "Bennetton", "vinted_name": "United Colors of Benetton", "id": 4690624, "category": "vetements"}, {"name": "Berenice", "vinted_name": "Berenice", "id": 4, "category": "vetements"}, {"name": "Best Mountain", "vinted_name": "Best Mountain", "id": 163, "category": "vetements"}, {"name": "Bonobo", "vinted_name": "Bonobo", "id": 47, "category": "vetements"}, {"name": "Bravafabrics", "vinted_name": "Brava Fabrics", "id": 897898, "category": "vetements"}, {"name": "Burberry", "vinted_name": "Burberry", "id": 364, "category": "vetements"}, {"name": "Burton", "vinted_name": "Burton", "id": 11469, "category": "vetements"}, {"name": "BURTON of London", "vinted_name": "BURTON of London", "id": 3757, "category": "vetements"}, {"name": "By Timo", "vinted_name": "byTiMo", "id": 321985, "category": "vetements"}, {"name": "By Zoe", "vinted_name": "By Zoe'", "id": 3273, "category": "vetements"}, {"name": "Cacharel", "vinted_name": "Cacharel", "id": 470, "category": "vetements"}, {"name": "Calvin Klein", "vinted_name": "Calvin Klein", "id": 255, "category": "vetements"}, {"name": "Camilla Pihl", "vinted_name": "Camilla Pihl", "id": 3122869, "category": "vetements"}, {"name": "Caroll", "vinted_name": "Caroll", "id": 72, "category": "vetements"}, {"name": "Cerise Blue", "vinted_name": "Cerise Blue", "id": 216384, "category": "vetements"}, {"name": "Chipie", "vinted_name": "Chipie", "id": 369, "category": "vetements"}, {"name": "Chloé", "vinted_name": "Chloé", "id": 2113, "category": "vetements"}, {"name": "cks", "vinted_name": "cks", "id": 13053, "category": "vetements"}, {"name": "Claudie Pierlot", "vinted_name": "Claudie Pierlot", "id": 117, "category": "vetements"}, {"name": "Closed", "vinted_name": "Closed", "id": 17919, "category": "vetements"}, {"name": "Colorblock", "vinted_name": "Colorblock", "id": 82946, "category": "vetements"}, {"name": "Comptoir des Cotonniers", "vinted_name": "Comptoir des Cotonniers", "id": 238, "category": "vetements"}, {"name": "cop copine", "vinted_name": "Cop Copine", "id": 67, "category": "vetements"}, {"name": "Copenhagen", "vinted_name": "Copenhagen", "id": 365365, "category": "vetements"}, {"name": "COS", "vinted_name": "COS", "id": 2029, "category": "vetements"}, {"name": "Cotelac", "vinted_name": "Cotélac", "id": 374, "category": "vetements"}, {"name": "Cozete", "vinted_name": "Cozete", "id": 137076, "category": "vetements"}, {"name": "Custo", "vinted_name": "Custo", "id": 366, "category": "vetements"}, {"name": "Custo Barcelona", "vinted_name": "Custo Barcelona", "id": 6469, "category": "vetements"}, {"name": "Cyrillus", "vinted_name": "Cyrillus", "id": 461, "category": "vetements"}, {"name": "DDP", "vinted_name": "DDP", "id": 145, "category": "vetements"}, {"name": "Denim Studio", "vinted_name": "Denim Studio", "id": 18469, "category": "vetements"}, {"name": "Des Petits Hauts", "vinted_name": "Des Petits Hauts", "id": 3025, "category": "vetements"}, {"name": "Desigual", "vinted_name": "Desigual", "id": 491, "category": "vetements"}, {"name": "Deux Two", "vinted_name": "Deux Two", "id": 196832, "category": "vetements"}, {"name": "Diega", "vinted_name": "Diega", "id": 42105, "category": "vetements"}, {"name": "Diesel", "vinted_name": "Diesel", "id": 161, "category": "vetements"}, {"name": "Drolatic", "vinted_name": "Drolatic", "id": 30533, "category": "vetements"}, {"name": "Ekyog", "vinted_name": "Ekyog", "id": 206, "category": "vetements"}, {"name": "Esprit", "vinted_name": "Esprit", "id": 17, "category": "vetements"}, {"name": "Essentiel Antwerp", "vinted_name": "Essentiel Antwerp", "id": 61428, "category": "vetements"}, {"name": "Etam", "vinted_name": "Etam", "id": 101, "category": "vetements"}, {"name": "Faithfull the brand", "vinted_name": "Faithfull The Brand", "id": 434627, "category": "vetements"}, {"name": "Farm Rio", "vinted_name": "Farm Rio", "id": 456895, "category": "vetements"}, {"name": "Free People", "vinted_name": "Free People", "id": 4983, "category": "vetements"}, {"name": "Freeman T. Porter", "vinted_name": "Freeman T. Porter", "id": 28, "category": "vetements"}, {"name": "FRNCH", "vinted_name": "FRNCH", "id": 207390, "category": "vetements"}, {"name": "G-Star", "vinted_name": "G-Star", "id": 258, "category": "vetements"}, {"name": "G-star RAW", "vinted_name": "G-Star RAW", "id": 2782756, "category": "vetements"}, {"name": "Ganni", "vinted_name": "Ganni", "id": 170650, "category": "vetements"}, {"name": "Garçonne", "vinted_name": "Garconne", "id": 14335, "category": "vetements"}, {"name": "Gat Rimon", "vinted_name": "Gat Rimon", "id": 5659, "category": "vetements"}, {"name": "Gerard Darel", "vinted_name": "Gerard Darel", "id": 179, "category": "vetements"}, {"name": "Gertrude", "vinted_name": "Gertrude", "id": 18309, "category": "vetements"}, {"name": "Gestuz", "vinted_name": "Gestuz", "id": 30725, "category": "vetements"}, {"name": "Ginette garde", "vinted_name": "Ginette Garde", "id": 2077367, "category": "vetements"}, {"name": "Goa", "vinted_name": "Goa", "id": 5489, "category": "vetements"}, {"name": "Grace & Mila", "vinted_name": "Grace & Mila", "id": 10541, "category": "vetements"}, {"name": "Grace and Mila", "vinted_name": "Grace and Mila", "id": 98702, "category": "vetements"}, {"name": "Guess", "vinted_name": "GUESS", "id": 20, "category": "vetements"}, {"name": "Guess by Marciano", "vinted_name": "Guess by Marciano", "id": 1045, "category": "vetements"}, {"name": "Hana San", "vinted_name": "Hana San", "id": 367575, "category": "vetements"}, {"name": "HAPPY", "vinted_name": "HAPPY", "id": 282609, "category": "vetements"}, {"name": "Harris Wilson", "vinted_name": "Harris Wilson", "id": 36355, "category": "vetements"}, {"name": "Hartford", "vinted_name": "Hartford", "id": 18837, "category": "vetements"}, {"name": "HBT", "vinted_name": "HBT", "id": 342853, "category": "vetements"}, {"name": "Heimstone", "vinted_name": "Heimstone", "id": 25573, "category": "vetements"}, {"name": "Hod", "vinted_name": "Hod", "id": 215132, "category": "vetements"}, {"name": "Hoss Intropia", "vinted_name": "Hoss Intropia", "id": 62068, "category": "vetements"}, {"name": "Hugo Boss", "vinted_name": "Hugo Boss", "id": 120, "category": "vetements"}, {"name": "I.Code", "vinted_name": "I.Code", "id": 2375, "category": "vetements"}, {"name": "Iben", "vinted_name": "Iben", "id": 1471447, "category": "vetements"}, {"name": "ICHI", "vinted_name": "ICHI", "id": 1433, "category": "vetements"}, {"name": "Idano", "vinted_name": "Idano", "id": 124844, "category": "vetements"}, {"name": "IKKS", "vinted_name": "IKKS", "id": 61, "category": "vetements"}, {"name": "Indies", "vinted_name": "Indies", "id": 45019, "category": "vetements"}, {"name": "IRO", "vinted_name": "IRO", "id": 1633, "category": "vetements"}, {"name": "Isabel Marant", "vinted_name": "Isabel Marant", "id": 121, "category": "vetements"}, {"name": "Isabel Marant Etoile", "vinted_name": "Isabel Marant Étoile", "id": 4756790, "category": "vetements"}, {"name": "Jacqueline Riu", "vinted_name": "Jacqueline Riu", "id": 39, "category": "vetements"}, {"name": "Jean Paul Gaultier", "vinted_name": "Jean Paul Gaultier", "id": 4129, "category": "vetements"}, {"name": "JODHPUR", "vinted_name": "JODHPUR", "id": 7467, "category": "vetements"}, {"name": "John Galliano", "vinted_name": "John Galliano", "id": 10613, "category": "vetements"}, {"name": "K&us", "vinted_name": "Creeks", "id": 262, "category": "vetements"}, {"name": "Kañopé", "vinted_name": "Kañopé", "id": 169186, "category": "vetements"}, {"name": "Kaporal", "vinted_name": "Kaporal", "id": 273, "category": "vetements"}, {"name": "Karen Millen", "vinted_name": "Karen Millen", "id": 4271, "category": "vetements"}, {"name": "Karl Lagerfeld", "vinted_name": "Karl Lagerfeld", "id": 103, "category": "vetements"}, {"name": "Karl Marc John", "vinted_name": "Karl Marc John", "id": 180, "category": "vetements"}, {"name": "Kenzo", "vinted_name": "Kenzo", "id": 1075, "category": "vetements"}, {"name": "King Louie", "vinted_name": "King Louie", "id": 181772, "category": "vetements"}, {"name": "Kling", "vinted_name": "Kling", "id": 222, "category": "vetements"}, {"name": "kookai", "vinted_name": "KOOKAÏ", "id": 123, "category": "vetements"}, {"name": "Kulte", "vinted_name": "Kulte", "id": 1587, "category": "vetements"}, {"name": "La Fée Maraboutée", "vinted_name": "La Fee Maraboutee", "id": 5493, "category": "vetements"}, {"name": "La p'tite étoile", "vinted_name": "La p'tite étoile", "id": 89232, "category": "vetements"}, {"name": "La petite étoile", "vinted_name": "La petite étoile", "id": 109540, "category": "vetements"}, {"name": "La Petite Française", "vinted_name": "La Petite Française", "id": 119, "category": "vetements"}, {"name": "Lab dip", "vinted_name": "Labdip", "id": 15073375, "category": "vetements"}, {"name": "Laura Clément", "vinted_name": "Laura Clément", "id": 311, "category": "vetements"}, {"name": "Laurence Bras", "vinted_name": "Laurence Bras", "id": 321732, "category": "vetements"}, {"name": "Laurence Doligé", "vinted_name": "Laurence doligé", "id": 37665, "category": "vetements"}, {"name": "Laurent Vidal", "vinted_name": "Lauren Vidal", "id": 31449, "category": "vetements"}, {"name": "Le Temps des Cerises", "vinted_name": "Le Temps des Cerises", "id": 46, "category": "vetements"}, {"name": "Leon & Harper", "vinted_name": "Leon & Harper", "id": 21019, "category": "vetements"}, {"name": "Les Petites", "vinted_name": "les petites", "id": 2323, "category": "vetements"}, {"name": "Levi's", "vinted_name": "Levi's", "id": 10, "category": "vetements"}, {"name": "Lili et Lala", "vinted_name": "Lili & Lala", "id": 178170, "category": "vetements"}, {"name": "Lili Sidonio", "vinted_name": "Lili Sidonio", "id": 507155, "category": "vetements"}, {"name": "LIU Jeans", "vinted_name": "LIU Jeans", "id": 30377, "category": "vetements"}, {"name": "Liu Jo", "vinted_name": "Liu Jo", "id": 2165, "category": "vetements"}, {"name": "Liu Jo Jeans", "vinted_name": "Liu Jo Jeans", "id": 6479670, "category": "vetements"}, {"name": "Lois", "vinted_name": "Lois", "id": 2389, "category": "vetements"}, {"name": "Lolita Lempicka", "vinted_name": "Lolita Lempicka", "id": 4283, "category": "vetements"}, {"name": "Loreak Mendian", "vinted_name": "Loreak Mendian", "id": 21835, "category": "vetements"}, {"name": "Louise Misha", "vinted_name": "Louise Misha", "id": 265000, "category": "vetements"}, {"name": "Louison", "vinted_name": "Louison", "id": 39333, "category": "vetements"}, {"name": "mademoiselle tara", "vinted_name": "mademoiselle tara", "id": 210570, "category": "vetements"}, {"name": "mais il est ou le soleil", "vinted_name": "Mais il est où le soleil ?", "id": 23715, "category": "vetements"}, {"name": "Maison 123", "vinted_name": "Maison 123", "id": 723475, "category": "vetements"}, {"name": "Maison Hotel", "vinted_name": "Maison Hotel", "id": 396848, "category": "vetements"}, {"name": "Maison Scotch", "vinted_name": "Maison Scotch", "id": 278, "category": "vetements"}, {"name": "Maje", "vinted_name": "Maje", "id": 116, "category": "vetements"}, {"name": "Majestic", "vinted_name": "Majestic", "id": 5725, "category": "vetements"}, {"name": "Manoukian", "vinted_name": "Manoukian", "id": 359, "category": "vetements"}, {"name": "Manoush", "vinted_name": "Manoush", "id": 1899, "category": "vetements"}, {"name": "Marc by Marc Jacobs", "vinted_name": "Marc by Marc Jacobs", "id": 3447, "category": "vetements"}, {"name": "Marc Jacobs", "vinted_name": "Marc Jacobs", "id": 372, "category": "vetements"}, {"name": "Marc'O Polo", "vinted_name": "Marc O'Polo", "id": 17251, "category": "vetements"}, {"name": "Marie Sixtine", "vinted_name": "Marie Sixtine", "id": 13939, "category": "vetements"}, {"name": "Marithé François Girbaud", "vinted_name": "Marithé + François Girbaud", "id": 11521, "category": "vetements"}, {"name": "Massimo Dutti", "vinted_name": "Massimo Dutti", "id": 579, "category": "vetements"}, {"name": "Max Mara", "vinted_name": "Max Mara", "id": 5483, "category": "vetements"}, {"name": "Mbym", "vinted_name": "MbyM", "id": 260600, "category": "vetements"}, {"name": "Michael Kors", "vinted_name": "Michael Kors", "id": 6005, "category": "vetements"}, {"name": "Mint&Berry", "vinted_name": "Mint & Berry", "id": 20981, "category": "vetements"}, {"name": "Mira Mikati", "vinted_name": "Mira Mikati", "id": 531525, "category": "vetements"}, {"name": "MKT studio", "vinted_name": "MKT Studio", "id": 32079, "category": "vetements"}, {"name": "Molly Bracken", "vinted_name": "Molly Bracken", "id": 1151, "category": "vetements"}, {"name": "Momoni", "vinted_name": "Momoni", "id": 65924, "category": "vetements"}, {"name": "Morgan", "vinted_name": "Morgan", "id": 36, "category": "vetements"}, {"name": "Mos mosh", "vinted_name": "Mos Mosh", "id": 62830, "category": "vetements"}, {"name": "Moshi moshi minds", "vinted_name": "Moshi Moshi Mind", "id": 1392869, "category": "vetements"}, {"name": "MSCH Copenhagen", "vinted_name": "MSCH Copenhagen", "id": 15439901, "category": "vetements"}, {"name": "My Sunday Morning", "vinted_name": "My Sunday Morning", "id": 279544, "category": "vetements"}, {"name": "Naf Naf", "vinted_name": "Naf Naf", "id": 177, "category": "vetements"}, {"name": "Napapijri", "vinted_name": "Napapijri", "id": 214, "category": "vetements"}, {"name": "Nekane", "vinted_name": "Nekane", "id": 453741, "category": "vetements"}, {"name": "Nice Things", "vinted_name": "Nice Things", "id": 14491, "category": "vetements"}, {"name": "Noa Noa", "vinted_name": "Noa Noa", "id": 1359, "category": "vetements"}, {"name": "Nümph", "vinted_name": "Nümph", "id": 13185, "category": "vetements"}, {"name": "OAKWOOD", "vinted_name": "OAKWOOD", "id": 6389, "category": "vetements"}, {"name": "Object", "vinted_name": "Object", "id": 12011, "category": "vetements"}, {"name": "One Step", "vinted_name": "One step", "id": 1987, "category": "vetements"}, {"name": "Only", "vinted_name": "ONLY", "id": 100, "category": "vetements"}, {"name": "Orfeo", "vinted_name": "Orfeo", "id": 75030, "category": "vetements"}, {"name": "Ottodame", "vinted_name": "ottod'Ame", "id": 55299, "category": "vetements"}, {"name": "Pablo", "vinted_name": "Pablo", "id": 24917, "category": "vetements"}, {"name": "Pablo de Gerard Darel", "vinted_name": "Pablo de Gerard Darel", "id": 5663, "category": "vetements"}, {"name": "Pako Litto", "vinted_name": "Pako Litto", "id": 3005, "category": "vetements"}, {"name": "Part Two", "vinted_name": "PART TWO", "id": 26627, "category": "vetements"}, {"name": "Patrice Bréal", "vinted_name": "Patrice Breal", "id": 522, "category": "vetements"}, {"name": "Patricia Pepe", "vinted_name": "Patrizia Pepe", "id": 7125, "category": "vetements"}, {"name": "Pepe Jeans", "vinted_name": "Pepe Jeans", "id": 192, "category": "vetements"}, {"name": "Petite Mendigote", "vinted_name": "Petite Mendigote", "id": 5501, "category": "vetements"}, {"name": "Pimkie", "vinted_name": "Pimkie", "id": 3, "category": "vetements"}, {"name": "Please", "vinted_name": "Please", "id": 30653, "category": "vetements"}, {"name": "Promod", "vinted_name": "Promod", "id": 5, "category": "vetements"}, {"name": "Ralph Lauren", "vinted_name": "Ralph Lauren", "id": 88, "category": "vetements"}, {"name": "RAW", "vinted_name": "RAW", "id": 46411, "category": "vetements"}, {"name": "Red Legend", "vinted_name": "Red Legend", "id": 334966, "category": "vetements"}, {"name": "Reiko", "vinted_name": "Reiko", "id": 16597, "category": "vetements"}, {"name": "Replay", "vinted_name": "Replay", "id": 1501, "category": "vetements"}, {"name": "Rita Row", "vinted_name": "Rita Row", "id": 620482, "category": "vetements"}, {"name": "Rosae Paris", "vinted_name": "Rosae Paris", "id": 1863049, "category": "vetements"}, {"name": "Rose Garden", "vinted_name": "Rose Garden", "id": 173852, "category": "vetements"}, {"name": "Roseanna", "vinted_name": "Roseanna", "id": 51009, "category": "vetements"}, {"name": "Rouje", "vinted_name": "Rouje", "id": 282478, "category": "vetements"}, {"name": "Sacrécœur", "vinted_name": "Sacrécoeur", "id": 809858, "category": "vetements"}, {"name": "Samsoe & Samsoe", "vinted_name": "Samsøe Samsøe", "id": 87414, "category": "vetements"}, {"name": "Sandro", "vinted_name": "Sandro", "id": 115, "category": "vetements"}, {"name": "Sandwich", "vinted_name": "sandwich", "id": 15817, "category": "vetements"}, {"name": "Scarlet Roos", "vinted_name": "Scarlet Roos", "id": 9453, "category": "vetements"}, {"name": "School Rag", "vinted_name": "School Rag", "id": 523, "category": "vetements"}, {"name": "SCOTCH & SODA", "vinted_name": "Scotch & Soda", "id": 13743, "category": "vetements"}, {"name": "Second Female", "vinted_name": "Second Female", "id": 103468, "category": "vetements"}, {"name": "See U Soon", "vinted_name": "See U Soon", "id": 58, "category": "vetements"}, {"name": "Serendipity", "vinted_name": "Serendipity", "id": 406418, "category": "vetements"}, {"name": "Sessun", "vinted_name": "Sessun", "id": 329, "category": "vetements"}, {"name": "Sezane", "vinted_name": "Sézane", "id": 38437, "category": "vetements"}, {"name": "Sinéquanone", "vinted_name": "Sinéquanone", "id": 182, "category": "vetements"}, {"name": "Skunkfunk", "vinted_name": "Skunkfunk", "id": 4591, "category": "vetements"}, {"name": "Sœur", "vinted_name": "soeur", "id": 18751, "category": "vetements"}, {"name": "Sonia Rykiel", "vinted_name": "Sonia Rykiel", "id": 231, "category": "vetements"}, {"name": "Stella & Suzie", "vinted_name": "Stella & Suzie", "id": 381811, "category": "vetements"}, {"name": "Stella Forest", "vinted_name": "Stella Forest", "id": 8723, "category": "vetements"}, {"name": "Street One", "vinted_name": "Street One", "id": 402, "category": "vetements"}, {"name": "SUD Express", "vinted_name": "SUD Express", "id": 388, "category": "vetements"}, {"name": "Suncoo", "vinted_name": "suncoo", "id": 2811, "category": "vetements"}, {"name": "Sweewë", "vinted_name": "Sweewë", "id": 6923, "category": "vetements"}, {"name": "Tara Jarmon", "vinted_name": "Tara Jarmon", "id": 1497, "category": "vetements"}, {"name": "Ted Baker", "vinted_name": "Ted Baker", "id": 1219, "category": "vetements"}, {"name": "Teddy Smith", "vinted_name": "Teddy Smith", "id": 132, "category": "vetements"}, {"name": "The kooples", "vinted_name": "The Kooples", "id": 2021, "category": "vetements"}, {"name": "The Korner", "vinted_name": "The Korner", "id": 200164, "category": "vetements"}, {"name": "The new society", "vinted_name": "The New Society", "id": 1697278, "category": "vetements"}, {"name": "Thinking Mu", "vinted_name": "Thinking MU", "id": 345148, "category": "vetements"}, {"name": "Tinsels", "vinted_name": "tinsels", "id": 139944, "category": "vetements"}, {"name": "Tom Tailor", "vinted_name": "Tom Tailor", "id": 1845, "category": "vetements"}, {"name": "Tommy Hilfiger", "vinted_name": "Tommy Hilfiger", "id": 94, "category": "vetements"}, {"name": "Tommy Jeans", "vinted_name": "Tommy Jeans", "id": 352755, "category": "vetements"}, {"name": "Vanessa Bruno", "vinted_name": "Vanessa Bruno", "id": 1593, "category": "vetements"}, {"name": "Vero Moda", "vinted_name": "Vero Moda", "id": 55, "category": "vetements"}, {"name": "Vila", "vinted_name": "Vila", "id": 460, "category": "vetements"}, {"name": "Virginie Castaway", "vinted_name": "virginie castaway", "id": 18279, "category": "vetements"}, {"name": "Wild", "vinted_name": "WiLD", "id": 294803, "category": "vetements"}, {"name": "Ycoo", "vinted_name": "YCOO", "id": 157862, "category": "vetements"}, {"name": "Yumi", "vinted_name": "Yumi", "id": 485, "category": "vetements"}, {"name": "Zadig & Voltaire", "vinted_name": "Zadig & Voltaire", "id": 765, "category": "vetements"}, {"name": "ZAPA", "vinted_name": "ZAPA", "id": 2483, "category": "vetements"}, {"name": "Anne de Solène", "vinted_name": "Anne de Solène", "id": 481647, "category": "textile"}, {"name": "Azzaro", "vinted_name": "Azzaro", "id": 4401, "category": "textile"}, {"name": "Becquet", "vinted_name": "Becquet", "id": 302009, "category": "textile"}, {"name": "Bouchara", "vinted_name": "Bouchara", "id": 268190, "category": "textile"}, {"name": "Carré Blanc", "vinted_name": "Carré Blanc", "id": 168840, "category": "textile"}, {"name": "Descamps", "vinted_name": "Descamps", "id": 225514, "category": "textile"}, {"name": "Galeries Lafayette", "vinted_name": "Galeries Lafayette", "id": 274, "category": "textile"}, {"name": "Garnier Thiebaut", "vinted_name": "Garnier Thiebaut", "id": 526800, "category": "textile"}, {"name": "Guy Laroche", "vinted_name": "Guy Laroche", "id": 1961, "category": "textile"}, {"name": "Habitat", "vinted_name": "Habitat", "id": 183450, "category": "textile"}, {"name": "Harmony", "vinted_name": "Harmony", "id": 114450, "category": "textile"}, {"name": "Jalla", "vinted_name": "Jalla", "id": 282112, "category": "textile"}, {"name": "Jean-Louis Scherrer", "vinted_name": "Jean-Louis Scherrer", "id": 1377, "category": "textile"}, {"name": "La Redoute", "vinted_name": "La Redoute", "id": 59, "category": "textile"}, {"name": "Leroy Merlin", "vinted_name": "Leroy Merlin", "id": 316440, "category": "textile"}, {"name": "LinVosges", "vinted_name": "Linvosges", "id": 44127, "category": "textile"}, {"name": "Madura", "vinted_name": "Madura", "id": 249248, "category": "textile"}, {"name": "Maison d'été", "vinted_name": "La Maison de l'Espadrille", "id": 20367, "category": "textile"}, {"name": "Olivier Desforges", "vinted_name": "Olivier Desforges", "id": 235196, "category": "textile"}, {"name": "Printemps", "vinted_name": "Printemps", "id": 6009, "category": "textile"}, {"name": "Tradition des Vosges", "vinted_name": "Tradition des Vosges", "id": 318143, "category": "textile"}, {"name": "Yves Delorme", "vinted_name": "Yves Delorme", "id": 340022, "category": "textile"}, {"name": "Banana Moon", "vinted_name": "Banana Moon", "id": 358, "category": "sportswear"}, {"name": "Bench", "vinted_name": "Bench", "id": 4749, "category": "sportswear"}, {"name": "Bensimon", "vinted_name": "Bensimon", "id": 328, "category": "sportswear"}, {"name": "Billabong", "vinted_name": "Billabong", "id": 446, "category": "sportswear"}, {"name": "E9", "vinted_name": "E9", "id": 296301, "category": "sportswear"}, {"name": "Element", "vinted_name": "Element", "id": 2037, "category": "sportswear"}, {"name": "KanaBeach", "vinted_name": "KanaBeach", "id": 64, "category": "sportswear"}, {"name": "North Sails", "vinted_name": "North Sails", "id": 118270, "category": "sportswear"}, {"name": "O'Neill", "vinted_name": "O'Neill", "id": 4325, "category": "sportswear"}, {"name": "Quicksilver", "vinted_name": "Quiksilver", "id": 159, "category": "sportswear"}, {"name": "Roxy", "vinted_name": "Roxy", "id": 27, "category": "sportswear"}, {"name": "Adidas", "vinted_name": "adidas", "id": 14, "category": "sport"}, {"name": "Asics", "vinted_name": "Asics", "id": 1195, "category": "sport"}, {"name": "Björn Bjorg", "vinted_name": "Björn Borg", "id": 72828, "category": "sport"}, {"name": "Brooks", "vinted_name": "Brooks", "id": 77512, "category": "sport"}, {"name": "Champion", "vinted_name": "Champion", "id": 7973, "category": "sport"}, {"name": "New Balance", "vinted_name": "New Balance", "id": 1775, "category": "sport"}, {"name": "Nike", "vinted_name": "Nike", "id": 53, "category": "sport"}, {"name": "Puma", "vinted_name": "Puma", "id": 535, "category": "sport"}, {"name": "Reebook", "vinted_name": "Reebok", "id": 162, "category": "sport"}, {"name": "Under Armour", "vinted_name": "Under Armour", "id": 52035, "category": "sport"}, {"name": "A.S.98", "vinted_name": "A.S.98", "id": 278655, "category": "sacs"}, {"name": "Abaco", "vinted_name": "Abaco", "id": 4669, "category": "sacs"}, {"name": "Basilic Pepper", "vinted_name": "Basilic Pepper", "id": 267495, "category": "sacs"}, {"name": "Bleu de Chauffe", "vinted_name": "Bleu de Chauffe", "id": 276805, "category": "sacs"}, {"name": "Campomaggi", "vinted_name": "Campomaggi", "id": 148292, "category": "sacs"}, {"name": "Coccinelle", "vinted_name": "Coccinelle", "id": 449, "category": "sacs"}, {"name": "Cotopaxi", "vinted_name": "Cotopaxi", "id": 1346677, "category": "sacs"}, {"name": "Dépêche", "vinted_name": "Depeche Mode", "id": 12993, "category": "sacs"}, {"name": "Doughnut", "vinted_name": "Doughnut", "id": 643216, "category": "sacs"}, {"name": "Elinia", "vinted_name": "Elina Kara", "id": 197170, "category": "sacs"}, {"name": "Erinly", "vinted_name": "Erinly", "id": 235536, "category": "sacs"}, {"name": "Faguo", "vinted_name": "FAGUO", "id": 12595, "category": "sacs"}, {"name": "Feeka", "vinted_name": "Feeka", "id": 1945632, "category": "sacs"}, {"name": "Fitz", "vinted_name": "FitZ", "id": 145948, "category": "sacs"}, {"name": "Fitz & Huxley", "vinted_name": "Fitz & Huxley", "id": 695648, "category": "sacs"}, {"name": "Fjallraven", "vinted_name": "Fjällräven", "id": 81026, "category": "sacs"}, {"name": "Fossil", "vinted_name": "Fossil", "id": 5173, "category": "sacs"}, {"name": "Harristweed", "vinted_name": "Harris Tweed", "id": 163012, "category": "sacs"}, {"name": "Herschel", "vinted_name": "Herschel", "id": 14151, "category": "sacs"}, {"name": "Jérôme Dreyfuss", "vinted_name": "Jérôme Dreyfuss", "id": 6383, "category": "sacs"}, {"name": "Kate Lee", "vinted_name": "Kate Lee", "id": 88400, "category": "sacs"}, {"name": "L4K3", "vinted_name": "L4K3", "id": 517252, "category": "sacs"}, {"name": "Lässig", "vinted_name": "Lässig", "id": 4640207, "category": "sacs"}, {"name": "Léa Toni", "vinted_name": "Le Amonie", "id": 1499935, "category": "sacs"}, {"name": "Les Tropeziennes", "vinted_name": "Les Tropeziennes", "id": 199, "category": "sacs"}, {"name": "Mandoline", "vinted_name": "Mandoline", "id": 270696, "category": "sacs"}, {"name": "Maradji", "vinted_name": "Maradji", "id": 274659, "category": "sacs"}, {"name": "Mila Louise", "vinted_name": "Mila Louise", "id": 14859, "category": "sacs"}, {"name": "Minelli", "vinted_name": "Minelli", "id": 118, "category": "sacs"}, {"name": "MySuelly", "vinted_name": "MySuelly", "id": 69030, "category": "sacs"}, {"name": "Nat & Nin", "vinted_name": "Nat & Nin", "id": 6235, "category": "sacs"}, {"name": "Paul & Joe", "vinted_name": "Paul & Joe", "id": 4755, "category": "sacs"}, {"name": "Paul Marius", "vinted_name": "Paul Marius", "id": 114024, "category": "sacs"}, {"name": "Paule Ka", "vinted_name": "Paule Ka", "id": 12555, "category": "sacs"}, {"name": "Pieces", "vinted_name": "Pieces", "id": 2251, "category": "sacs"}, {"name": "Polder", "vinted_name": "Polder", "id": 178440, "category": "sacs"}, {"name": "Rains", "vinted_name": "Rains", "id": 118456, "category": "sacs"}, {"name": "Rodier", "vinted_name": "Rodier", "id": 1879, "category": "sacs"}, {"name": "Sabrina", "vinted_name": "Sabrina", "id": 2421, "category": "sacs"}, {"name": "SANDQVIST", "vinted_name": "Sandqvist", "id": 276161, "category": "sacs"}, {"name": "Scooter", "vinted_name": "Scooter", "id": 11625, "category": "sacs"}, {"name": "Sokura", "vinted_name": "SAKURA", "id": 47239, "category": "sacs"}, {"name": "Virginie Darling", "vinted_name": "Virginie Darling", "id": 1225849, "category": "sacs"}, {"name": "Rosefield", "vinted_name": "Rosefield", "id": 272619, "category": "montres"}, {"name": "Arc'teryx", "vinted_name": "Arc'teryx", "id": 319730, "category": "montagne"}, {"name": "Ayacucho", "vinted_name": "Ayacucho", "id": 242118, "category": "montagne"}, {"name": "Bergans", "vinted_name": "Bergans", "id": 355332, "category": "montagne"}, {"name": "Berghaus", "vinted_name": "Berghaus", "id": 69298, "category": "montagne"}, {"name": "black crows", "vinted_name": "Black Rose", "id": 276415, "category": "montagne"}, {"name": "Black Diamond", "vinted_name": "Black Diamond", "id": 279381, "category": "montagne"}, {"name": "Buff", "vinted_name": "Buff", "id": 258674, "category": "montagne"}, {"name": "Bvsport", "vinted_name": "BV SPORT", "id": 196536, "category": "montagne"}, {"name": "Camp", "vinted_name": "Camper", "id": 6607, "category": "montagne"}, {"name": "cimalp", "vinted_name": "Cimalp", "id": 267435, "category": "montagne"}, {"name": "CMP", "vinted_name": "CMP", "id": 30609, "category": "montagne"}, {"name": "Columbia", "vinted_name": "Columbia", "id": 17161, "category": "montagne"}, {"name": "Craft", "vinted_name": "Craft", "id": 120326, "category": "montagne"}, {"name": "Devold", "vinted_name": "Devold", "id": 323984, "category": "montagne"}, {"name": "Eider", "vinted_name": "Eider", "id": 31197, "category": "montagne"}, {"name": "Haglöfs", "vinted_name": "Haglöfs", "id": 245240, "category": "montagne"}, {"name": "Hoka one one", "vinted_name": "Hoka One One", "id": 4744140, "category": "montagne"}, {"name": "Icebreaker", "vinted_name": "icebreaker", "id": 278800, "category": "montagne"}, {"name": "Icepeak", "vinted_name": "Icepeak", "id": 82496, "category": "montagne"}, {"name": "Jack Wolfskin", "vinted_name": "Jack Wolfskin", "id": 147650, "category": "montagne"}, {"name": "Kari Traa", "vinted_name": "Kari Traa", "id": 250248, "category": "montagne"}, {"name": "Karpos", "vinted_name": "KARPOS", "id": 364788, "category": "montagne"}, {"name": "keen", "vinted_name": "keen", "id": 266259, "category": "montagne"}, {"name": "La Sportiva", "vinted_name": "La Sportiva", "id": 201320, "category": "montagne"}, {"name": "Lafuma", "vinted_name": "Lafuma", "id": 4435, "category": "montagne"}, {"name": "Lolë", "vinted_name": "Lolë", "id": 137070, "category": "montagne"}, {"name": "looking for wild", "vinted_name": "Looking for Wild", "id": 452875, "category": "montagne"}, {"name": "Low alpine", "vinted_name": "Lowe Alpine", "id": 254204, "category": "montagne"}, {"name": "Lowa", "vinted_name": "Lowa", "id": 233698, "category": "montagne"}, {"name": "Lululemon", "vinted_name": "Lululemon", "id": 198238, "category": "montagne"}, {"name": "Mammut", "vinted_name": "Mammut", "id": 209084, "category": "montagne"}, {"name": "Marmot", "vinted_name": "Marmot", "id": 150068, "category": "montagne"}, {"name": "Merrell", "vinted_name": "Merrell", "id": 98860, "category": "montagne"}, {"name": "Millet", "vinted_name": "Millet", "id": 78398, "category": "montagne"}, {"name": "MIZUNO", "vinted_name": "MIZUNO", "id": 28571, "category": "montagne"}, {"name": "Montura", "vinted_name": "Montura", "id": 323480, "category": "montagne"}, {"name": "Mountain Equipment", "vinted_name": "Mountain Equipment", "id": 572046, "category": "montagne"}, {"name": "Norrona", "vinted_name": "Norrøna", "id": 356632, "category": "montagne"}, {"name": "Odlo", "vinted_name": "Odlo", "id": 26843, "category": "montagne"}, {"name": "On Running", "vinted_name": "On Running", "id": 267947, "category": "montagne"}, {"name": "Ortovox", "vinted_name": "Ortovox", "id": 422028, "category": "montagne"}, {"name": "Osprey", "vinted_name": "Osprey", "id": 301297, "category": "montagne"}, {"name": "Patagonia", "vinted_name": "Patagonia", "id": 90804, "category": "montagne"}, {"name": "Petzl", "vinted_name": "PETZL", "id": 345475, "category": "montagne"}, {"name": "Picture", "vinted_name": "PICTURE", "id": 19215, "category": "montagne"}, {"name": "Picture Organic Clothing", "vinted_name": "Picture Organic Clothing", "id": 96536, "category": "montagne"}, {"name": "Prana", "vinted_name": "Prana", "id": 160260, "category": "montagne"}, {"name": "Rab", "vinted_name": "Paco Rabanne", "id": 1379, "category": "montagne"}, {"name": "Raidlight", "vinted_name": "Raidlight", "id": 292542, "category": "montagne"}, {"name": "Regatta", "vinted_name": "Regatta", "id": 14317, "category": "montagne"}, {"name": "Rossignol", "vinted_name": "Rossignol", "id": 19387, "category": "montagne"}, {"name": "Royal Robbins", "vinted_name": "Royal Robbins", "id": 255056, "category": "montagne"}, {"name": "Rukka", "vinted_name": "Rukka", "id": 367931, "category": "montagne"}, {"name": "Salewa", "vinted_name": "Salewa", "id": 60412, "category": "montagne"}, {"name": "Salming", "vinted_name": "Salming", "id": 208160, "category": "montagne"}, {"name": "Salomon", "vinted_name": "Salomon", "id": 15457, "category": "montagne"}, {"name": "Saucony", "vinted_name": "Saucony", "id": 40813, "category": "montagne"}, {"name": "Schmuddelwedda", "vinted_name": "Schmuddelwedda", "id": 325262, "category": "montagne"}, {"name": "Simond", "vinted_name": "Simond", "id": 173272, "category": "montagne"}, {"name": "Skins", "vinted_name": "Skins", "id": 170786, "category": "montagne"}, {"name": "Tecnica", "vinted_name": "Tecnica", "id": 181264, "category": "montagne"}, {"name": "Teva", "vinted_name": "Teva", "id": 177100, "category": "montagne"}, {"name": "The North Face", "vinted_name": "The North Face", "id": 2319, "category": "montagne"}, {"name": "Trangoworld", "vinted_name": "Trangoworld", "id": 379410, "category": "montagne"}, {"name": "Trespass", "vinted_name": "Trespass", "id": 51861, "category": "montagne"}, {"name": "Vaude", "vinted_name": "Vaude", "id": 63684, "category": "montagne"}, {"name": "Wed'ze", "vinted_name": "Wed'ze", "id": 13813, "category": "montagne"}, {"name": "X-Bionic", "vinted_name": "X-BIONIC", "id": 197188, "category": "montagne"}, {"name": "AMPM", "vinted_name": "AM:PM", "id": 56944, "category": "maison"}, {"name": "Applicata", "vinted_name": "Applicata", "id": 2377748, "category": "maison"}, {"name": "Avolt", "vinted_name": "La faute a Voltaire", "id": 301954, "category": "maison"}, {"name": "Blomus", "vinted_name": "Blomus", "id": 1780326, "category": "maison"}, {"name": "Bloomingville", "vinted_name": "Bloomingville", "id": 293062, "category": "maison"}, {"name": "Bo Concept", "vinted_name": "BoConcept", "id": 1463020, "category": "maison"}, {"name": "Fatboy", "vinted_name": "Fatboy", "id": 203744, "category": "maison"}, {"name": "Ferm living", "vinted_name": "Ferm Living", "id": 329412, "category": "maison"}, {"name": "Gejst", "vinted_name": "Gejst", "id": 7659422, "category": "maison"}, {"name": "H&M", "vinted_name": "H&M", "id": 7, "category": "maison"}, {"name": "H&M home", "vinted_name": "H&M Home", "id": 760151, "category": "maison"}, {"name": "Hay", "vinted_name": "Hay", "id": 254028, "category": "maison"}, {"name": "House Doctor", "vinted_name": "House Doctor", "id": 320178, "category": "maison"}, {"name": "Hübsch", "vinted_name": "Hübsch", "id": 629884, "category": "maison"}, {"name": "Ibride", "vinted_name": "Inside", "id": 5143, "category": "maison"}, {"name": "ikea", "vinted_name": "IKEA", "id": 184302, "category": "maison"}, {"name": "Kare Design", "vinted_name": "Kare Design", "id": 605777, "category": "maison"}, {"name": "Karlsson", "vinted_name": "Karlsson", "id": 582327, "category": "maison"}, {"name": "Kartell", "vinted_name": "Kartell", "id": 199876, "category": "maison"}, {"name": "Kave Home", "vinted_name": "Kave Home", "id": 1277015, "category": "maison"}, {"name": "Madeinwow", "vinted_name": "Made in Tomboy", "id": 5046275, "category": "maison"}, {"name": "Magis", "vinted_name": "magis", "id": 953636, "category": "maison"}, {"name": "Maisons du Monde", "vinted_name": "Maisons du Monde", "id": 124344, "category": "maison"}, {"name": "Monoprix", "vinted_name": "Monoprix", "id": 104, "category": "maison"}, {"name": "Nordal", "vinted_name": "Nordal", "id": 632844, "category": "maison"}, {"name": "Normann Copenhagen", "vinted_name": "Normann Copenhagen", "id": 957810, "category": "maison"}, {"name": "Rokr", "vinted_name": "Roy Roger's", "id": 179520, "category": "maison"}, {"name": "Seletti", "vinted_name": "Seletti", "id": 398122, "category": "maison"}, {"name": "Serax", "vinted_name": "Serax", "id": 447745, "category": "maison"}, {"name": "Sklum", "vinted_name": "Sklum", "id": 1403551, "category": "maison"}, {"name": "Umbra", "vinted_name": "Umbra", "id": 305581, "category": "maison"}, {"name": "Zara Home", "vinted_name": "Zara Home", "id": 45969, "category": "maison"}, {"name": "Zodio", "vinted_name": "Zodio", "id": 287076, "category": "maison"}, {"name": "Zuiver", "vinted_name": "Zuiver", "id": 1275066, "category": "maison"}, {"name": "Agent Provocateur", "vinted_name": "Agent Provocateur", "id": 86728, "category": "lingerie"}, {"name": "Albertine", "vinted_name": "Albertine", "id": 102400, "category": "lingerie"}, {"name": "Aubade", "vinted_name": "Aubade", "id": 6793, "category": "lingerie"}, {"name": "Belveris", "vinted_name": "Bellerose", "id": 2007, "category": "lingerie"}, {"name": "Chantal Thomass", "vinted_name": "Chantal Thomass", "id": 175, "category": "lingerie"}, {"name": "Chantelle", "vinted_name": "Chantelle", "id": 49653, "category": "lingerie"}, {"name": "Darjeeling", "vinted_name": "Darjeeling", "id": 333, "category": "lingerie"}, {"name": "Eres", "vinted_name": "Eres", "id": 4691, "category": "lingerie"}, {"name": "Gerbe", "vinted_name": "GERBE", "id": 144440, "category": "lingerie"}, {"name": "Hanro", "vinted_name": "Hanro", "id": 72806, "category": "lingerie"}, {"name": "Hunkem'oller", "vinted_name": "Hunkemöller", "id": 27913, "category": "lingerie"}, {"name": "Implicite", "vinted_name": "Implicite", "id": 182722, "category": "lingerie"}, {"name": "Intimissimi", "vinted_name": "Intimissimi", "id": 9799, "category": "lingerie"}, {"name": "La Perla", "vinted_name": "La Perla", "id": 21013, "category": "lingerie"}, {"name": "Lejaby", "vinted_name": "Lejaby", "id": 5992436, "category": "lingerie"}, {"name": "Lise Charmel", "vinted_name": "Lise Charmel", "id": 23079, "category": "lingerie"}, {"name": "Maison Lejaby", "vinted_name": "Maison Lejaby", "id": 151432, "category": "lingerie"}, {"name": "Pasionnata", "vinted_name": "Passionata", "id": 2711, "category": "lingerie"}, {"name": "Patrice catanzaro", "vinted_name": "Patrice Catanzaro", "id": 91970, "category": "lingerie"}, {"name": "Princesse Tam Tam", "vinted_name": "Princesse Tam Tam", "id": 171, "category": "lingerie"}, {"name": "Rougegorge", "vinted_name": "Rougegorge", "id": 4691474, "category": "lingerie"}, {"name": "Simone Péréle", "vinted_name": "Simone Pérèle", "id": 651, "category": "lingerie"}, {"name": "Uniqlo", "vinted_name": "Uniqlo", "id": 1153, "category": "lingerie"}, {"name": "Wolford", "vinted_name": "Wolford", "id": 19323, "category": "lingerie"}, {"name": "Barts", "vinted_name": "Barts", "id": 12945, "category": "écharpes"}, {"name": "Beck Sondergaard", "vinted_name": "Becksöndergaard", "id": 4630577, "category": "écharpes"}, {"name": "Bloom", "vinted_name": "Bloom", "id": 138886, "category": "écharpes"}, {"name": "Isotoner", "vinted_name": "Isotoner", "id": 15071, "category": "écharpes"}, {"name": "La Fiancée du Mékong", "vinted_name": "La Fiancée du Mekong", "id": 4535, "category": "écharpes"}, {"name": "Alessi", "vinted_name": "Alessi", "id": 331522, "category": "cuisine"}, {"name": "Aubecq", "vinted_name": "Aubert", "id": 3003001, "category": "cuisine"}, {"name": "Beka", "vinted_name": "Pull & Bear", "id": 4690593, "category": "cuisine"}, {"name": "Berghoff", "vinted_name": "BergHOFF", "id": 510483, "category": "cuisine"}, {"name": "Bialetti", "vinted_name": "Bialetti", "id": 726317, "category": "cuisine"}, {"name": "Bourgeat", "vinted_name": "Jean Bourget", "id": 20801, "category": "cuisine"}, {"name": "brabantia", "vinted_name": "Brabantia", "id": 389956, "category": "cuisine"}, {"name": "Cristel", "vinted_name": "Cristel", "id": 307600, "category": "cuisine"}, {"name": "De buyer", "vinted_name": "Biche de Bere", "id": 14009, "category": "cuisine"}, {"name": "Delonghi", "vinted_name": "De'Longhi", "id": 371027, "category": "cuisine"}, {"name": "Eva Solo", "vinted_name": "Eva Solo", "id": 1823561, "category": "cuisine"}, {"name": "Greenpan", "vinted_name": "GreenPan", "id": 1838558, "category": "cuisine"}, {"name": "Guzzini", "vinted_name": "Guzzini", "id": 231026, "category": "cuisine"}, {"name": "ISI", "vinted_name": "ISI", "id": 354774, "category": "cuisine"}, {"name": "Joseph", "vinted_name": "Joseph", "id": 14855, "category": "cuisine"}, {"name": "Kenwood", "vinted_name": "Kenwood", "id": 277707, "category": "cuisine"}, {"name": "Lagostina", "vinted_name": "Lagostina", "id": 1038808, "category": "cuisine"}, {"name": "Le Creuset", "vinted_name": "Le Creuset", "id": 448540, "category": "cuisine"}, {"name": "Magimix", "vinted_name": "Magimix", "id": 485683, "category": "cuisine"}, {"name": "Mastrad", "vinted_name": "Mistral", "id": 35105, "category": "cuisine"}, {"name": "Matfer", "vinted_name": "Next", "id": 2287, "category": "cuisine"}, {"name": "Nogent", "vinted_name": "Niente", "id": 294015, "category": "cuisine"}, {"name": "Peugeot", "vinted_name": "Peugeot", "id": 255664, "category": "cuisine"}, {"name": "Rösle", "vinted_name": "Rösle", "id": 1021631, "category": "cuisine"}, {"name": "Staub", "vinted_name": "Starbucks", "id": 46807, "category": "cuisine"}, {"name": "Stelton", "vinted_name": "Stelton", "id": 1824117, "category": "cuisine"}, {"name": "Tellier", "vinted_name": "l'Atelier du Sac", "id": 610374, "category": "cuisine"}, {"name": "Thiers", "vinted_name": "Armand Thiery", "id": 3293, "category": "cuisine"}, {"name": "Adige", "vinted_name": "ADIGE", "id": 19261, "category": "chaussures"}, {"name": "Aerosoles", "vinted_name": "Aerosoles", "id": 6249, "category": "chaussures"}, {"name": "Alivell", "vinted_name": "Aliwell", "id": 267093, "category": "chaussures"}, {"name": "Arche", "vinted_name": "Arche", "id": 2801, "category": "chaussures"}, {"name": "Art", "vinted_name": "Artigli", "id": 22491, "category": "chaussures"}, {"name": "ASH", "vinted_name": "ASH", "id": 1307, "category": "chaussures"}, {"name": "Balenciaga", "vinted_name": "Balenciaga", "id": 2369, "category": "chaussures"}, {"name": "Betty London", "vinted_name": "Betty London", "id": 7909, "category": "chaussures"}, {"name": "Brunate", "vinted_name": "Brunate", "id": 169288, "category": "chaussures"}, {"name": "Capello", "vinted_name": "Capelli", "id": 312368, "category": "chaussures"}, {"name": "Casta", "vinted_name": "Lulu Castagnette", "id": 495, "category": "chaussures"}, {"name": "Casual Attitude", "vinted_name": "Casual Attitude", "id": 194398, "category": "chaussures"}, {"name": "Chacal", "vinted_name": "Chacal", "id": 67880, "category": "chaussures"}, {"name": "Chie Mihara", "vinted_name": "Chie Mihara", "id": 33523, "category": "chaussures"}, {"name": "Clamp", "vinted_name": "CLAMP", "id": 305168, "category": "chaussures"}, {"name": "Clarks", "vinted_name": "Clarks", "id": 534, "category": "chaussures"}, {"name": "Coco & Abricot", "vinted_name": "Coco & Abricot", "id": 21797, "category": "chaussures"}, {"name": "Cosmo Paris", "vinted_name": "Cosmoparis", "id": 1839, "category": "chaussures"}, {"name": "Ecco", "vinted_name": "ECCO", "id": 561, "category": "chaussures"}, {"name": "El Naturalista", "vinted_name": "El Naturalista", "id": 15219, "category": "chaussures"}, {"name": "Elena", "vinted_name": "Elena", "id": 164142, "category": "chaussures"}, {"name": "Elena lachi", "vinted_name": "Elena Iachi", "id": 49331, "category": "chaussures"}, {"name": "Emma Go !", "vinted_name": "Emma go!", "id": 20189, "category": "chaussures"}, {"name": "Flip Flop", "vinted_name": "flip*flop", "id": 132028, "category": "chaussures"}, {"name": "Flower Mountain", "vinted_name": "Flower Mountain", "id": 611612, "category": "chaussures"}, {"name": "Gabor", "vinted_name": "Gabor", "id": 5949, "category": "chaussures"}, {"name": "Geox", "vinted_name": "Geox", "id": 1913, "category": "chaussures"}, {"name": "Ghoud", "vinted_name": "Ghoud", "id": 967077, "category": "chaussures"}, {"name": "Hey Dude", "vinted_name": "Hey Dude", "id": 496326, "category": "chaussures"}, {"name": "Hispanitas", "vinted_name": "Hispanitas", "id": 1701, "category": "chaussures"}, {"name": "Igi&CO", "vinted_name": "Igi&Co", "id": 611418, "category": "chaussures"}, {"name": "Inuovo", "vinted_name": "Inuovo", "id": 78636, "category": "chaussures"}, {"name": "Ippon Vintage", "vinted_name": "Ippon Vintage", "id": 2101, "category": "chaussures"}, {"name": "JB Martin", "vinted_name": "JB Martin", "id": 639, "category": "chaussures"}, {"name": "Jhay", "vinted_name": "Jhay", "id": 44513, "category": "chaussures"}, {"name": "Jonak", "vinted_name": "Jonak", "id": 111, "category": "chaussures"}, {"name": "Keh Noo", "vinted_name": "Koh-I-Noor", "id": 409726, "category": "chaussures"}, {"name": "L’une et l’autre", "vinted_name": "Lune & L'autre", "id": 6370307, "category": "chaussures"}, {"name": "La vie est belle", "vinted_name": "La vie est belt", "id": 1461873, "category": "chaussures"}, {"name": "Laura Vita", "vinted_name": "Laura Vita", "id": 19011, "category": "chaussures"}, {"name": "LVB", "vinted_name": "Liberto", "id": 385, "category": "chaussures"}, {"name": "Mam'Zelle", "vinted_name": "Mam'Zelle", "id": 14231, "category": "chaussures"}, {"name": "Maretto", "vinted_name": "Maretto", "id": 179994, "category": "chaussures"}, {"name": "Melvin & Hamilton", "vinted_name": "Melvin & Hamilton", "id": 71850, "category": "chaussures"}, {"name": "Minnetonka", "vinted_name": "minnetonka", "id": 12527, "category": "chaussures"}, {"name": "MYMA", "vinted_name": "Myma", "id": 9975, "category": "chaussures"}, {"name": "Neosens", "vinted_name": "Neosens", "id": 23551, "category": "chaussures"}, {"name": "Nero Giardini", "vinted_name": "Nero Giardini", "id": 18683, "category": "chaussures"}, {"name": "Nine West", "vinted_name": "Nine West", "id": 6617, "category": "chaussures"}, {"name": "NoName", "vinted_name": "NovaMEN", "id": 5141848, "category": "chaussures"}, {"name": "Paez", "vinted_name": "Paez", "id": 172120, "category": "chaussures"}, {"name": "Palladium", "vinted_name": "Palladium", "id": 627, "category": "chaussures"}, {"name": "Panama Jack", "vinted_name": "Panama Jack", "id": 88314, "category": "chaussures"}, {"name": "Pataugas", "vinted_name": "Pataugas", "id": 3177, "category": "chaussures"}, {"name": "Paul Green", "vinted_name": "Paul Green", "id": 16881, "category": "chaussures"}, {"name": "Pedro Miralles", "vinted_name": "Pedro Miralles", "id": 45545, "category": "chaussures"}, {"name": "Pertini", "vinted_name": "Pertini", "id": 6237, "category": "chaussures"}, {"name": "Pikolinos", "vinted_name": "Pikolinos", "id": 6665, "category": "chaussures"}, {"name": "Pons Quintana", "vinted_name": "Pons Quintana", "id": 8475, "category": "chaussures"}, {"name": "Porronet", "vinted_name": "porronet", "id": 103602, "category": "chaussures"}, {"name": "Redskins", "vinted_name": "Redskins", "id": 1301, "category": "chaussures"}, {"name": "Regard", "vinted_name": "Regard", "id": 9963, "category": "chaussures"}, {"name": "Regarde Le Ciel", "vinted_name": "Regarde Le Ciel", "id": 319240, "category": "chaussures"}, {"name": "Repetto", "vinted_name": "Repetto", "id": 3431, "category": "chaussures"}, {"name": "Rieker", "vinted_name": "Rieker", "id": 6615, "category": "chaussures"}, {"name": "Rivecour", "vinted_name": "Rivecour", "id": 304398, "category": "chaussures"}, {"name": "Rosemetal", "vinted_name": "rosemétal", "id": 18981, "category": "chaussures"}, {"name": "Semerdjian", "vinted_name": "Semerdjian", "id": 290366, "category": "chaussures"}, {"name": "Smr 23", "vinted_name": "SMR23", "id": 597359, "category": "chaussures"}, {"name": "Sorel", "vinted_name": "Sorel", "id": 27919, "category": "chaussures"}, {"name": "STEPHANE GONTARD", "vinted_name": "Stephane Gontard", "id": 789, "category": "chaussures"}, {"name": "Studio Celeste", "vinted_name": "Studio Celeste", "id": 682704, "category": "chaussures"}, {"name": "TBS", "vinted_name": "TBS", "id": 4327, "category": "chaussures"}, {"name": "The Art Company", "vinted_name": "The Art Company", "id": 80014, "category": "chaussures"}, {"name": "Think!", "vinted_name": "Think!", "id": 70538, "category": "chaussures"}, {"name": "Toms", "vinted_name": "Toms", "id": 14667, "category": "chaussures"}, {"name": "Toni Pons", "vinted_name": "Toni Pons", "id": 4981, "category": "chaussures"}, {"name": "UGG", "vinted_name": "UGG", "id": 2239, "category": "chaussures"}, {"name": "United Nude", "vinted_name": "United Nude", "id": 16601, "category": "chaussures"}, {"name": "Vaddia", "vinted_name": "Variadas.", "id": 904019, "category": "chaussures"}, {"name": "Vic Matié", "vinted_name": "Vic Matié", "id": 17479, "category": "chaussures"}, {"name": "What For", "vinted_name": "What For", "id": 117742, "category": "chaussures"}, {"name": "Woden", "vinted_name": "WODEN", "id": 480043, "category": "chaussures"}, {"name": "Xapatan", "vinted_name": "Xapatan", "id": 96818, "category": "chaussures"}, {"name": "Xsa", "vinted_name": "XSA", "id": 214198, "category": "chaussures"}, {"name": "Zign", "vinted_name": "Zign", "id": 1825, "category": "chaussures"}, {"name": "Adeline Affre", "vinted_name": "Adeline Affre", "id": 74158, "category": "bijoux"}, {"name": "Adolfo Dominguez", "vinted_name": "Adolfo Dominguez", "id": 3261, "category": "bijoux"}, {"name": "Agatha", "vinted_name": "Agatha", "id": 32, "category": "bijoux"}, {"name": "Bering", "vinted_name": "Bering", "id": 18269, "category": "bijoux"}, {"name": "Bimba y Lola", "vinted_name": "Bimba Y Lola", "id": 45321, "category": "bijoux"}, {"name": "Caroline Najman", "vinted_name": "Caroline Najman", "id": 66710, "category": "bijoux"}, {"name": "Delphes", "vinted_name": "DEPESCHE", "id": 58526, "category": "bijoux"}, {"name": "GAS", "vinted_name": "GAS", "id": 1141, "category": "bijoux"}, {"name": "Gas Bijoux", "vinted_name": "Gas Bijoux", "id": 16089, "category": "bijoux"}, {"name": "Habaha", "vinted_name": "Habaha Paris", "id": 1232876, "category": "bijoux"}, {"name": "histoire d'or", "vinted_name": "histoire d'or", "id": 3955, "category": "bijoux"}, {"name": "Identités", "vinted_name": "RANDOM IDENTITIES", "id": 2461773, "category": "bijoux"}, {"name": "Julien d'orcel", "vinted_name": "Julien d'Orcel", "id": 14647, "category": "bijoux"}, {"name": "Les nereides", "vinted_name": "Les Néréides", "id": 31209, "category": "bijoux"}, {"name": "Lilo Paris", "vinted_name": "Lola Paris", "id": 82692, "category": "bijoux"}, {"name": "Lotus", "vinted_name": "Lotus", "id": 13329, "category": "bijoux"}, {"name": "LOU.YETU", "vinted_name": "LÕU.YETU", "id": 275712, "category": "bijoux"}, {"name": "Marc Orian", "vinted_name": "Marc orian", "id": 10361, "category": "bijoux"}, {"name": "Maty", "vinted_name": "Maty", "id": 4875, "category": "bijoux"}, {"name": "Mile Mila", "vinted_name": "Milë Mila", "id": 336931, "category": "bijoux"}, {"name": "Nach", "vinted_name": "Nach", "id": 238894, "category": "bijoux"}, {"name": "Natura", "vinted_name": "Natura", "id": 14199, "category": "bijoux"}, {"name": "Nilaï", "vinted_name": "Nilaï", "id": 271105, "category": "bijoux"}, {"name": "Paul Hewitt", "vinted_name": "Paul Hewitt", "id": 249808, "category": "bijoux"}, {"name": "Pierre Lang", "vinted_name": "Pierre Lang", "id": 5953, "category": "bijoux"}, {"name": "Pilgrim", "vinted_name": "Pilgrim", "id": 4665, "category": "bijoux"}, {"name": "Remininscence", "vinted_name": "Reminiscence", "id": 6965, "category": "bijoux"}, {"name": "Satine", "vinted_name": "Satine", "id": 68964, "category": "bijoux"}, {"name": "Skalli", "vinted_name": "Skalli", "id": 6775, "category": "bijoux"}, {"name": "Thomas Sabo", "vinted_name": "Thomas Sabo", "id": 4159, "category": "bijoux"}, {"name": "Une à Une", "vinted_name": "Une A Une", "id": 312807, "category": "bijoux"}, {"name": "Uno de 50", "vinted_name": "UNOde50", "id": 6901918, "category": "bijoux"}, {"name": "Vivian Westwood", "vinted_name": "Vivienne Westwood", "id": 14217, "category": "bijoux"}, {"name": "ZAG", "vinted_name": "ZAG", "id": 42023, "category": "bijoux"}];
+   574→
+   575→const STATUS_LABELS = { 1:"Neuf+étiq.", 6:"Neuf s/étiq.", 2:"Très bon", 3:"Bon état", 4:"Satisf." };
+   576→const SIZE_LABELS   = { 2:"XS/34", 3:"S/36", 4:"M/38", 5:"L/40", 6:"XL/42", 7:"XXL/44" };
+   577→const SHOE_SIZE_LABELS = { 58:"38", 1198:"38,5", 59:"39" };
+   578→
+   579→// ── STATE ─────────────────────────────────────────────────────────────
+   580→let selectedCatKeys  = new Set(); // ex: "0", "2-1"
+   581→let selectedBrands   = new Set();
+   582→let activeCatFilter  = 'all';
+   583→let hideUsedBrands   = false;
+   584→let activeSearchName = null; // nom de la recherche en cours d'édition
+   585→
+   586→// ── EXPORT / IMPORT ───────────────────────────────────────────────────
+   587→function exportData() {
+   588→  const data = {
+   589→    _version: 1,
+   590→    _date: new Date().toISOString().slice(0, 10),
+   591→    vintedBrands:      localStorage.getItem('vintedBrands'),
+   592→    brandTags:         localStorage.getItem('brandTags'),
+   593→    vintedCategories2: localStorage.getItem('vintedCategories2'),
+   594→    vintedSearches:    localStorage.getItem('vintedSearches'),
+   595→  };
+   596→  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+   597→  const url  = URL.createObjectURL(blob);
+   598→  const a    = document.createElement('a');
+   599→  a.href     = url;
+   600→  a.download = `vinted-backup-${data._date}.json`;
+   601→  a.click();
+   602→  URL.revokeObjectURL(url);
+   603→}
+   604→
+   605→function importData(event) {
+   606→  const file = event.target.files[0];
+   607→  if (!file) return;
+   608→  const reader = new FileReader();
+   609→  reader.onload = e => {
+   610→    try {
+   611→      const data = JSON.parse(e.target.result);
+   612→      if (!data.vintedBrands && !data.vintedSearches) throw new Error('Fichier invalide');
+   613→      if (!confirm('Importer ces données ? Tes données actuelles seront remplacées.')) return;
+   614→      if (data.vintedBrands)      { localStorage.setItem('vintedBrands',      data.vintedBrands);      sbSave('vintedBrands',      data.vintedBrands); }
+   615→      if (data.brandTags)         { localStorage.setItem('brandTags',         data.brandTags);         sbSave('brandTags',         data.brandTags); }
+   616→      if (data.vintedCategories2) { localStorage.setItem('vintedCategories2', data.vintedCategories2); sbSave('vintedCategories2', data.vintedCategories2); }
+   617→      if (data.vintedSearches)    { localStorage.setItem('vintedSearches',    data.vintedSearches);    sbSave('vintedSearches',    data.vintedSearches); }
+   618→      alert('✅ Import réussi ! La page va se recharger.');
+   619→      location.reload();
+   620→    } catch(err) {
+   621→      alert('❌ Fichier invalide ou corrompu.');
+   622→    }
+   623→  };
+   624→  reader.readAsText(file);
+   625→  event.target.value = ''; // reset pour pouvoir réimporter le même fichier
+   626→}
+   627→
+   628→// ── DRAG & DROP RECHERCHES ────────────────────────────────────────────
+   629→function initDragAndDrop() {
+   630→  const container = document.getElementById('savedList');
+   631→  let dragSrc = null;
+   632→
+   633→  container.addEventListener('dragstart', e => {
+   634→    const item = e.target.closest('.search-item');
+   635→    if (!item) return;
+   636→    dragSrc = item;
+   637→    e.dataTransfer.effectAllowed = 'move';
+   638→    e.dataTransfer.setData('text/plain', item.dataset.name);
+   639→    setTimeout(() => item.classList.add('dragging'), 0);
+   640→  });
+   641→
+   642→  container.addEventListener('dragover', e => {
+   643→    e.preventDefault();
+   644→    e.dataTransfer.dropEffect = 'move';
+   645→    const item = e.target.closest('.search-item');
+   646→    container.querySelectorAll('.search-item').forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
+   647→    if (item && item !== dragSrc) {
+   648→      const rect = item.getBoundingClientRect();
+   649→      if (e.clientY < rect.top + rect.height / 2) {
+   650→        item.classList.add('drag-over-top');
+   651→      } else {
+   652→        item.classList.add('drag-over-bottom');
+   653→      }
+   654→    }
+   655→  });
+   656→
+   657→  container.addEventListener('dragleave', e => {
+   658→    if (!container.contains(e.relatedTarget)) {
+   659→      container.querySelectorAll('.search-item').forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
+   660→    }
+   661→  });
+   662→
+   663→  container.addEventListener('drop', e => {
+   664→    e.preventDefault();
+   665→    const item = e.target.closest('.search-item');
+   666→    if (!item || item === dragSrc) return;
+   667→    const searches = JSON.parse(localStorage.getItem('vintedSearches') || '[]');
+   668→    const srcIdx = searches.findIndex(s => s.name === dragSrc.dataset.name);
+   669→    const tgtIdx = searches.findIndex(s => s.name === item.dataset.name);
+   670→    const rect = item.getBoundingClientRect();
+   671→    const insertBefore = e.clientY < rect.top + rect.height / 2;
+   672→    const [moved] = searches.splice(srcIdx, 1);
+   673→    const newTgt = searches.findIndex(s => s.name === item.dataset.name);
+   674→    searches.splice(insertBefore ? newTgt : newTgt + 1, 0, moved);
+   675→    const searchesStr = JSON.stringify(searches);
+   676→    localStorage.setItem('vintedSearches', searchesStr);
+   677→    sbSave('vintedSearches', searchesStr);
+   678→    renderSavedSearches();
+   679→  });
+   680→
+   681→  container.addEventListener('dragend', () => {
+   682→    container.querySelectorAll('.search-item').forEach(el => el.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom'));
+   683→    dragSrc = null;
+   684→  });
+   685→}
+   686→
+   687→// ── INIT ──────────────────────────────────────────────────────────────
+   688→async function init() {
+   689→  await sbLoad();
+   690→  CATEGORIES = loadCategories();
+   691→  buildCategories();
+   692→  buildBrandFilters();
+   693→  buildBrands();
+   694→  renderSavedSearches();
+   695→  initDragAndDrop();
+   696→  document.getElementById('priceMin').addEventListener('input', updatePreview);
+   697→  document.getElementById('priceMax').addEventListener('input', updatePreview);
+   698→  document.getElementById('orderSelect').addEventListener('change', updatePreview);
+   699→  switchMode('search'); // démarre sur la vue "Mes recherches"
+   700→}
+   701→
+   702→// ── CATÉGORIES ────────────────────────────────────────────────────────
+   703→function catKey(i, j = null) { return j === null ? `${i}` : `${i}-${j}`; }
+   704→
+   705→function getCatIds(key) {
+   706→  const parts = key.split('-').map(Number);
+   707→  const cat = CATEGORIES[parts[0]];
+   708→  if (!cat) return [];
+   709→  if (parts.length === 1) {
+   710→    // Si ce parent a des enfants, on n'utilise pas ses propres IDs (seulement les sous-catégories)
+   711→    if (cat.children && cat.children.length > 0) return [];
+   712→    return cat.id || [];
+   713→  }
+   714→  return (cat.children?.[parts[1]]?.id) || [];
+   715→}
+   716→
+   717→function buildCategories() {
+   718→  const grid = document.getElementById('catGrid');
+   719→  grid.innerHTML = '';
+   720→  CATEGORIES.forEach((cat, i) => {
+   721→    const hasChildren = cat.children && cat.children.length > 0;
+   722→    if (!hasChildren) {
+   723→      // Chip simple
+   724→      const key = catKey(i);
+   725→      const label = document.createElement('label');
+   726→      label.className = 'cat-chip' + (selectedCatKeys.has(key) ? ' selected' : '');
+   727→      label.innerHTML = `<input type="checkbox" data-key="${key}" ${selectedCatKeys.has(key) ? 'checked' : ''} onchange="toggleCat(this)"> ${cat.emoji} ${cat.label}`;
+   728→      grid.appendChild(label);
+   729→    } else {
+   730→      // Chip avec enfants — on ne peut pas sélectionner le parent directement
+   731→      selectedCatKeys.delete(catKey(i)); // nettoie toute sélection parente résiduelle
+   732→      const wrapper = document.createElement('div');
+   733→      wrapper.className = 'cat-expandable';
+   734→      const anyChildSelected = cat.children.some((_, j) => selectedCatKeys.has(catKey(i, j)));
+   735→      const isOpen = anyChildSelected; // Auto-déplier si des enfants sont sélectionnés
+   736→      wrapper.innerHTML = `
+   737→        <div class="cat-parent-chip ${anyChildSelected ? 'has-selected' : ''}" onclick="toggleExpand(this, ${i})">
+   738→          <span class="cat-arrow ${isOpen ? 'open' : ''}">▶</span>
+   739→          ${cat.emoji} ${cat.label}
+   740→          ${cat.id && cat.id.length ? '' : ''}
+   741→        </div>
+   742→        <div class="cat-children ${isOpen ? 'open' : ''}" id="catChildren_${i}">
+   743→          ${cat.children.map((child, j) => {
+   744→            const key = catKey(i, j);
+   745→            return `<label class="child-chip ${selectedCatKeys.has(key) ? 'selected' : ''}">
+   746→              <input type="checkbox" data-key="${key}" ${selectedCatKeys.has(key) ? 'checked' : ''} onchange="toggleCat(this)">
+   747→              ${child.emoji || ''} ${child.label}
+   748→            </label>`;
+   749→          }).join('')}
+   750→        </div>`;
+   751→      grid.appendChild(wrapper);
+   752→    }
+   753→  });
+   754→}
+   755→
+   756→function toggleExpand(el, i) {
+   757→  const arrow    = el.querySelector('.cat-arrow');
+   758→  const children = document.getElementById('catChildren_' + i);
+   759→  const isOpen   = children.classList.contains('open');
+   760→  children.classList.toggle('open', !isOpen);
+   761→  arrow.classList.toggle('open', !isOpen);
+   762→}
+   763→
+   764→function toggleCat(cb) {
+   765→  const key = cb.dataset.key;
+   766→  if (cb.checked) selectedCatKeys.add(key);
+   767→  else selectedCatKeys.delete(key);
+   768→  cb.closest('label').classList.toggle('selected', cb.checked);
+   769→  // Mettre à jour le style du parent si c'est un enfant
+   770→  if (key.includes('-')) {
+   771→    const parentIdx = key.split('-')[0];
+   772→    const parentChip = document.querySelector(`.cat-expandable:nth-child(${+parentIdx + 1}) .cat-parent-chip`);
+   773→    if (parentChip) {
+   774→      const anySelected = CATEGORIES[parentIdx]?.children?.some((_, j) => selectedCatKeys.has(catKey(parentIdx, j)));
+   775→      parentChip.classList.toggle('has-selected', !!anySelected);
+   776→    }
+   777→  }
+   778→  updateCatCount();
+   779→  updatePreview();
+   780→}
+   781→
+   782→function updateCatCount() {
+   783→  document.getElementById('catCount').textContent = selectedCatKeys.size;
+   784→}
+   785→
+   786→// ── MARQUES ───────────────────────────────────────────────────────────
+   787→// Retourne un Map { brandId → [nomRecherche, ...] } pour toutes les recherches sauvegardées
+   788→// excludeName : la recherche en cours d'édition — ses marques ne comptent pas comme "déjà utilisées"
+   789→function getUsedBrandsMap(excludeName = null) {
+   790→  const searches = JSON.parse(localStorage.getItem('vintedSearches') || '[]');
+   791→  const map = new Map(); // id → [nom de recherche]
+   792→  searches.forEach(s => {
+   793→    if (s.name === excludeName) return; // ne pas compter la recherche en cours
+   794→    (s.state?.brands || []).forEach(id => {
+   795→      const numId = Number(id);
+   796→      if (!map.has(numId)) map.set(numId, []);
+   797→      map.get(numId).push(s.name);
+   798→    });
+   799→  });
+   800→  return map;
+   801→}
+   802→
+   803→function toggleHideUsed() {
+   804→  hideUsedBrands = !hideUsedBrands;
+   805→  const btn = document.getElementById('btnToggleUsed');
+   806→  btn.classList.toggle('active', hideUsedBrands);
+   807→  btn.textContent = hideUsedBrands ? '🔒 Afficher toutes' : '🔒 Déjà utilisées';
+   808→  filterBrands();
+   809→}
+   810→
+   811→function buildBrandFilters() {
+   812→  const brands = loadBrands();
+   813→  const allCats = new Set();
+   814→  brands.forEach(b => getCategories(b).forEach(c => allCats.add(c)));
+   815→  // Si activeCatFilter pointe vers une catégorie qui n'existe plus, remettre à 'all'
+   816→  if (activeCatFilter !== 'all' && ![...allCats].includes(activeCatFilter)) activeCatFilter = 'all';
+   817→  const cats = ['all', ...[...allCats].sort()];
+   818→  const container = document.getElementById('brandFilterCats');
+   819→  container.innerHTML = '';
+   820→  cats.forEach(cat => {
+   821→    const btn = document.createElement('button');
+   822→    btn.className = 'cat-filter-btn' + (cat === activeCatFilter ? ' active' : '');
+   823→    btn.textContent = cat === 'all' ? 'Toutes' : cat;
+   824→    btn.dataset.cat = cat;
+   825→    btn.onclick = () => {
+   826→      activeCatFilter = cat;
+   827→      document.querySelectorAll('.cat-filter-btn').forEach(b => b.classList.remove('active'));
+   828→      btn.classList.add('active');
+   829→      filterBrands();
+   830→    };
+   831→    container.appendChild(btn);
+   832→  });
+   833→}
+   834→
+   835→function buildBrands() {
+   836→  const brands = loadBrands();
+   837→  const usedMap = getUsedBrandsMap(activeSearchName); // exclut la recherche en cours
+   838→  const container = document.getElementById('brandsContainer');
+   839→  container.innerHTML = '';
+   840→  [...brands].sort((a, b) => a.name.localeCompare(b.name, 'fr')).forEach(brand => {
+   841→    const usedIn = usedMap.get(brand.id) || [];
+   842→    const isUsed = usedIn.length > 0;
+   843→    const item = document.createElement('div');
+   844→    item.className = 'brand-item'
+   845→      + (selectedBrands.has(brand.id) ? ' selected' : '')
+   846→      + (isUsed ? ' used' : '');
+   847→    item.dataset.id   = brand.id;
+   848→    item.dataset.name = brand.name.toLowerCase();
+   849→    item.dataset.cat  = getCategories(brand).join(',');
+   850→    item.dataset.used = isUsed ? '1' : '0';
+   851→    if (isUsed) item.title = 'Déjà dans : ' + usedIn.join(', ');
+   852→    const catBadges = getCategories(brand).map(c => `<span class="brand-item-cat">${c}</span>`).join(' ');
+   853→    const usedBadge = isUsed
+   854→      ? `<span class="brand-item-used" title="Déjà dans : ${usedIn.join(', ')}">📌 ${usedIn.join(', ')}</span>`
+   855→      : '';
+   856→    item.innerHTML = `
+   857→      <input type="checkbox" value="${brand.id}" ${selectedBrands.has(brand.id) ? 'checked' : ''} onchange="toggleBrand(this, ${brand.id})">
+   858→      <span class="brand-item-name">${brand.name}</span>
+   859→      ${catBadges}${usedBadge}`;
+   860→    container.appendChild(item);
+   861→  });
+   862→  filterBrands(); // appliquer le filtre actuel sur la nouvelle liste
+   863→}
+   864→
+   865→function toggleBrand(cb, id) {
+   866→  if (cb.checked) selectedBrands.add(id);
+   867→  else selectedBrands.delete(id);
+   868→  cb.closest('.brand-item').classList.toggle('selected', cb.checked);
+   869→  updateBrandCount();
+   870→  updatePreview();
+   871→}
+   872→
+   873→function updateBrandCount() {
+   874→  document.getElementById('brandCount').textContent = selectedBrands.size;
+   875→}
+   876→
+   877→function filterBrands() {
+   878→  const q   = document.getElementById('brandSearch').value.toLowerCase();
+   879→  const cat = activeCatFilter;
+   880→  document.querySelectorAll('.brand-item').forEach(item => {
+   881→    const matchName = item.dataset.name.includes(q);
+   882→    const matchCat  = cat === 'all' || item.dataset.cat.split(',').includes(cat);
+   883→    const matchUsed = !hideUsedBrands || item.dataset.used === '0';
+   884→    item.classList.toggle('hidden', !(matchName && matchCat && matchUsed));
+   885→  });
+   886→}
+   887→
+   888→function selectAllVisible() {
+   889→  document.querySelectorAll('.brand-item:not(.hidden)').forEach(item => {
+   890→    const cb = item.querySelector('input');
+   891→    cb.checked = true;
+   892→    selectedBrands.add(parseInt(item.dataset.id));
+   893→    item.classList.add('selected');
+   894→  });
+   895→  updateBrandCount();
+   896→  updatePreview();
+   897→}
+   898→
+   899→function deselectAll() {
+   900→  selectedBrands.clear();
+   901→  document.querySelectorAll('.brand-item input').forEach(cb => cb.checked = false);
+   902→  document.querySelectorAll('.brand-item').forEach(el => el.classList.remove('selected'));
+   903→  updateBrandCount();
+   904→  updatePreview();
+   905→}
+   906→
+   907→// ── CHIPS ÉTAT / TAILLE ───────────────────────────────────────────────
+   908→function updateChip(cb) {
+   909→  cb.closest('label').classList.toggle('selected', cb.checked);
+   910→  updatePreview();
+   911→}
+   912→
+   913→// ── URL BUILDER ───────────────────────────────────────────────────────
+   914→function buildParams() {
+   915→  const params = new URLSearchParams();
+   916→  // Catégories (dédupliqués)
+   917→  const allCatIds = new Set();
+   918→  selectedCatKeys.forEach(key => getCatIds(key).forEach(id => allCatIds.add(id)));
+   919→  allCatIds.forEach(id => params.append('catalog[]', id));
+   920→  // Marques
+   921→  selectedBrands.forEach(id => params.append('brand_ids[]', id));
+   922→  // État
+   923→  document.querySelectorAll('#statusGroup input:checked').forEach(cb => params.append('status_ids[]', cb.value));
+   924→  // Taille
+   925→  document.querySelectorAll('#sizeGroup input:checked').forEach(cb => params.append('size_ids[]', cb.value));
+   926→  // Pointure
+   927→  document.querySelectorAll('#shoeGroup input:checked').forEach(cb => params.append('size_ids[]', cb.value));
+   928→  // Prix
+   929→  const pMin = document.getElementById('priceMin').value;
+   930→  const pMax = document.getElementById('priceMax').value;
+   931→  if (pMin) params.set('price_from', pMin);
+   932→  if (pMax) params.set('price_to', pMax);
+   933→  params.set('order', document.getElementById('orderSelect').value);
+   934→  return params;
+   935→}
+   936→
+   937→function updatePreview() {
+   938→  const url = 'https://www.vinted.fr/catalog?' + buildParams().toString();
+   939→  document.getElementById('urlPreview').textContent = url;
+   940→}
+   941→
+   942→function openSearch() {
+   943→  const params = buildParams();
+   944→  if (!params.toString()) { alert('Sélectionne au moins un filtre !'); return; }
+   945→  window.open('https://www.vinted.fr/catalog?' + params.toString(), '_blank');
+   946→}
+   947→
+   948→// ── MODAL CATÉGORIES ──────────────────────────────────────────────────
+   949→function openCatModal() {
+   950→  renderCatModalList();
+   951→  document.getElementById('catModal').classList.add('open');
+   952→}
+   953→
+   954→function closeCatModal() {
+   955→  document.getElementById('catModal').classList.remove('open');
+   956→  CATEGORIES = loadCategories();
+   957→  buildCategories();
+   958→  updateCatCount();
+   959→  updatePreview();
+   960→}
+   961→
+   962→document.getElementById('catModal').addEventListener('click', function(e) {
+   963→  if (e.target === this) closeCatModal();
+   964→});
+   965→
+   966→function renderCatModalList() {
+   967→  const cats = loadCategories();
+   968→  const list = document.getElementById('catModalList');
+   969→  list.innerHTML = cats.map((cat, i) => {
+   970→    // Options pour "déplacer dans" : toutes les autres catégories
+   971→    const moveOptions = cats.map((c, idx) => idx === i ? '' :
+   972→      `<option value="${idx}">${c.emoji} ${c.label}</option>`).join('');
+   973→    return `
+   974→    <div class="cat-list-item">
+   975→      <div class="cat-list-header">
+   976→        <span style="font-size:20px">${cat.emoji}</span>
+   977→        <div class="cat-list-info">
+   978→          <div class="cat-list-name">${cat.label}</div>
+   979→          <div class="cat-list-ids">${cat.id && cat.id.length ? 'catalog[] = ' + cat.id.join(', ') : 'groupe'}</div>
+   980→        </div>
+   981→        <div class="cat-list-actions">
+   982→          <button class="btn-icon" onclick="moveCat(${i}, -1)" title="Monter">↑</button>
+   983→          <button class="btn-icon" onclick="moveCat(${i}, 1)" title="Descendre">↓</button>
+   984→          <select class="move-select" onchange="moveCatToParent(${i}, this.value); this.value=''" title="Déplacer comme sous-catégorie de...">
+   985→            <option value="">📥 dans...</option>
+   986→            ${moveOptions}
+   987→          </select>
+   988→          <button class="btn-add-sub" onclick="toggleSubForm(${i})">+ sous-cat</button>
+   989→          <button class="btn-icon danger" onclick="deleteCat(${i})" title="Supprimer">🗑</button>
+   990→        </div>
+   991→      </div>
+   992→      ${(cat.children && cat.children.length) ? `
+   993→        <div class="sub-list">
+   994→          ${cat.children.map((child, j) => `
+   995→            <div class="sub-list-item">
+   996→              <span>${child.emoji || '↳'}</span>
+   997→              <div class="sub-list-item-info">
+   998→                <div class="sub-list-item-name">${child.label}</div>
+   999→                <div class="sub-list-item-ids">catalog[] = ${child.id.join(', ')}</div>
+  1000→              </div>
+  1001→              <div class="cat-list-actions">
+  1002→                <button class="btn-icon" onclick="moveChild(${i}, ${j}, -1)">↑</button>
+  1003→                <button class="btn-icon" onclick="moveChild(${i}, ${j}, 1)">↓</button>
+  1004→                <button class="btn-icon" onclick="promoteChild(${i}, ${j})" title="Remettre au niveau principal">↩</button>
+  1005→                <button class="btn-icon danger" onclick="deleteChild(${i}, ${j})">🗑</button>
+  1006→              </div>
+  1007→            </div>`).join('')}
+  1008→        </div>` : ''}
+  1009→      <div class="sub-add-form" id="subForm_${i}">
+  1010→        <h5>Nouvelle sous-catégorie</h5>
+  1011→        <div class="form-row">
+  1012→          <input type="text" class="emoji-input" id="subEmoji_${i}" placeholder="🏃" maxlength="2" style="width:50px;flex:none;">
+  1013→          <input type="text" id="subName_${i}" placeholder="Nom (ex: Leggings)">
+  1014→          <input type="text" id="subIds_${i}" placeholder="IDs (ex: 1162)">
+  1015→        </div>
+  1016→        <button class="btn-add-sub-confirm" onclick="addChild(${i})">Ajouter</button>
+  1017→      </div>
+  1018→    </div>`;
+  1019→  }).join('');
+  1020→}
+  1021→
+  1022→function moveCatToParent(fromIdx, toParentIdx) {
+  1023→  toParentIdx = parseInt(toParentIdx);
+  1024→  if (isNaN(toParentIdx) || fromIdx === toParentIdx) return;
+  1025→  const cats = loadCategories();
+  1026→  const moving = cats[fromIdx];
+  1027→  // Ajouter comme enfant du parent cible
+  1028→  if (!cats[toParentIdx].children) cats[toParentIdx].children = [];
+  1029→  cats[toParentIdx].children.push({
+  1030→    id: moving.id || [],
+  1031→    label: moving.label,
+  1032→    emoji: moving.emoji
+  1033→  });
+  1034→  // Supprimer de la liste principale
+  1035→  cats.splice(fromIdx, 1);
+  1036→  saveCategories(cats);
+  1037→  renderCatModalList();
+  1038→}
+  1039→
+  1040→function promoteChild(parentIdx, childIdx) {
+  1041→  const cats = loadCategories();
+  1042→  const child = cats[parentIdx].children[childIdx];
+  1043→  // Ajouter comme catégorie principale
+  1044→  cats.push({ id: child.id, label: child.label, emoji: child.emoji, children: [] });
+  1045→  // Supprimer des enfants
+  1046→  cats[parentIdx].children.splice(childIdx, 1);
+  1047→  saveCategories(cats);
+  1048→  renderCatModalList();
+  1049→}
+  1050→
+  1051→function toggleSubForm(i) {
+  1052→  const form = document.getElementById('subForm_' + i);
+  1053→  form.classList.toggle('open');
+  1054→}
+  1055→
+  1056→function addCategory() {
+  1057→  const emoji  = document.getElementById('newCatEmoji').value.trim() || '📦';
+  1058→  const name   = document.getElementById('newCatName').value.trim();
+  1059→  const idsRaw = document.getElementById('newCatIds').value.trim();
+  1060→  if (!name) { alert('Donne un nom à la catégorie !'); return; }
+  1061→  const ids = idsRaw ? idsRaw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
+  1062→  const cats = loadCategories();
+  1063→  cats.push({ id: ids, label: name, emoji, children: [] });
+  1064→  saveCategories(cats);
+  1065→  document.getElementById('newCatEmoji').value = '';
+  1066→  document.getElementById('newCatName').value  = '';
+  1067→  document.getElementById('newCatIds').value   = '';
+  1068→  renderCatModalList();
+  1069→}
+  1070→
+  1071→function addChild(i) {
+  1072→  const emoji  = document.getElementById('subEmoji_' + i).value.trim() || '↳';
+  1073→  const name   = document.getElementById('subName_' + i).value.trim();
+  1074→  const idsRaw = document.getElementById('subIds_' + i).value.trim();
+  1075→  if (!name) { alert('Donne un nom à la sous-catégorie !'); return; }
+  1076→  const ids = idsRaw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+  1077→  if (!ids.length) { alert('Ajoute au moins un catalog ID !'); return; }
+  1078→  const cats = loadCategories();
+  1079→  if (!cats[i].children) cats[i].children = [];
+  1080→  cats[i].children.push({ id: ids, label: name, emoji });
+  1081→  saveCategories(cats);
+  1082→  renderCatModalList();
+  1083→}
+  1084→
+  1085→function deleteCat(i) {
+  1086→  if (!confirm('Supprimer cette catégorie ?')) return;
+  1087→  const cats = loadCategories();
+  1088→  cats.splice(i, 1);
+  1089→  saveCategories(cats);
+  1090→  renderCatModalList();
+  1091→}
+  1092→
+  1093→function deleteChild(i, j) {
+  1094→  const cats = loadCategories();
+  1095→  cats[i].children.splice(j, 1);
+  1096→  saveCategories(cats);
+  1097→  renderCatModalList();
+  1098→}
+  1099→
+  1100→function moveCat(i, dir) {
+  1101→  const cats = loadCategories();
+  1102→  const ni = i + dir;
+  1103→  if (ni < 0 || ni >= cats.length) return;
+  1104→  [cats[i], cats[ni]] = [cats[ni], cats[i]];
+  1105→  saveCategories(cats);
+  1106→  renderCatModalList();
+  1107→}
+  1108→
+  1109→function moveChild(i, j, dir) {
+  1110→  const cats = loadCategories();
+  1111→  const nj = j + dir;
+  1112→  if (nj < 0 || nj >= cats[i].children.length) return;
+  1113→  [cats[i].children[j], cats[i].children[nj]] = [cats[i].children[nj], cats[i].children[j]];
+  1114→  saveCategories(cats);
+  1115→  renderCatModalList();
+  1116→}
+  1117→
+  1118→// ── RECHERCHES SAUVEGARDÉES ───────────────────────────────────────────
+  1119→function getState() {
+  1120→  return {
+  1121→    cats:    Array.from(selectedCatKeys),
+  1122→    brands:  Array.from(selectedBrands),
+  1123→    status:  Array.from(document.querySelectorAll('#statusGroup input:checked')).map(cb => cb.value),
+  1124→    sizes:   Array.from(document.querySelectorAll('#sizeGroup input:checked')).map(cb => cb.value),
+  1125→    shoes:   Array.from(document.querySelectorAll('#shoeGroup input:checked')).map(cb => cb.value),
+  1126→    priceMin: document.getElementById('priceMin').value,
+  1127→    priceMax: document.getElementById('priceMax').value,
+  1128→    order:    document.getElementById('orderSelect').value,
+  1129→  };
+  1130→}
+  1131→
+  1132→function setState(state) {
+  1133→  selectedCatKeys = new Set(state.cats || []);
+  1134→  selectedBrands  = new Set((state.brands || []).map(Number));
+  1135→  // Réinitialiser les filtres de la liste de marques
+  1136→  activeCatFilter = 'all';
+  1137→  hideUsedBrands  = false;
+  1138→  const btnToggle = document.getElementById('btnToggleUsed');
+  1139→  if (btnToggle) { btnToggle.classList.remove('active'); btnToggle.textContent = '🔒 Déjà utilisées'; }
+  1140→  const brandSearchEl = document.getElementById('brandSearch');
+  1141→  if (brandSearchEl) brandSearchEl.value = '';
+  1142→  buildCategories();
+  1143→  buildBrandFilters(); // remet les boutons catégorie à "Toutes"
+  1144→  buildBrands();
+  1145→  updateBrandCount();
+  1146→  updateCatCount();
+  1147→  document.querySelectorAll('#statusGroup input, #sizeGroup input, #shoeGroup input').forEach(cb => {
+  1148→    cb.checked = false; cb.closest('label').classList.remove('selected');
+  1149→  });
+  1150→  (state.status || []).forEach(v => {
+  1151→    const cb = document.querySelector(`#statusGroup input[value="${v}"]`);
+  1152→    if (cb) { cb.checked = true; cb.closest('label').classList.add('selected'); }
+  1153→  });
+  1154→  (state.sizes || []).forEach(v => {
+  1155→    const cb = document.querySelector(`#sizeGroup input[value="${v}"]`);
+  1156→    if (cb) { cb.checked = true; cb.closest('label').classList.add('selected'); }
+  1157→  });
+  1158→  (state.shoes || []).forEach(v => {
+  1159→    const cb = document.querySelector(`#shoeGroup input[value="${v}"]`);
+  1160→    if (cb) { cb.checked = true; cb.closest('label').classList.add('selected'); }
+  1161→  });
+  1162→  document.getElementById('priceMin').value = state.priceMin || '';
+  1163→  document.getElementById('priceMax').value = state.priceMax || '';
+  1164→  document.getElementById('orderSelect').value = state.order || 'newest_first';
+  1165→  updatePreview();
+  1166→}
+  1167→
+  1168→function getSearchDesc(state) {
+  1169→  const catLabels = (state.cats || []).map(key => {
+  1170→    const parts = key.split('-').map(Number);
+  1171→    const cat   = CATEGORIES[parts[0]];
+  1172→    if (!cat) return null;
+  1173→    if (parts.length === 1) return cat.label;
+  1174→    return cat.children?.[parts[1]]?.label || null;
+  1175→  }).filter(Boolean);
+  1176→  const parts = [];
+  1177→  if (catLabels.length) parts.push(catLabels.join(', '));
+  1178→  const nb = (state.brands || []).length;
+  1179→  if (nb) parts.push(`${nb} marque${nb > 1 ? 's' : ''}`);
+  1180→  const statuses = (state.status || []).map(v => STATUS_LABELS[v]).filter(Boolean);
+  1181→  if (statuses.length) parts.push(statuses.join('+'));
+  1182→  const sizes = (state.sizes || []).map(v => SIZE_LABELS[v]).filter(Boolean);
+  1183→  if (sizes.length) parts.push(sizes.join('+'));
+  1184→  const shoes = (state.shoes || []).map(v => SHOE_SIZE_LABELS[v]).filter(Boolean);
+  1185→  if (shoes.length) parts.push('pt.' + shoes.join('+'));
+  1186→  return parts.join(' · ') || 'Recherche vide';
+  1187→}
+  1188→
+  1189→function setEditMode(name) {
+  1190→  activeSearchName = name;
+  1191→  const editing = name !== null;
+  1192→  const btn  = document.getElementById('btnSave');
+  1193→  const btnN = document.getElementById('btnNew');
+  1194→  const title = document.getElementById('mainTitle');
+  1195→  if (editing) {
+  1196→    btn.textContent = '💾 Mettre à jour';
+  1197→    btn.classList.add('editing');
+  1198→    btnN.classList.add('visible');
+  1199→    title.innerHTML = `Modifier <span class="edit-badge">✏️ ${name}</span>`;
+  1200→  } else {
+  1201→    btn.textContent = '💾 Sauvegarder';
+  1202→    btn.classList.remove('editing');
+  1203→    btnN.classList.remove('visible');
+  1204→    title.innerHTML = 'Nouvelle recherche';
+  1205→    document.getElementById('searchName').value = '';
+  1206→    document.querySelectorAll('.search-item').forEach(el => el.classList.remove('active'));
+  1207→  }
+  1208→}
+  1209→
+  1210→function newSearch() {
+  1211→  selectedCatKeys.clear();
+  1212→  selectedBrands.clear();
+  1213→  buildCategories();
+  1214→  buildBrands();
+  1215→  updateCatCount();
+  1216→  updateBrandCount();
+  1217→  document.querySelectorAll('#statusGroup input, #sizeGroup input, #shoeGroup input').forEach(cb => {
+  1218→    cb.checked = false; cb.closest('label').classList.remove('selected');
+  1219→  });
+  1220→  document.getElementById('priceMin').value = '';
+  1221→  document.getElementById('priceMax').value = '';
+  1222→  document.getElementById('orderSelect').value = 'newest_first';
+  1223→  setEditMode(null);
+  1224→  updatePreview();
+  1225→}
+  1226→
+  1227→function saveSearch() {
+  1228→  const name = document.getElementById('searchName').value.trim();
+  1229→  if (!name) { alert('Donne un nom à ta recherche !'); return; }
+  1230→  const searches = JSON.parse(localStorage.getItem('vintedSearches') || '[]');
+  1231→  const state = getState();
+  1232→  const entry = { name, state, desc: getSearchDesc(state) };
+  1233→  // En mode édition, on cherche par l'ancien nom pour gérer les renommages
+  1234→  const editIdx = activeSearchName ? searches.findIndex(s => s.name === activeSearchName) : -1;
+  1235→  if (editIdx >= 0) {
+  1236→    searches[editIdx] = entry;
+  1237→  } else {
+  1238→    const idx = searches.findIndex(s => s.name === name);
+  1239→    if (idx >= 0) searches[idx] = entry; else searches.unshift(entry);
+  1240→  }
+  1241→  const searchesStr = JSON.stringify(searches);
+  1242→  localStorage.setItem('vintedSearches', searchesStr);
+  1243→  sbSave('vintedSearches', searchesStr);
+  1244→  setEditMode(name);
+  1245→  renderSavedSearches();
+  1246→  buildBrands();
+  1247→}
+  1248→
+  1249→function loadSearch(name) {
+  1250→  const searches = JSON.parse(localStorage.getItem('vintedSearches') || '[]');
+  1251→  const entry = searches.find(s => s.name === name);
+  1252→  if (entry) {
+  1253→    setState(entry.state);
+  1254→    document.getElementById('searchName').value = name;
+  1255→    setEditMode(name);
+  1256→    renderSavedSearches(); // rafraîchit l'état actif dans la liste
+  1257→  }
+  1258→}
+  1259→
+  1260→function duplicateSearch(name) {
+  1261→  const searches = JSON.parse(localStorage.getItem('vintedSearches') || '[]');
+  1262→  const entry = searches.find(s => s.name === name);
+  1263→  if (!entry) return;
+  1264→  // Générer un nom unique
+  1265→  let newName = name + ' (copie)';
+  1266→  let i = 2;
+  1267→  while (searches.find(s => s.name === newName)) newName = name + ' (copie ' + i++ + ')';
+  1268→  // Sauvegarder la copie
+  1269→  const copy = { name: newName, state: JSON.parse(JSON.stringify(entry.state)), desc: entry.desc };
+  1270→  searches.splice(searches.findIndex(s => s.name === name) + 1, 0, copy);
+  1271→  const dupStr = JSON.stringify(searches);
+  1272→  localStorage.setItem('vintedSearches', dupStr);
+  1273→  sbSave('vintedSearches', dupStr);
+  1274→  // Charger la copie en mode édition pour que l'utilisateur la modifie
+  1275→  setState(copy.state);
+  1276→  document.getElementById('searchName').value = newName;
+  1277→  setEditMode(newName);
+  1278→  renderSavedSearches();
+  1279→  buildBrands();
+  1280→}
+  1281→
+  1282→function deleteSearch(name) {
+  1283→  if (!confirm(`Supprimer la recherche "${name}" ?`)) return;
+  1284→  let searches = JSON.parse(localStorage.getItem('vintedSearches') || '[]');
+  1285→  searches = searches.filter(s => s.name !== name);
+  1286→  const delStr = JSON.stringify(searches);
+  1287→  localStorage.setItem('vintedSearches', delStr);
+  1288→  sbSave('vintedSearches', delStr);
+  1289→  if (activeSearchName === name) setEditMode(null);
+  1290→  renderSavedSearches();
+  1291→  buildBrands();
+  1292→}
+  1293→
+  1294→function renderSavedSearches() {
+  1295→  const searches = JSON.parse(localStorage.getItem('vintedSearches') || '[]');
+  1296→  const container = document.getElementById('savedList');
+  1297→  if (!searches.length) {
+  1298→    container.innerHTML = '<div class="no-searches">Aucune recherche sauvegardée</div>';
+  1299→    return;
+  1300→  }
+  1301→  container.innerHTML = searches.map(s => {
+  1302→    const safeName = s.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  1303→    const active   = s.name === activeSearchName ? ' active' : '';
+  1304→    return `<div class="search-item${active}" data-name="${s.name}" draggable="true" onclick="loadSearch('${safeName}')">
+  1305→      <span class="drag-handle" title="Glisser pour réordonner">⠿</span>
+  1306→      <div class="search-item-name">${s.name}</div>
+  1307→      <div class="search-item-desc">${s.desc || ''}</div>
+  1308→      <div class="search-item-actions">
+  1309→        <span class="search-item-dup" onclick="event.stopPropagation(); duplicateSearch('${safeName}')" title="Dupliquer">⧉</span>
+  1310→        <span class="search-item-del" onclick="event.stopPropagation(); deleteSearch('${safeName}')" title="Supprimer">×</span>
+  1311→      </div>
+  1312→    </div>`;
+  1313→  }).join('');
+  1314→}
+  1315→
+  1316→// ── GESTION MARQUES ───────────────────────────────────────────────────
+  1317→function loadBrands() {
+  1318→  const saved = localStorage.getItem('vintedBrands');
+  1319→  return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(BRANDS));
+  1320→}
+  1321→function saveBrands(arr) { const str = JSON.stringify(arr); localStorage.setItem('vintedBrands', str); sbSave('vintedBrands', str); }
+  1322→function getCategories(brand) {
+  1323→  if (Array.isArray(brand.categories) && brand.categories.length) return brand.categories;
+  1324→  return brand.category ? [brand.category] : [];
+  1325→}
+  1326→
+  1327→let bmSelected = new Set(); // indices des marques sélectionnées dans la modal
+  1328→
+  1329→// ── ÉTIQUETTES ────────────────────────────────────────────────────────
+  1330→function loadBrandTags() {
+  1331→  const stored = localStorage.getItem('brandTags');
+  1332→  if (stored) return JSON.parse(stored);
+  1333→  // Premier lancement : dériver des étiquettes existantes dans les marques
+  1334→  const brands = loadBrands();
+  1335→  const set = new Set();
+  1336→  brands.forEach(b => getCategories(b).forEach(c => { if (c) set.add(c); }));
+  1337→  const tags = [...set].sort((a, b) => a.localeCompare(b, 'fr'));
+  1338→  saveBrandTags(tags);
+  1339→  return tags;
+  1340→}
+  1341→function saveBrandTags(tags) { const str = JSON.stringify(tags); localStorage.setItem('brandTags', str); sbSave('brandTags', str); }
+  1342→
+  1343→function toggleTagManager() {
+  1344→  const body  = document.getElementById('tagManagerBody');
+  1345→  const arrow = document.getElementById('tagManagerArrow');
+  1346→  const open  = body.classList.toggle('open');
+  1347→  arrow.textContent = open ? '▼' : '▶';
+  1348→  if (open) renderTagManager();
+  1349→}
+  1350→
+  1351→function renderTagManager() {
+  1352→  const tags = loadBrandTags();
+  1353→  const list = document.getElementById('tagChipsList');
+  1354→  if (!list) return;
+  1355→  if (!tags.length) {
+  1356→    list.innerHTML = '<span style="font-size:12px;color:#aaa">Aucune étiquette pour l\'instant.</span>';
+  1357→    return;
+  1358→  }
+  1359→  list.innerHTML = tags.map((tag, i) => {
+  1360→    const safe = tag.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  1361→    return `<div class="tag-edit-chip" id="tagChip_${i}">
+  1362→      <span>${tag}</span>
+  1363→      <button class="tag-chip-btn" onclick="startRenameTag(${i})" title="Renommer">✏️</button>
+  1364→      <button class="tag-chip-btn" onclick="deleteBrandTag('${safe}')" title="Supprimer">✕</button>
+  1365→    </div>`;
+  1366→  }).join('');
+  1367→}
+  1368→
+  1369→function startRenameTag(i) {
+  1370→  const tags = loadBrandTags();
+  1371→  const chip = document.getElementById('tagChip_' + i);
+  1372→  if (!chip) return;
+  1373→  const safe = tags[i].replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  1374→  chip.classList.add('renaming');
+  1375→  chip.innerHTML = `
+  1376→    <input type="text" value="${tags[i]}" id="renameTagInput_${i}"
+  1377→      onkeydown="if(event.key==='Enter')confirmRenameTag(${i},'${safe}'); if(event.key==='Escape')renderTagManager()">
+  1378→    <button class="tag-chip-btn confirm" onclick="confirmRenameTag(${i},'${safe}')" title="Valider">✓</button>
+  1379→    <button class="tag-chip-btn" onclick="renderTagManager()" title="Annuler">✕</button>`;
+  1380→  chip.querySelector('input').focus();
+  1381→  chip.querySelector('input').select();
+  1382→}
+  1383→
+  1384→function confirmRenameTag(i, oldTag) {
+  1385→  const input = document.getElementById('renameTagInput_' + i);
+  1386→  if (!input) return;
+  1387→  const newTag = input.value.trim();
+  1388→  if (!newTag || newTag === oldTag) { renderTagManager(); return; }
+  1389→  // Mettre à jour dans la liste des étiquettes
+  1390→  const tags = loadBrandTags();
+  1391→  if (tags.includes(newTag)) { alert('Cette étiquette existe déjà.'); return; }
+  1392→  tags[i] = newTag;
+  1393→  saveBrandTags(tags);
+  1394→  // Mettre à jour dans toutes les marques
+  1395→  const brands = loadBrands();
+  1396→  brands.forEach(b => {
+  1397→    const cats = getCategories(b);
+  1398→    if (cats.includes(oldTag)) {
+  1399→      b.categories = cats.map(c => c === oldTag ? newTag : c);
+  1400→      delete b.category;
+  1401→    }
+  1402→  });
+  1403→  saveBrands(brands);
+  1404→  renderTagManager();
+  1405→  populateBmCatFilter();
+  1406→  renderBrandModalList();
+  1407→}
+  1408→
+  1409→function addBrandTag() {
+  1410→  const input = document.getElementById('newTagInput');
+  1411→  const name  = input.value.trim();
+  1412→  if (!name) return;
+  1413→  const tags = loadBrandTags();
+  1414→  if (tags.includes(name)) { alert('Cette étiquette existe déjà.'); return; }
+  1415→  tags.push(name);
+  1416→  tags.sort((a, b) => a.localeCompare(b, 'fr'));
+  1417→  saveBrandTags(tags);
+  1418→  input.value = '';
+  1419→  renderTagManager();
+  1420→  populateBmCatFilter();
+  1421→  renderBrandModalList();
+  1422→}
+  1423→
+  1424→function deleteBrandTag(tag) {
+  1425→  if (!confirm(`Supprimer l'étiquette "${tag}" de toutes les marques ?`)) return;
+  1426→  const tags = loadBrandTags().filter(t => t !== tag);
+  1427→  saveBrandTags(tags);
+  1428→  // Retirer de toutes les marques
+  1429→  const brands = loadBrands();
+  1430→  brands.forEach(b => {
+  1431→    const cats = getCategories(b);
+  1432→    if (cats.includes(tag)) {
+  1433→      b.categories = cats.filter(c => c !== tag);
+  1434→      delete b.category;
+  1435→    }
+  1436→  });
+  1437→  saveBrands(brands);
+  1438→  renderTagManager();
+  1439→  populateBmCatFilter();
+  1440→  renderBrandModalList();
+  1441→}
+  1442→
+  1443→function openBrandModal() {
+  1444→  bmSelected.clear();
+  1445→  populateBmCatFilter();
+  1446→  renderBrandModalList();
+  1447→  // Étiquettes pour le formulaire d'ajout de marque
+  1448→  const tags = loadBrandTags();
+  1449→  const container = document.getElementById('newBrandCats');
+  1450→  container.innerHTML = tags.map(t => {
+  1451→    const safe = t.replace(/"/g, '&quot;');
+  1452→    return `<label class="check-chip" style="font-size:11px;padding:4px 9px">
+  1453→      <input type="checkbox" value="${safe}" onchange="updateChip(this)"> ${safe}
+  1454→    </label>`;
+  1455→  }).join('');
+  1456→  // Peupler les selects des actions en masse et du remplacement
+  1457→  const tagOpts = tags.map(t => `<option value="${t}">${t}</option>`).join('');
+  1458→  document.getElementById('bmBulkCat').innerHTML = '<option value="">— Étiquette —</option>' + tagOpts;
+  1459→  document.getElementById('brTo').innerHTML = '<option value="">— Étiquette cible —</option>' + tagOpts;
+  1460→  document.getElementById('brandModal').classList.add('open');
+  1461→  checkProxyStatus();
+  1462→}
+  1463→function closeBrandModal() {
+  1464→  document.getElementById('brandModal').classList.remove('open');
+  1465→  // Rafraîchir l'app sans changer le filtre actif
+  1466→  buildBrandFilters();
+  1467→  buildBrands(); // appelle filterBrands() en interne
+  1468→  updateBrandCount();
+  1469→}
+  1470→
+  1471→function resetBrandFilters() {
+  1472→  activeCatFilter = 'all';
+  1473→  hideUsedBrands  = false;
+  1474→  document.getElementById('brandSearch').value = '';
+  1475→  const btnToggle = document.getElementById('btnToggleUsed');
+  1476→  if (btnToggle) { btnToggle.classList.remove('active'); btnToggle.textContent = '🔒 Déjà utilisées'; }
+  1477→  buildBrandFilters();
+  1478→  buildBrands();
+  1479→}
+  1480→document.getElementById('brandModal').addEventListener('click', function(e) {
+  1481→  if (e.target === this) closeBrandModal();
+  1482→});
+  1483→
+  1484→function populateBmCatFilter() {
+  1485→  const tags = loadBrandTags();
+  1486→  const opts = tags.map(c => `<option value="${c}">${c}</option>`).join('');
+  1487→  document.getElementById('bmCatFilter').innerHTML = '<option value="">Toutes les étiquettes</option><option value="__none__">— Sans étiquette —</option>' + opts;
+  1488→  document.getElementById('brFrom').innerHTML = '<option value="">— Étiquette source —</option>' + opts;
+  1489→}
+  1490→
+  1491→function renderBrandModalList() {
+  1492→  const brands = loadBrands();
+  1493→  const q   = document.getElementById('bmSearch').value.toLowerCase();
+  1494→  const cat = document.getElementById('bmCatFilter').value;
+  1495→  const filtered = brands.filter(b => {
+  1496→    const matchName = b.name.toLowerCase().includes(q);
+  1497→    const bCats = getCategories(b);
+  1498→    const matchCat = !cat ? true : cat === '__none__' ? bCats.length === 0 : bCats.includes(cat);
+  1499→    return matchName && matchCat;
+  1500→  });
+  1501→  // Étiquettes définies (liste gérée séparément, pas les catégories de recherche Vinted)
+  1502→  const allBrandCats = loadBrandTags();
+  1503→  const container = document.getElementById('brandModalList');
+  1504→  if (!filtered.length) { container.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">Aucune marque trouvée</div>'; return; }
+  1505→  container.innerHTML = filtered.map(brand => {
+  1506→    const realIdx = brands.indexOf(brand);
+  1507→    const brandCats = getCategories(brand);
+  1508→    const isChecked = bmSelected.has(realIdx);
+  1509→    const catToggles = allBrandCats.map(c =>
+  1510→      `<button class="bm-cat-toggle ${brandCats.includes(c) ? 'on' : ''}"
+  1511→        onclick="toggleBrandCat(${realIdx}, '${c}', this)">${c}</button>`).join('');
+  1512→    return `
+  1513→      <div class="bm-item" id="bmRow_${realIdx}" style="${isChecked ? 'background:#fff8f0' : ''}">
+  1514→        <input type="checkbox" class="bm-item-check" ${isChecked ? 'checked' : ''} onchange="toggleBmSelect(${realIdx}, this)">
+  1515→        <div class="bm-item-info">
+  1516→          <div class="bm-item-name">${brand.name}${brand.vinted_name && brand.vinted_name !== brand.name ? ` <span style="color:#aaa;font-weight:400;font-size:11px">(${brand.vinted_name})</span>` : ''}</div>
+  1517→          <div class="bm-item-cats" id="bmCats_${realIdx}">
+  1518→            ${brandCats.map(c => `<span class="bm-cat-badge">${c}</span>`).join('')}
+  1519→          </div>
+  1520→          <div class="bm-edit-cats" id="bmEdit_${realIdx}">${catToggles}</div>
+  1521→        </div>
+  1522→        <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
+  1523→          <button class="btn-icon" onclick="toggleBmEdit(${realIdx})" title="Modifier catégories">✏️</button>
+  1524→          <button class="btn-icon danger" onclick="deleteBrand(${realIdx})" title="Supprimer">🗑</button>
+  1525→        </div>
+  1526→      </div>`;
+  1527→  }).join('');
+  1528→  updateBmToolbar();
+  1529→}
+  1530→
+  1531→function toggleBmEdit(idx) {
+  1532→  document.getElementById('bmEdit_' + idx)?.classList.toggle('open');
+  1533→  document.getElementById('bmCats_' + idx)?.classList.toggle('open');
+  1534→}
+  1535→
+  1536→function toggleBrandCat(idx, cat, btn) {
+  1537→  const brands = loadBrands();
+  1538→  const brand  = brands[idx];
+  1539→  let cats = getCategories(brand);
+  1540→  if (cats.includes(cat)) cats = cats.filter(c => c !== cat);
+  1541→  else cats.push(cat);
+  1542→  brand.categories = cats;
+  1543→  delete brand.category;
+  1544→  saveBrands(brands);
+  1545→  // Mettre à jour l'affichage des badges
+  1546→  const badgesEl = document.getElementById('bmCats_' + idx);
+  1547→  if (badgesEl) badgesEl.innerHTML = cats.map(c => `<span class="bm-cat-badge">${c}</span>`).join('');
+  1548→  btn.classList.toggle('on', cats.includes(cat));
+  1549→}
+  1550→
+  1551→function deleteBrand(idx) {
+  1552→  if (!confirm('Supprimer cette marque ?')) return;
+  1553→  const brands = loadBrands();
+  1554→  brands.splice(idx, 1);
+  1555→  saveBrands(brands);
+  1556→  populateBmCatFilter();
+  1557→  renderBrandModalList();
+  1558→}
+  1559→
+  1560→async function checkProxyStatus() {
+  1561→  const dot   = document.getElementById('proxyDot');
+  1562→  const label = document.getElementById('proxyLabel');
+  1563→  const btn   = document.getElementById('proxyCopyBtn');
+  1564→  dot.textContent = '⏳'; label.style.color = '#888'; label.textContent = 'Vérification…'; btn.style.display = 'none';
+  1565→  try {
+  1566→    const resp = await fetch('http://localhost:8765/search?q=test', { signal: AbortSignal.timeout(2000) });
+  1567→    if (resp.ok) {
+  1568→      dot.textContent = '🟢'; label.style.color = '#2a9d4e'; label.textContent = 'Proxy actif — la recherche d\'ID fonctionne';
+  1569→      btn.style.display = 'none';
+  1570→      return;
+  1571→    }
+  1572→  } catch(e) {}
+  1573→  dot.textContent = '🔴'; label.style.color = '#e94560'; label.textContent = 'Proxy inactif — copie la commande et lance-la dans le Terminal';
+  1574→  btn.style.display = 'inline-block';
+  1575→}
+  1576→
+  1577→function copyProxyCommand() {
+  1578→  const cmd = 'python3 "/Users/stephanie/Documents/Claude/app favoris/vinted_proxy.py"';
+  1579→  navigator.clipboard.writeText(cmd).then(() => {
+  1580→    const btn = document.getElementById('proxyCopyBtn');
+  1581→    const orig = btn.textContent;
+  1582→    btn.textContent = '✅ Copié !';
+  1583→    setTimeout(() => btn.textContent = orig, 2000);
+  1584→  });
+  1585→}
+  1586→
+  1587→async function searchVintedBrand() {
+  1588→  const name = document.getElementById('newBrandName').value.trim();
+  1589→  if (!name) return;
+  1590→  const status = document.getElementById('brandSearchStatus');
+  1591→  status.textContent = '🔍 Recherche en cours...';
+  1592→
+  1593→  // 1. Chercher d'abord dans les marques déjà dans l'app
+  1594→  const existingBrands = loadBrands();
+  1595→  const nameLow = name.toLowerCase();
+  1596→  const localMatch = existingBrands.find(b =>
+  1597→    (b.name || '').toLowerCase() === nameLow ||
+  1598→    (b.vinted_name || '').toLowerCase() === nameLow
+  1599→  );
+  1600→  if (localMatch && localMatch.id) {
+  1601→    document.getElementById('newBrandId').value = localMatch.id;
+  1602→    document.getElementById('newBrandVintedName').value = localMatch.vinted_name !== name ? localMatch.vinted_name : '';
+  1603→    status.textContent = `✅ Trouvé dans la liste : ${localMatch.vinted_name} (ID ${localMatch.id})`;
+  1604→    return;
+  1605→  }
+  1606→
+  1607→  // 2. Essayer le proxy local (python vinted_proxy.py)
+  1608→  try {
+  1609→    const resp = await fetch(`http://localhost:8765/search?q=${encodeURIComponent(name)}`, { signal: AbortSignal.timeout(3000) });
+  1610→    if (resp.ok) {
+  1611→      const data = await resp.json();
+  1612→      const brands = data.brands || [];
+  1613→      const exact = brands.find(b => b.title.toLowerCase() === nameLow) || brands[0];
+  1614→      if (exact) {
+  1615→        document.getElementById('newBrandId').value = exact.id;
+  1616→        document.getElementById('newBrandVintedName').value = exact.title !== name ? exact.title : '';
+  1617→        status.textContent = `✅ Trouvé : ${exact.title} (ID ${exact.id})`;
+  1618→        return;
+  1619→      }
+  1620→    }
+  1621→  } catch(e) { /* proxy non disponible */ }
+  1622→
+  1623→  // 3. Essayer l'API Vinted directement (peut échouer à cause du CORS)
+  1624→  try {
+  1625→    const resp = await fetch(`https://www.vinted.fr/api/v2/brands?keyword=${encodeURIComponent(name)}&per_page=5`);
+  1626→    const data = await resp.json();
+  1627→    const brands = data.brands || [];
+  1628→    const exact = brands.find(b => b.title.toLowerCase() === nameLow) || brands[0];
+  1629→    if (exact) {
+  1630→      document.getElementById('newBrandId').value = exact.id;
+  1631→      document.getElementById('newBrandVintedName').value = exact.title !== name ? exact.title : '';
+  1632→      status.textContent = `✅ Trouvé : ${exact.title} (ID ${exact.id})`;
+  1633→      return;
+  1634→    }
+  1635→    status.textContent = '❌ Non trouvé sur Vinted';
+  1636→  } catch(e) {
+  1637→    status.innerHTML = `⚠️ CORS bloqué par le navigateur. Lance le proxy&nbsp;: <code style="background:#f0f0f0;padding:2px 6px;border-radius:4px">python3 vinted_proxy.py</code>`;
+  1638→  }
+  1639→}
+  1640→
+  1641→function addBrand() {
+  1642→  const name       = document.getElementById('newBrandName').value.trim();
+  1643→  const id         = parseInt(document.getElementById('newBrandId').value);
+  1644→  const vintedName = document.getElementById('newBrandVintedName').value.trim();
+  1645→  if (!name) { alert('Entre le nom de la marque'); return; }
+  1646→  if (!id || isNaN(id)) { alert('Entre l\'ID Vinted (nombre)'); return; }
+  1647→  const cats = Array.from(document.querySelectorAll('#newBrandCats input:checked')).map(cb => cb.value);
+  1648→  if (!cats.length) { alert('Sélectionne au moins une catégorie'); return; }
+  1649→  const brands = loadBrands();
+  1650→  brands.push({ name, vinted_name: vintedName || name, id, categories: cats });
+  1651→  saveBrands(brands);
+  1652→  document.getElementById('newBrandName').value = '';
+  1653→  document.getElementById('newBrandId').value = '';
+  1654→  document.getElementById('newBrandVintedName').value = '';
+  1655→  document.getElementById('brandSearchStatus').textContent = '';
+  1656→  document.querySelectorAll('#newBrandCats input').forEach(cb => { cb.checked = false; cb.closest('label')?.classList.remove('selected'); });
+  1657→  populateBmCatFilter();
+  1658→  renderBrandModalList();
+  1659→}
+  1660→
+  1661→function toggleBmSelect(idx, cb) {
+  1662→  if (cb.checked) bmSelected.add(idx);
+  1663→  else bmSelected.delete(idx);
+  1664→  const row = document.getElementById('bmRow_' + idx);
+  1665→  if (row) row.style.background = cb.checked ? '#fff8f0' : '';
+  1666→  updateBmToolbar();
+  1667→}
+  1668→
+  1669→function toggleBmSelectAll(cb) {
+  1670→  document.querySelectorAll('#brandModalList .bm-item-check').forEach(el => {
+  1671→    const idx = parseInt(el.closest('.bm-item').id.replace('bmRow_',''));
+  1672→    el.checked = cb.checked;
+  1673→    if (cb.checked) bmSelected.add(idx); else bmSelected.delete(idx);
+  1674→    el.closest('.bm-item').style.background = cb.checked ? '#fff8f0' : '';
+  1675→  });
+  1676→  updateBmToolbar();
+  1677→}
+  1678→
+  1679→function updateBmToolbar() {
+  1680→  const toolbar = document.getElementById('bmToolbar');
+  1681→  if (!toolbar) return;
+  1682→  const count = bmSelected.size;
+  1683→  toolbar.classList.toggle('visible', count > 0);
+  1684→  const countEl = document.getElementById('bmSelCount');
+  1685→  if (countEl) countEl.textContent = count + ' sélectionnée(s)';
+  1686→}
+  1687→
+  1688→function clearBmSelection() {
+  1689→  bmSelected.clear();
+  1690→  document.querySelectorAll('#brandModalList .bm-item-check').forEach(cb => {
+  1691→    cb.checked = false;
+  1692→    cb.closest('.bm-item').style.background = '';
+  1693→  });
+  1694→  const selectAll = document.getElementById('bmSelectAll');
+  1695→  if (selectAll) selectAll.checked = false;
+  1696→  updateBmToolbar();
+  1697→}
+  1698→
+  1699→function applyBulkAdd() {
+  1700→  const cat = document.getElementById('bmBulkCat').value;
+  1701→  if (!cat) { alert('Sélectionne une catégorie'); return; }
+  1702→  if (!bmSelected.size) { alert('Sélectionne au moins une marque'); return; }
+  1703→  const brands = loadBrands();
+  1704→  bmSelected.forEach(idx => {
+  1705→    const cats = getCategories(brands[idx]);
+  1706→    if (!cats.includes(cat)) {
+  1707→      brands[idx].categories = [...cats, cat];
+  1708→      delete brands[idx].category;
+  1709→    }
+  1710→  });
+  1711→  saveBrands(brands);
+  1712→  renderBrandModalList();
+  1713→}
+  1714→
+  1715→function applyBulkRemove() {
+  1716→  const cat = document.getElementById('bmBulkCat').value;
+  1717→  if (!cat) { alert('Sélectionne une catégorie'); return; }
+  1718→  if (!bmSelected.size) { alert('Sélectionne au moins une marque'); return; }
+  1719→  const brands = loadBrands();
+  1720→  bmSelected.forEach(idx => {
+  1721→    brands[idx].categories = getCategories(brands[idx]).filter(c => c !== cat);
+  1722→    delete brands[idx].category;
+  1723→  });
+  1724→  saveBrands(brands);
+  1725→  renderBrandModalList();
+  1726→}
+  1727→
+  1728→function applyBulkReplace() {
+  1729→  const from = document.getElementById('brFrom').value;
+  1730→  const to   = document.getElementById('brTo').value;
+  1731→  if (!from || !to) { alert('Sélectionne la catégorie source ET la catégorie cible'); return; }
+  1732→  if (from === to) { alert('Les deux catégories sont identiques'); return; }
+  1733→  const brands = loadBrands();
+  1734→  let count = 0;
+  1735→  brands.forEach(b => {
+  1736→    const cats = getCategories(b);
+  1737→    if (cats.includes(from)) {
+  1738→      b.categories = cats.map(c => c === from ? to : c);
+  1739→      delete b.category;
+  1740→      count++;
+  1741→    }
+  1742→  });
+  1743→  saveBrands(brands);
+  1744→  alert('✅ ' + count + ' marque(s) mise(s) à jour');
+  1745→  populateBmCatFilter();
+  1746→  renderBrandModalList();
+  1747→}
+  1748→
+  1749→// ── MODE "MES RECHERCHES" (vue usage) ─────────────────────────────────
+  1750→function escHtml(s) {
+  1751→  return String(s == null ? '' : s)
+  1752→    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  1753→    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  1754→}
+  1755→
+  1756→const ORDER_LABELS = {
+  1757→  newest_first: 'Plus récents',
+  1758→  relevance: 'Pertinence',
+  1759→  price_high_to_low: 'Prix décroissant',
+  1760→  price_low_to_high: 'Prix croissant',
+  1761→};
+  1762→
+  1763→// Reconstruit l'URL Vinted depuis un état sauvegardé (miroir de buildParams)
+  1764→function buildParamsFromState(state) {
+  1765→  const params = new URLSearchParams();
+  1766→  const allCatIds = new Set();
+  1767→  (state.cats || []).forEach(key => getCatIds(key).forEach(id => allCatIds.add(id)));
+  1768→  allCatIds.forEach(id => params.append('catalog[]', id));
+  1769→  (state.brands || []).forEach(id => params.append('brand_ids[]', id));
+  1770→  (state.status || []).forEach(v => params.append('status_ids[]', v));
+  1771→  (state.sizes  || []).forEach(v => params.append('size_ids[]', v));
+  1772→  (state.shoes  || []).forEach(v => params.append('size_ids[]', v));
+  1773→  if (state.priceMin) params.set('price_from', state.priceMin);
+  1774→  if (state.priceMax) params.set('price_to', state.priceMax);
+  1775→  params.set('order', state.order || 'newest_first');
+  1776→  return params;
+  1777→}
+  1778→
+  1779→function openSearchByName(name) {
+  1780→  const searches = JSON.parse(localStorage.getItem('vintedSearches') || '[]');
+  1781→  const entry = searches.find(s => s.name === name);
+  1782→  if (!entry) return;
+  1783→  const params = buildParamsFromState(entry.state || {});
+  1784→  window.open('https://www.vinted.fr/catalog?' + params.toString(), '_blank');
+  1785→}
+  1786→
+  1787→function catLabelsFromState(state) {
+  1788→  return (state.cats || []).map(key => {
+  1789→    const parts = key.split('-').map(Number);
+  1790→    const cat = CATEGORIES[parts[0]];
+  1791→    if (!cat) return null;
+  1792→    if (parts.length === 1) return cat.label;
+  1793→    return cat.children?.[parts[1]]?.label || null;
+  1794→  }).filter(Boolean);
+  1795→}
+  1796→
+  1797→let selectedSearchName = null; // recherche affichée dans le panneau détail
+  1798→
+  1799→function getSearches() {
+  1800→  return JSON.parse(localStorage.getItem('vintedSearches') || '[]');
+  1801→}
+  1802→
+  1803→// Vue maître-détail : liste à gauche + détail à droite
+  1804→function renderSearchView() {
+  1805→  const searches = getSearches();
+  1806→  // Conserver la sélection si toujours valide, sinon prendre la première
+  1807→  if (!searches.some(s => s.name === selectedSearchName)) {
+  1808→    selectedSearchName = searches.length ? searches[0].name : null;
+  1809→  }
+  1810→  renderSearchList(searches);
+  1811→  renderSearchDetail(selectedSearchName);
+  1812→}
+  1813→
+  1814→function renderSearchList(searches) {
+  1815→  const list = document.getElementById('svList');
+  1816→  if (!searches.length) {
+  1817→    list.innerHTML = '<div class="sv-list-empty">Aucune recherche enregistrée.<br>Clique sur « ＋ Nouvelle recherche ».</div>';
+  1818→    return;
+  1819→  }
+  1820→  list.innerHTML = searches.map(s => {
+  1821→    const safeName = s.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  1822→    const active = s.name === selectedSearchName ? ' active' : '';
+  1823→    return `<div class="sv-item${active}" onclick="selectSearch('${safeName}')">
+  1824→      <span class="sv-item-name">${escHtml(s.name)}</span>
+  1825→      <button class="sv-item-go" title="Voir sur Vinted" onclick="event.stopPropagation(); openSearchByName('${safeName}')">▶</button>
+  1826→    </div>`;
+  1827→  }).join('');
+  1828→}
+  1829→
+  1830→function renderSearchDetail(name) {
+  1831→  const panel = document.getElementById('svDetail');
+  1832→  const entry = getSearches().find(s => s.name === name);
+  1833→  if (!entry) {
+  1834→    panel.innerHTML = '<div class="sv-detail-empty">Sélectionne une recherche à gauche pour voir son détail.</div>';
+  1835→    return;
+  1836→  }
+  1837→  const st = entry.state || {};
+  1838→  const safeName = entry.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  1839→
+  1840→  const brandMap = {};
+  1841→  loadBrands().forEach(b => { brandMap[b.id] = b.name; });
+  1842→  const brandNames = (st.brands || []).map(id => brandMap[id] || ('#' + id))
+  1843→    .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  1844→  const brandsHtml = brandNames.length
+  1845→    ? brandNames.map(n => `<span class="scard-chip">${escHtml(n)}</span>`).join('')
+  1846→    : '<span class="scard-empty-crit">Aucune marque</span>';
+  1847→
+  1848→  const crit = [];
+  1849→  catLabelsFromState(st).forEach(l => crit.push(`<span class="scard-chip cat">${escHtml(l)}</span>`));
+  1850→  (st.status || []).map(v => STATUS_LABELS[v]).filter(Boolean).forEach(l => crit.push(`<span class="scard-chip crit">${escHtml(l)}</span>`));
+  1851→  (st.sizes  || []).map(v => SIZE_LABELS[v]).filter(Boolean).forEach(l => crit.push(`<span class="scard-chip crit">${escHtml(l)}</span>`));
+  1852→  (st.shoes  || []).map(v => SHOE_SIZE_LABELS[v]).filter(Boolean).forEach(l => crit.push(`<span class="scard-chip crit">pt. ${escHtml(l)}</span>`));
+  1853→  if (st.priceMin || st.priceMax) {
+  1854→    crit.push(`<span class="scard-chip crit">${escHtml((st.priceMin || '0') + '–' + (st.priceMax || '∞') + ' €')}</span>`);
+  1855→  }
+  1856→  if (st.order && st.order !== 'newest_first' && ORDER_LABELS[st.order]) {
+  1857→    crit.push(`<span class="scard-chip crit">${escHtml(ORDER_LABELS[st.order])}</span>`);
+  1858→  }
+  1859→  const critHtml = crit.length ? crit.join('') : '<span class="scard-empty-crit">Aucun critère</span>';
+  1860→
+  1861→  panel.innerHTML = `
+  1862→    <div class="sv-detail-head">
+  1863→      <div class="sv-detail-title">${escHtml(entry.name)}</div>
+  1864→      <div class="sv-detail-actions">
+  1865→        <button class="scard-open" onclick="openSearchByName('${safeName}')">▶ Voir sur Vinted</button>
+  1866→        <button class="scard-edit" onclick="editFromCard('${safeName}')">✏️ Modifier</button>
+  1867→      </div>
+  1868→    </div>
+  1869→    <div class="scard-block">
+  1870→      <div class="scard-label">Critères</div>
+  1871→      <div class="scard-crit-row">${critHtml}</div>
+  1872→    </div>
+  1873→    <div class="scard-block">
+  1874→      <div class="scard-label">Marques (${brandNames.length})</div>
+  1875→      <div class="scard-brands cols">${brandsHtml}</div>
+  1876→    </div>`;
+  1877→}
+  1878→
+  1879→function selectSearch(name) {
+  1880→  selectedSearchName = name;
+  1881→  renderSearchView();
+  1882→}
+  1883→
+  1884→function switchMode(mode) {
+  1885→  const isSearch = mode === 'search';
+  1886→  document.getElementById('viewSearches').style.display = isSearch ? '' : 'none';
+  1887→  document.getElementById('viewBuilder').style.display  = isSearch ? 'none' : '';
+  1888→  document.querySelector('.sidebar').style.display       = isSearch ? 'none' : '';
+  1889→  document.getElementById('tabSearches').classList.toggle('active', isSearch);
+  1890→  document.getElementById('tabBuilder').classList.toggle('active', !isSearch);
+  1891→  if (isSearch) renderSearchView();
+  1892→}
+  1893→
+  1894→function newSearchFromView() {
+  1895→  newSearch();
+  1896→  switchMode('build');
+  1897→}
+  1898→
+  1899→function editFromCard(name) {
+  1900→  loadSearch(name);
+  1901→  switchMode('build');
+  1902→}
+  1903→
+  1904→init();
+  1905→</script>
+  1906→</body>
+  1907→</html>

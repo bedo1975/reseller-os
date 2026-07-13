@@ -1,0 +1,929 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useMemo } from 'react'
+     4→     4→import { useFetch } from '@/hooks/use-fetch'
+     5→     5→import { useSettings } from '@/hooks/use-settings'
+     6→     6→import { Card, CardContent } from '@/components/ui/card'
+     7→     7→import { Button } from '@/components/ui/button'
+     8→     8→import { Input } from '@/components/ui/input'
+     9→     9→import { Label } from '@/components/ui/label'
+    10→    10→import { Badge } from '@/components/ui/badge'
+    11→    11→import {
+    12→    12→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    13→    13→} from '@/components/ui/table'
+    14→    14→import {
+    15→    15→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    16→    16→} from '@/components/ui/select'
+    17→    17→import {
+    18→    18→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+    19→    19→} from '@/components/ui/dialog'
+    20→    20→import { Skeleton } from '@/components/ui/skeleton'
+    21→    21→import {
+    22→    22→  Plus, Search, MapPin, Barcode, Edit, Trash2, Package, ChevronLeft, ChevronRight,
+    23→    23→  Eye, AlertCircle,
+    24→    24→} from 'lucide-react'
+    25→    25→import { toast } from 'sonner'
+    26→    26→import {
+    27→    27→  formatEUR, formatDate, PUBLICATION_STATUSES,
+    28→    28→  getPubStatusColor, getPubStatusLabel,
+    29→    29→  getPlatformLabel, getPlatformColor, PLATFORMS,
+    30→    30→} from '@/lib/constants'
+    31→    31→import { cn } from '@/lib/utils'
+    32→    32→
+    33→    33→const PAGE_SIZE = 10
+    34→    34→
+    35→    35→interface Supplier {
+    36→    36→  id: string
+    37→    37→  name: string
+    38→    38→  type: string
+    39→    39→}
+    40→    40→
+    41→    41→interface StockItem {
+    42→    42→  id: string
+    43→    43→  sku: string
+    44→    44→  barcode: string | null
+    45→    45→  photos: string
+    46→    46→  brand: string
+    47→    47→  category: string
+    48→    48→  size: string | null
+    49→    49→  color: string | null
+    50→    50→  condition: string
+    51→    51→  purchaseDate: string
+    52→    52→  supplierId: string | null
+    53→    53→  supplier: Supplier | null
+    54→    54→  purchaseCost: number
+    55→    55→  lotReference: string | null
+    56→    56→  warehouse: string | null
+    57→    57→  rack: string | null
+    58→    58→  shelf: string | null
+    59→    59→  bin: string | null
+    60→    60→  status: string
+    61→    61→  platform: string | null
+    62→    62→  platforms: string  // JSON array
+    63→    63→  suggestedPrice: number | null
+    64→    64→  description: string | null
+    65→    65→  measurements: string | null
+    66→    66→  sale?: { id: string; salePrice: number; profit: number } | null
+    67→    67→}
+    68→    68→
+    69→    69→export function StockModule() {
+    70→    70→  const { data: items, loading, refresh } = useFetch<StockItem[]>('/api/stock')
+    71→    71→  const { data: suppliers } = useFetch<Supplier[]>('/api/suppliers')
+    72→    72→  const { getByType, getLabel } = useSettings()
+    73→    73→
+    74→    74→  const categories = getByType('category')
+    75→    75→  const conditions = getByType('condition')
+    76→    76→
+    77→    77→  const [search, setSearch] = useState('')
+    78→    78→  const [statusFilter, setStatusFilter] = useState<string>('all')
+    79→    79→  const [brandFilter, setBrandFilter] = useState<string>('all')
+    80→    80→  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+    81→    81→  const [page, setPage] = useState(1)
+    82→    82→  const [showForm, setShowForm] = useState(false)
+    83→    83→  const [editingItem, setEditingItem] = useState<StockItem | null>(null)
+    84→    84→  const [viewItem, setViewItem] = useState<StockItem | null>(null)
+    85→    85→  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    86→    86→  const [showDeleteModal, setShowDeleteModal] = useState(false)
+    87→    87→  const [deleteTarget, setDeleteTarget] = useState<{ type: 'single' | 'bulk'; item?: StockItem } | null>(null)
+    88→    88→
+    89→    89→  const brands = useMemo(() => {
+    90→    90→    if (!items) return []
+    91→    91→    return Array.from(new Set(items.map(i => i.brand))).sort()
+    92→    92→  }, [items])
+    93→    93→
+    94→    94→  const filtered = useMemo(() => {
+    95→    95→    if (!items) return []
+    96→    96→    return items.filter(i => {
+    97→    97→      if (statusFilter !== 'all' && i.status !== statusFilter) return false
+    98→    98→      if (brandFilter !== 'all' && i.brand !== brandFilter) return false
+    99→    99→      if (categoryFilter !== 'all' && i.category !== categoryFilter) return false
+   100→   100→      if (search) {
+   101→   101→        const q = search.toLowerCase()
+   102→   102→        return (
+   103→   103→          i.sku.toLowerCase().includes(q) ||
+   104→   104→          i.brand.toLowerCase().includes(q) ||
+   105→   105→          i.color?.toLowerCase().includes(q) ||
+   106→   106→          i.barcode?.toLowerCase().includes(q) ||
+   107→   107→          i.lotReference?.toLowerCase().includes(q)
+   108→   108→        )
+   109→   109→      }
+   110→   110→      return true
+   111→   111→    })
+   112→   112→  }, [items, search, statusFilter, brandFilter, categoryFilter])
+   113→   113→
+   114→   114→  // Quand les filtres changent, on reset la page via la clé de filtre
+   115→   115→  const filterKey = `${search}|${statusFilter}|${brandFilter}|${categoryFilter}`
+   116→   116→  const [lastFilterKey, setLastFilterKey] = useState(filterKey)
+   117→   117→  if (filterKey !== lastFilterKey) {
+   118→   118→    setLastFilterKey(filterKey)
+   119→   119→    setPage(1)
+   120→   120→  }
+   121→   121→
+   122→   122→  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+   123→   123→  const safePage = Math.min(page, totalPages)
+   124→   124→  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+   125→   125→
+   126→   126→  const totalStockValue = filtered.reduce((sum, i) => sum + i.purchaseCost, 0)
+   127→   127→  const totalPotentialRevenue = filtered.reduce((sum, i) => sum + (i.suggestedPrice || 0), 0)
+   128→   128→
+   129→   129→  // ─── Gestion de la sélection ───
+   130→   130→  const toggleSelect = (id: string) => {
+   131→   131→    setSelectedIds(prev => {
+   132→   132→      const next = new Set(prev)
+   133→   133→      if (next.has(id)) next.delete(id)
+   134→   134→      else next.add(id)
+   135→   135→      return next
+   136→   136→    })
+   137→   137→  }
+   138→   138→
+   139→   139→  const toggleSelectAll = () => {
+   140→   140→    if (selectedIds.size === paginated.length) {
+   141→   141→      // Tout est sélectionné sur cette page → désélectionner
+   142→   142→      setSelectedIds(new Set())
+   143→   143→    } else {
+   144→   144→      // Sinon → sélectionner tous les items de la page courante
+   145→   145→      setSelectedIds(new Set(paginated.map(i => i.id)))
+   146→   146→    }
+   147→   147→  }
+   148→   148→
+   149→   149→  const isAllSelected = paginated.length > 0 && paginated.every(i => selectedIds.has(i.id))
+   150→   150→  const isSomeSelected = paginated.some(i => selectedIds.has(i.id)) && !isAllSelected
+   151→   151→
+   152→   152→  // ─── Suppression (modale au lieu de confirm) ───
+   153→   153→  const askDeleteSingle = (item: StockItem) => {
+   154→   154→    setDeleteTarget({ type: 'single', item })
+   155→   155→    setShowDeleteModal(true)
+   156→   156→  }
+   157→   157→
+   158→   158→  const askDeleteBulk = () => {
+   159→   159→    if (selectedIds.size === 0) return
+   160→   160→    setDeleteTarget({ type: 'bulk' })
+   161→   161→    setShowDeleteModal(true)
+   162→   162→  }
+   163→   163→
+   164→   164→  const confirmDelete = async () => {
+   165→   165→    if (!deleteTarget) return
+   166→   166→    setShowDeleteModal(false)
+   167→   167→
+   168→   168→    if (deleteTarget.type === 'single' && deleteTarget.item) {
+   169→   169→      const res = await fetch(`/api/stock/${deleteTarget.item.id}`, { method: 'DELETE' })
+   170→   170→      if (res.ok) {
+   171→   171→        toast.success('Article supprimé')
+   172→   172→        refresh()
+   173→   173→      } else {
+   174→   174→        toast.error('Erreur lors de la suppression')
+   175→   175→      }
+   176→   176→    } else if (deleteTarget.type === 'bulk') {
+   177→   177→      // Suppression multiple
+   178→   178→      const ids = Array.from(selectedIds)
+   179→   179→      let okCount = 0
+   180→   180→      let errCount = 0
+   181→   181→      for (const id of ids) {
+   182→   182→        const res = await fetch(`/api/stock/${id}`, { method: 'DELETE' })
+   183→   183→        if (res.ok) okCount++
+   184→   184→        else errCount++
+   185→   185→      }
+   186→   186→      if (okCount > 0) toast.success(`${okCount} article${okCount > 1 ? 's' : ''} supprimé${okCount > 1 ? 's' : ''}`)
+   187→   187→      if (errCount > 0) toast.error(`${errCount} suppression(s) en échec`)
+   188→   188→      setSelectedIds(new Set())
+   189→   189→      refresh()
+   190→   190→    }
+   191→   191→    setDeleteTarget(null)
+   192→   192→  }
+   193→   193→
+   194→   194→  return (
+   195→   195→    <div className="space-y-5">
+   196→   196→      {/* Stats */}
+   197→   197→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   198→   198→        <Card>
+   199→   199→          <CardContent className="p-4">
+   200→   200→            <p className="text-xs text-muted-foreground uppercase">Articles</p>
+   201→   201→            <p className="text-2xl font-bold mt-1">{filtered.length}</p>
+   202→   202→          </CardContent>
+   203→   203→        </Card>
+   204→   204→        <Card>
+   205→   205→          <CardContent className="p-4">
+   206→   206→            <p className="text-xs text-muted-foreground uppercase">Valeur stock</p>
+   207→   207→            <p className="text-2xl font-bold mt-1">{formatEUR(totalStockValue)}</p>
+   208→   208→          </CardContent>
+   209→   209→        </Card>
+   210→   210→        <Card>
+   211→   211→          <CardContent className="p-4">
+   212→   212→            <p className="text-xs text-muted-foreground uppercase">Potentiel vente</p>
+   213→   213→            <p className="text-2xl font-bold mt-1 text-emerald-600">{formatEUR(totalPotentialRevenue)}</p>
+   214→   214→          </CardContent>
+   215→   215→        </Card>
+   216→   216→        <Card>
+   217→   217→          <CardContent className="p-4">
+   218→   218→            <p className="text-xs text-muted-foreground uppercase">Marge potentielle</p>
+   219→   219→            <p className="text-2xl font-bold mt-1">
+   220→   220→              {totalStockValue > 0 ? Math.round(((totalPotentialRevenue - totalStockValue) / totalStockValue) * 100) : 0}%
+   221→   221→            </p>
+   222→   222→          </CardContent>
+   223→   223→        </Card>
+   224→   224→      </div>
+   225→   225→
+   226→   226→      {/* Toolbar */}
+   227→   227→      <Card>
+   228→   228→        <CardContent className="p-4">
+   229→   229→          <div className="flex flex-col lg:flex-row gap-3">
+   230→   230→            <div className="relative flex-1">
+   231→   231→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   232→   232→              <Input
+   233→   233→                placeholder="Rechercher par SKU, marque, code-barres, lot..."
+   234→   234→                value={search}
+   235→   235→                onChange={e => setSearch(e.target.value)}
+   236→   236→                className="pl-9"
+   237→   237→              />
+   238→   238→            </div>
+   239→   239→            <div className="grid grid-cols-3 gap-2 lg:flex">
+   240→   240→              <Select value={statusFilter} onValueChange={setStatusFilter}>
+   241→   241→                <SelectTrigger className="w-full lg:w-[150px]">
+   242→   242→                  <SelectValue placeholder="Statut" />
+   243→   243→                </SelectTrigger>
+   244→   244→                <SelectContent>
+   245→   245→                  <SelectItem value="all">Tous statuts</SelectItem>
+   246→   246→                  {PUBLICATION_STATUSES.map(s => (
+   247→   247→                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+   248→   248→                  ))}
+   249→   249→                </SelectContent>
+   250→   250→              </Select>
+   251→   251→              <Select value={brandFilter} onValueChange={setBrandFilter}>
+   252→   252→                <SelectTrigger className="w-full lg:w-[140px]">
+   253→   253→                  <SelectValue placeholder="Marque" />
+   254→   254→                </SelectTrigger>
+   255→   255→                <SelectContent>
+   256→   256→                  <SelectItem value="all">Toutes marques</SelectItem>
+   257→   257→                  {brands.map(b => (
+   258→   258→                    <SelectItem key={b} value={b}>{b}</SelectItem>
+   259→   259→                  ))}
+   260→   260→                </SelectContent>
+   261→   261→              </Select>
+   262→   262→              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+   263→   263→                <SelectTrigger className="w-full lg:w-[140px]">
+   264→   264→                  <SelectValue placeholder="Catégorie" />
+   265→   265→                </SelectTrigger>
+   266→   266→                <SelectContent>
+   267→   267→                  <SelectItem value="all">Toutes catégories</SelectItem>
+   268→   268→                  {categories.map(c => (
+   269→   269→                    <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>
+   270→   270→                  ))}
+   271→   271→                </SelectContent>
+   272→   272→              </Select>
+   273→   273→            </div>
+   274→   274→            <Button onClick={() => { setEditingItem(null); setShowForm(true) }}>
+   275→   275→              <Plus className="h-4 w-4 mr-2" /> Nouvel article
+   276→   276→            </Button>
+   277→   277→          </div>
+   278→   278→        </CardContent>
+   279→   279→      </Card>
+   280→   280→
+   281→   281→      {/* Barre d'actions bulk (visible quand des items sont sélectionnés) */}
+   282→   282→      {selectedIds.size > 0 && (
+   283→   283→        <Card className="border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
+   284→   284→          <CardContent className="p-3 flex items-center justify-between gap-3">
+   285→   285→            <div className="flex items-center gap-3">
+   286→   286→              <div className="h-8 w-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">
+   287→   287→                {selectedIds.size}
+   288→   288→              </div>
+   289→   289→              <span className="text-sm font-medium">
+   290→   290→                {selectedIds.size} article{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}
+   291→   291→              </span>
+   292→   292→            </div>
+   293→   293→            <div className="flex items-center gap-2">
+   294→   294→              <Button
+   295→   295→                variant="outline"
+   296→   296→                size="sm"
+   297→   297→                onClick={() => setSelectedIds(new Set())}
+   298→   298→              >
+   299→   299→                Désélectionner
+   300→   300→              </Button>
+   301→   301→              <Button
+   302→   302→                variant="destructive"
+   303→   303→                size="sm"
+   304→   304→                onClick={askDeleteBulk}
+   305→   305→              >
+   306→   306→                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+   307→   307→                Supprimer ({selectedIds.size})
+   308→   308→              </Button>
+   309→   309→            </div>
+   310→   310→          </CardContent>
+   311→   311→        </Card>
+   312→   312→      )}
+   313→   313→
+   314→   314→      {/* Table */}
+   315→   315→      <Card>
+   316→   316→        <CardContent className="p-0">
+   317→   317→          {loading ? (
+   318→   318→            <div className="p-4 space-y-2">
+   319→   319→              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12" />)}
+   320→   320→            </div>
+   321→   321→          ) : filtered.length === 0 ? (
+   322→   322→            <div className="py-16 text-center">
+   323→   323→              <Package className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+   324→   324→              <p className="text-sm font-medium">Aucun article trouvé</p>
+   325→   325→              <p className="text-xs text-muted-foreground mt-1">Modifiez vos filtres ou ajoutez un nouvel article.</p>
+   326→   326→            </div>
+   327→   327→          ) : (
+   328→   328→            <>
+   329→   329→              <Table>
+   330→   330→                <TableHeader>
+   331→   331→                  <TableRow className="bg-muted/30">
+   332→   332→                    <TableHead className="w-10">
+   333→   333→                      <input
+   334→   334→                        type="checkbox"
+   335→   335→                        checked={isAllSelected}
+   336→   336→                        ref={el => { if (el) el.indeterminate = isSomeSelected }}
+   337→   337→                        onChange={toggleSelectAll}
+   338→   338→                        className="h-4 w-4 rounded border-border cursor-pointer"
+   339→   339→                        title="Tout sélectionner"
+   340→   340→                      />
+   341→   341→                    </TableHead>
+   342→   342→                    <TableHead className="w-12"></TableHead>
+   343→   343→                    <TableHead>SKU</TableHead>
+   344→   344→                    <TableHead>Marque</TableHead>
+   345→   345→                    <TableHead className="hidden md:table-cell">Catégorie</TableHead>
+   346→   346→                    <TableHead className="hidden lg:table-cell">Taille</TableHead>
+   347→   347→                    <TableHead className="hidden lg:table-cell">Couleur</TableHead>
+   348→   348→                    <TableHead className="hidden xl:table-cell">Emplacement</TableHead>
+   349→   349→                    <TableHead className="text-right">Coût</TableHead>
+   350→   350→                    <TableHead className="text-right hidden md:table-cell">Prix conseillé</TableHead>
+   351→   351→                    <TableHead>Statut</TableHead>
+   352→   352→                    <TableHead className="hidden lg:table-cell">Plateforme</TableHead>
+   353→   353→                    <TableHead className="text-right">Actions</TableHead>
+   354→   354→                  </TableRow>
+   355→   355→                </TableHeader>
+   356→   356→                <TableBody>
+   357→   357→                  {paginated.map(item => {
+   358→   358→                    const photos: string[] = (() => {
+   359→   359→                      try { return JSON.parse(item.photos) } catch { return [] }
+   360→   360→                    })()
+   361→   361→                    const location = [item.rack, item.shelf ? `Ét. ${item.shelf}` : null, item.bin ? `Bac ${item.bin}` : null].filter(Boolean).join(' · ')
+   362→   362→                    return (
+   363→   363→                      <TableRow
+   364→   364→                        key={item.id}
+   365→   365→                        className={cn(
+   366→   366→                          'hover:bg-muted/40 transition-colors',
+   367→   367→                          selectedIds.has(item.id) && 'bg-emerald-50/50 dark:bg-emerald-950/20'
+   368→   368→                        )}
+   369→   369→                      >
+   370→   370→                        <TableCell className="p-2" onClick={e => e.stopPropagation()}>
+   371→   371→                          <input
+   372→   372→                            type="checkbox"
+   373→   373→                            checked={selectedIds.has(item.id)}
+   374→   374→                            onChange={() => toggleSelect(item.id)}
+   375→   375→                            className="h-4 w-4 rounded border-border cursor-pointer"
+   376→   376→                          />
+   377→   377→                        </TableCell>
+   378→   378→                        <TableCell className="p-1.5 cursor-pointer" onClick={() => setViewItem(item)}>
+   379→   379→                          <div className="h-10 w-10 rounded-md overflow-hidden bg-muted shrink-0">
+   380→   380→                            {photos[0] ? (
+   381→   381→                              <img src={photos[0]} alt={item.brand} className="w-full h-full object-cover" />
+   382→   382→                            ) : (
+   383→   383→                              <div className="w-full h-full flex items-center justify-center">
+   384→   384→                                <Package className="h-4 w-4 text-muted-foreground/40" />
+   385→   385→                              </div>
+   386→   386→                            )}
+   387→   387→                          </div>
+   388→   388→                        </TableCell>
+   389→   389→                        <TableCell className="font-mono text-xs">{item.sku}</TableCell>
+   390→   390→                        <TableCell className="font-medium">{item.brand}</TableCell>
+   391→   391→                        <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{getLabel('category', item.category)}</TableCell>
+   392→   392→                        <TableCell className="hidden lg:table-cell text-xs">{item.size || '—'}</TableCell>
+   393→   393→                        <TableCell className="hidden lg:table-cell text-xs">{item.color || '—'}</TableCell>
+   394→   394→                        <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
+   395→   395→                          {location ? (
+   396→   396→                            <span className="flex items-center gap-1">
+   397→   397→                              <MapPin className="h-3 w-3 shrink-0" /> {location}
+   398→   398→                            </span>
+   399→   399→                          ) : '—'}
+   400→   400→                        </TableCell>
+   401→   401→                        <TableCell className="text-right font-medium">{formatEUR(item.purchaseCost)}</TableCell>
+   402→   402→                        <TableCell className="text-right hidden md:table-cell">
+   403→   403→                          {item.suggestedPrice ? (
+   404→   404→                            <span className="font-semibold text-emerald-600">{formatEUR(item.suggestedPrice)}</span>
+   405→   405→                          ) : '—'}
+   406→   406→                        </TableCell>
+   407→   407→                        <TableCell>
+   408→   408→                          <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block', getPubStatusColor(item.status))}>
+   409→   409→                            {getPubStatusLabel(item.status)}
+   410→   410→                          </span>
+   411→   411→                        </TableCell>
+   412→   412→                        <TableCell className="hidden lg:table-cell">
+   413→   413→                          {item.platform ? (
+   414→   414→                            <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block', getPlatformColor(item.platform))}>
+   415→   415→                              {getPlatformLabel(item.platform)}
+   416→   416→                            </span>
+   417→   417→                          ) : '—'}
+   418→   418→                        </TableCell>
+   419→   419→                        <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+   420→   420→                          <div className="flex items-center justify-end gap-1">
+   421→   421→                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setViewItem(item)}>
+   422→   422→                              <Eye className="h-3.5 w-3.5" />
+   423→   423→                            </Button>
+   424→   424→                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditingItem(item); setShowForm(true) }}>
+   425→   425→                              <Edit className="h-3.5 w-3.5" />
+   426→   426→                            </Button>
+   427→   427→                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700" onClick={() => askDeleteSingle(item)}>
+   428→   428→                              <Trash2 className="h-3.5 w-3.5" />
+   429→   429→                            </Button>
+   430→   430→                          </div>
+   431→   431→                        </TableCell>
+   432→   432→                      </TableRow>
+   433→   433→                    )
+   434→   434→                  })}
+   435→   435→                </TableBody>
+   436→   436→              </Table>
+   437→   437→
+   438→   438→              {/* Pagination */}
+   439→   439→              <div className="flex items-center justify-between px-4 py-3 border-t">
+   440→   440→                <p className="text-xs text-muted-foreground">
+   441→   441→                  {filtered.length} article{filtered.length > 1 ? 's' : ''} ·{' '}
+   442→   442→                  Page {safePage} sur {totalPages} ·{' '}
+   443→   443→                  Affiche {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)}
+   444→   444→                </p>
+   445→   445→                <div className="flex items-center gap-1">
+   446→   446→                  <Button
+   447→   447→                    variant="outline"
+   448→   448→                    size="sm"
+   449→   449→                    disabled={safePage === 1}
+   450→   450→                    onClick={() => setPage(p => Math.max(1, p - 1))}
+   451→   451→                    className="h-8"
+   452→   452→                  >
+   453→   453→                    <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Préc.
+   454→   454→                  </Button>
+   455→   455→                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+   456→   456→                    .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+   457→   457→                    .map((p, idx, arr) => {
+   458→   458→                      const showEllipsisBefore = idx > 0 && arr[idx - 1] !== p - 1
+   459→   459→                      return (
+   460→   460→                        <span key={p} className="flex items-center">
+   461→   461→                          {showEllipsisBefore && <span className="px-1 text-muted-foreground">…</span>}
+   462→   462→                          <Button
+   463→   463→                            variant={p === safePage ? 'default' : 'outline'}
+   464→   464→                            size="sm"
+   465→   465→                            className="h-8 w-8 p-0"
+   466→   466→                            onClick={() => setPage(p)}
+   467→   467→                          >
+   468→   468→                            {p}
+   469→   469→                          </Button>
+   470→   470→                        </span>
+   471→   471→                      )
+   472→   472→                    })}
+   473→   473→                  <Button
+   474→   474→                    variant="outline"
+   475→   475→                    size="sm"
+   476→   476→                    disabled={safePage === totalPages}
+   477→   477→                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+   478→   478→                    className="h-8"
+   479→   479→                  >
+   480→   480→                    Suiv. <ChevronRight className="h-3.5 w-3.5 ml-1" />
+   481→   481→                  </Button>
+   482→   482→                </div>
+   483→   483→              </div>
+   484→   484→            </>
+   485→   485→          )}
+   486→   486→        </CardContent>
+   487→   487→      </Card>
+   488→   488→
+   489→   489→      {/* Form Dialog */}
+   490→   490→      <StockForm
+   491→   491→        open={showForm}
+   492→   492→        onOpenChange={setShowForm}
+   493→   493→        item={editingItem}
+   494→   494→        suppliers={suppliers || []}
+   495→   495→        categories={categories}
+   496→   496→        conditions={conditions}
+   497→   497→        sizes={getByType('size')}
+   498→   498→        colors={getByType('color')}
+   499→   499→        onSaved={() => { setShowForm(false); refresh() }}
+   500→   500→      />
+   501→   501→
+   502→   502→      {/* View Dialog */}
+   503→   503→      <StockDetail open={!!viewItem} onOpenChange={(o) => !o && setViewItem(null)} item={viewItem} />
+   504→   504→
+   505→   505→      {/* Modale de confirmation de suppression */}
+   506→   506→      <Dialog open={showDeleteModal} onOpenChange={(o) => { setShowDeleteModal(o); if (!o) setDeleteTarget(null) }}>
+   507→   507→        <DialogContent className="max-w-md">
+   508→   508→          <DialogHeader>
+   509→   509→            <DialogTitle className="flex items-center gap-2 text-rose-700 dark:text-rose-300">
+   510→   510→              <AlertCircle className="h-5 w-5" />
+   511→   511→              Confirmation de suppression
+   512→   512→            </DialogTitle>
+   513→   513→            <DialogDescription>
+   514→   514→              {deleteTarget?.type === 'bulk'
+   515→   515→                ? `Vous êtes sur le point de supprimer ${selectedIds.size} article${selectedIds.size > 1 ? 's' : ''}.`
+   516→   516→                : 'Vous êtes sur le point de supprimer cet article.'
+   517→   517→              }
+   518→   518→            </DialogDescription>
+   519→   519→          </DialogHeader>
+   520→   520→          <div className="py-2">
+   521→   521→            {deleteTarget?.type === 'bulk' ? (
+   522→   522→              <div className="space-y-2">
+   523→   523→                <p className="text-sm">
+   524→   524→                  Cette action est <strong>irréversible</strong>. Les articles sélectionnés et leurs données associées (ventes, photos) seront définitivement supprimés.
+   525→   525→                </p>
+   526→   526→                <div className="max-h-32 overflow-y-auto rounded-lg bg-muted/40 p-2 text-xs space-y-1">
+   527→   527→                  {paginated.filter(i => selectedIds.has(i.id)).map(i => (
+   528→   528→                    <div key={i.id} className="flex items-center gap-2">
+   529→   529→                      <Package className="h-3 w-3 text-muted-foreground shrink-0" />
+   530→   530→                      <span className="font-mono text-[10px]">{i.sku}</span>
+   531→   531→                      <span className="truncate">{i.brand}</span>
+   532→   532→                    </div>
+   533→   533→                  ))}
+   534→   534→                </div>
+   535→   535→              </div>
+   536→   536→            ) : (
+   537→   537→              <p className="text-sm">
+   538→   538→                Cette action est <strong>irréversible</strong>. L'article
+   539→   539→                {deleteTarget?.item && (
+   540→   540→                  <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded ml-1">
+   541→   541→                    {deleteTarget.item.sku}
+   542→   542→                  </span>
+   543→   543→                )}
+   544→   544→                {deleteTarget?.item && (
+   545→   545→                  <span> — {deleteTarget.item.brand}</span>
+   546→   546→                )}
+   547→   547→                et toutes ses données associées seront définitivement supprimés.
+   548→   548→              </p>
+   549→   549→            )}
+   550→   550→          </div>
+   551→   551→          <DialogFooter>
+   552→   552→            <Button variant="outline" onClick={() => { setShowDeleteModal(false); setDeleteTarget(null) }}>
+   553→   553→              Annuler
+   554→   554→            </Button>
+   555→   555→            <Button variant="destructive" onClick={confirmDelete}>
+   556→   556→              <Trash2 className="h-4 w-4 mr-1.5" />
+   557→   557→              {deleteTarget?.type === 'bulk'
+   558→   558→                ? `Supprimer ${selectedIds.size} article${selectedIds.size > 1 ? 's' : ''}`
+   559→   559→                : 'Supprimer'
+   560→   560→              }
+   561→   561→            </Button>
+   562→   562→          </DialogFooter>
+   563→   563→        </DialogContent>
+   564→   564→      </Dialog>
+   565→   565→    </div>
+   566→   566→  )
+   567→   567→}
+   568→   568→
+   569→   569→// ─────────────────────────────────────────────────────────────────────────────
+   570→   570→// Form (identique à la version précédente)
+   571→   571→// ─────────────────────────────────────────────────────────────────────────────
+   572→   572→
+   573→   573→function StockForm({ open, onOpenChange, item, suppliers, categories, conditions, sizes, colors, onSaved }: {
+   574→   574→  open: boolean
+   575→   575→  onOpenChange: (o: boolean) => void
+   576→   576→  item: StockItem | null
+   577→   577→  suppliers: Supplier[]
+   578→   578→  categories: { id: string; code: string; value: string; isDefault: boolean }[]
+   579→   579→  conditions: { id: string; code: string; value: string; isDefault: boolean }[]
+   580→   580→  sizes: { id: string; code: string; value: string; isDefault: boolean }[]
+   581→   581→  colors: { id: string; code: string; value: string; isDefault: boolean }[]
+   582→   582→  onSaved: () => void
+   583→   583→}) {
+   584→   584→  const [saving, setSaving] = useState(false)
+   585→   585→  const defaultCat = categories.find(c => c.isDefault)?.code || categories[0]?.code || 'vetements'
+   586→   586→  const defaultCond = conditions.find(c => c.isDefault)?.code || conditions[0]?.code || 'bon'
+   587→   587→  const [form, setForm] = useState({
+   588→   588→    sku: '', brand: '', category: defaultCat, size: '', color: '', condition: defaultCond,
+   589→   589→    purchaseCost: '', purchaseDate: new Date().toISOString().split('T')[0],
+   590→   590→    supplierId: '', lotReference: '',
+   591→   591→    warehouse: '', rack: '', shelf: '', bin: '',
+   592→   592→    description: '', suggestedPrice: '',
+   593→   593→    platform: '', platforms: '[]', status: 'A_PHOTOGRAPHIER',
+   594→   594→  })
+   595→   595→
+   596→   596→  useMemo(() => {
+   597→   597→    if (item) {
+   598→   598→      setForm({
+   599→   599→        sku: item.sku, brand: item.brand, category: item.category,
+   600→   600→        size: item.size || '', color: item.color || '', condition: item.condition,
+   601→   601→        purchaseCost: String(item.purchaseCost),
+   602→   602→        purchaseDate: new Date(item.purchaseDate).toISOString().split('T')[0],
+   603→   603→        supplierId: item.supplierId || '', lotReference: item.lotReference || '',
+   604→   604→        warehouse: item.warehouse || '', rack: item.rack || '', shelf: item.shelf || '', bin: item.bin || '',
+   605→   605→        description: item.description || '', suggestedPrice: item.suggestedPrice ? String(item.suggestedPrice) : '',
+   606→   606→        platform: item.platform || '',
+   607→   607→        platforms: item.platforms || '[]',
+   608→   608→        status: item.status,
+   609→   609→      })
+   610→   610→    } else if (open) {
+   611→   611→      setForm({
+   612→   612→        sku: '', brand: '', category: defaultCat, size: '', color: '', condition: defaultCond,
+   613→   613→        purchaseCost: '', purchaseDate: new Date().toISOString().split('T')[0],
+   614→   614→        supplierId: '', lotReference: '',
+   615→   615→        warehouse: '', rack: '', shelf: '', bin: '',
+   616→   616→        description: '', suggestedPrice: '',
+   617→   617→        platform: '', platforms: '[]', status: 'A_PHOTOGRAPHIER',
+   618→   618→      })
+   619→   619→    }
+   620→   620→  }, [item, open])
+   621→   621→
+   622→   622→  const submit = async () => {
+   623→   623→    if (!form.sku || !form.brand) {
+   624→   624→      toast.error('SKU et marque requis')
+   625→   625→      return
+   626→   626→    }
+   627→   627→    setSaving(true)
+   628→   628→    try {
+   629→   629→      const url = item ? `/api/stock/${item.id}` : '/api/stock'
+   630→   630→      const method = item ? 'PATCH' : 'POST'
+   631→   631→      const res = await fetch(url, {
+   632→   632→        method,
+   633→   633→        headers: { 'Content-Type': 'application/json' },
+   634→   634→        body: JSON.stringify(form),
+   635→   635→      })
+   636→   636→      if (!res.ok) {
+   637→   637→        const err = await res.json()
+   638→   638→        throw new Error(err.error || 'Erreur')
+   639→   639→      }
+   640→   640→      toast.success(item ? 'Article modifié' : 'Article créé')
+   641→   641→      onSaved()
+   642→   642→    } catch (e: unknown) {
+   643→   643→      toast.error(e instanceof Error ? e.message : 'Erreur')
+   644→   644→    } finally {
+   645→   645→      setSaving(false)
+   646→   646→    }
+   647→   647→  }
+   648→   648→
+   649→   649→  return (
+   650→   650→    <Dialog open={open} onOpenChange={onOpenChange}>
+   651→   651→      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+   652→   652→        <DialogHeader>
+   653→   653→          <DialogTitle>{item ? 'Modifier l\'article' : 'Nouvel article'}</DialogTitle>
+   654→   654→          <DialogDescription>
+   655→   655→            {item ? `SKU: ${item.sku}` : 'Renseignez les informations d\'identification et de stockage.'}
+   656→   656→          </DialogDescription>
+   657→   657→        </DialogHeader>
+   658→   658→        <div className="space-y-4 py-2">
+   659→   659→          {/* Identification */}
+   660→   660→          <div>
+   661→   661→            <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Identification</h4>
+   662→   662→            <div className="grid grid-cols-2 gap-3">
+   663→   663→              <div className="space-y-1.5">
+   664→   664→                <Label className="text-xs">SKU *</Label>
+   665→   665→                <Input value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="RL-POLO-00125" className="font-mono text-sm" />
+   666→   666→              </div>
+   667→   667→              <div className="space-y-1.5">
+   668→   668→                <Label className="text-xs">Marque *</Label>
+   669→   669→                <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="Ralph Lauren" />
+   670→   670→              </div>
+   671→   671→              <div className="space-y-1.5">
+   672→   672→                <Label className="text-xs">Catégorie</Label>
+   673→   673→                <Select value={form.category} onValueChange={v => setForm({ ...form, category: v })}>
+   674→   674→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   675→   675→                  <SelectContent>
+   676→   676→                    {categories.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+   677→   677→                  </SelectContent>
+   678→   678→                </Select>
+   679→   679→              </div>
+   680→   680→              <div className="space-y-1.5">
+   681→   681→                <Label className="text-xs">État</Label>
+   682→   682→                <Select value={form.condition} onValueChange={v => setForm({ ...form, condition: v })}>
+   683→   683→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   684→   684→                  <SelectContent>
+   685→   685→                    {conditions.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+   686→   686→                  </SelectContent>
+   687→   687→                </Select>
+   688→   688→              </div>
+   689→   689→              <div className="space-y-1.5">
+   690→   690→                <Label className="text-xs">Taille</Label>
+   691→   691→                <Select
+   692→   692→                  value={form.size || '__none__'}
+   693→   693→                  onValueChange={v => setForm({ ...form, size: v === '__none__' ? '' : v })}
+   694→   694→                >
+   695→   695→                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+   696→   696→                  <SelectContent>
+   697→   697→                    <SelectItem value="__none__">—</SelectItem>
+   698→   698→                    {sizes.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
+   699→   699→                  </SelectContent>
+   700→   700→                </Select>
+   701→   701→              </div>
+   702→   702→              <div className="space-y-1.5">
+   703→   703→                <Label className="text-xs">Couleur</Label>
+   704→   704→                <Select
+   705→   705→                  value={form.color || '__none__'}
+   706→   706→                  onValueChange={v => setForm({ ...form, color: v === '__none__' ? '' : v })}
+   707→   707→                >
+   708→   708→                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+   709→   709→                  <SelectContent>
+   710→   710→                    <SelectItem value="__none__">—</SelectItem>
+   711→   711→                    {colors.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+   712→   712→                  </SelectContent>
+   713→   713→                </Select>
+   714→   714→              </div>
+   715→   715→            </div>
+   716→   716→          </div>
+   717→   717→
+   718→   718→          {/* Achat */}
+   719→   719→          <div>
+   720→   720→            <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Achat</h4>
+   721→   721→            <div className="grid grid-cols-2 gap-3">
+   722→   722→              <div className="space-y-1.5">
+   723→   723→                <Label className="text-xs">Coût d'achat (€)</Label>
+   724→   724→                <Input type="number" step="0.01" value={form.purchaseCost} onChange={e => setForm({ ...form, purchaseCost: e.target.value })} placeholder="12.00" />
+   725→   725→              </div>
+   726→   726→              <div className="space-y-1.5">
+   727→   727→                <Label className="text-xs">Date d'achat</Label>
+   728→   728→                <Input type="date" value={form.purchaseDate} onChange={e => setForm({ ...form, purchaseDate: e.target.value })} />
+   729→   729→              </div>
+   730→   730→              <div className="space-y-1.5">
+   731→   731→                <Label className="text-xs">Fournisseur</Label>
+   732→   732→                <Select value={form.supplierId} onValueChange={v => setForm({ ...form, supplierId: v })}>
+   733→   733→                  <SelectTrigger><SelectValue placeholder="Aucun" /></SelectTrigger>
+   734→   734→                  <SelectContent>
+   735→   735→                    {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+   736→   736→                  </SelectContent>
+   737→   737→                </Select>
+   738→   738→              </div>
+   739→   739→              <div className="space-y-1.5">
+   740→   740→                <Label className="text-xs">Lot d'origine</Label>
+   741→   741→                <Input value={form.lotReference} onChange={e => setForm({ ...form, lotReference: e.target.value })} placeholder="LOT-1-2026" />
+   742→   742→              </div>
+   743→   743→            </div>
+   744→   744→          </div>
+   745→   745→
+   746→   746→          {/* Stockage */}
+   747→   747→          <div>
+   748→   748→            <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Stockage</h4>
+   749→   749→            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+   750→   750→              <div className="space-y-1.5">
+   751→   751→                <Label className="text-xs">Entrepôt</Label>
+   752→   752→                <Input value={form.warehouse} onChange={e => setForm({ ...form, warehouse: e.target.value })} placeholder="Principal" />
+   753→   753→              </div>
+   754→   754→              <div className="space-y-1.5">
+   755→   755→                <Label className="text-xs">Rack</Label>
+   756→   756→                <Input value={form.rack} onChange={e => setForm({ ...form, rack: e.target.value })} placeholder="Rack B" />
+   757→   757→              </div>
+   758→   758→              <div className="space-y-1.5">
+   759→   759→                <Label className="text-xs">Étagère</Label>
+   760→   760→                <Input value={form.shelf} onChange={e => setForm({ ...form, shelf: e.target.value })} placeholder="3" />
+   761→   761→              </div>
+   762→   762→              <div className="space-y-1.5">
+   763→   763→                <Label className="text-xs">Bin</Label>
+   764→   764→                <Input value={form.bin} onChange={e => setForm({ ...form, bin: e.target.value })} placeholder="12" />
+   765→   765→              </div>
+   766→   766→            </div>
+   767→   767→          </div>
+   768→   768→
+   769→   769→          {/* Publication */}
+   770→   770→          <div>
+   771→   771→            <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Publication</h4>
+   772→   772→            <div className="grid grid-cols-3 gap-3">
+   773→   773→              <div className="space-y-1.5">
+   774→   774→                <Label className="text-xs">Statut</Label>
+   775→   775→                <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+   776→   776→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   777→   777→                  <SelectContent>
+   778→   778→                    {PUBLICATION_STATUSES.map(s => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
+   779→   779→                  </SelectContent>
+   780→   780→                </Select>
+   781→   781→              </div>
+   782→   782→              <div className="space-y-1.5">
+   783→   783→                <Label className="text-xs">Plateforme(s) de vente</Label>
+   784→   784→                <div className="border rounded-md p-2 space-y-1.5 max-h-32 overflow-y-auto">
+   785→   785→                  {PLATFORMS.map(p => {
+   786→   786→                    const platList: string[] = (() => {
+   787→   787→                      try { return JSON.parse(form.platforms || '[]') } catch { return [] }
+   788→   788→                    })()
+   789→   789→                    const checked = platList.includes(p.id)
+   790→   790→                    return (
+   791→   791→                      <label key={p.id} className="flex items-center gap-2 cursor-pointer text-xs hover:bg-muted/40 px-1.5 py-0.5 rounded">
+   792→   792→                        <input
+   793→   793→                          type="checkbox"
+   794→   794→                          checked={checked}
+   795→   795→                          onChange={(e) => {
+   796→   796→                            const current: string[] = (() => {
+   797→   797→                              try { return JSON.parse(form.platforms || '[]') } catch { return [] }
+   798→   798→                            })()
+   799→   799→                            const next = e.target.checked
+   800→   800→                              ? [...current, p.id]
+   801→   801→                              : current.filter(x => x !== p.id)
+   802→   802→                            setForm({ ...form, platforms: JSON.stringify(next) })
+   803→   803→                          }}
+   804→   804→                          className="h-3.5 w-3.5 rounded border-border"
+   805→   805→                        />
+   806→   806→                        <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', p.color)}>
+   807→   807→                          {p.label}
+   808→   808→                        </span>
+   809→   809→                      </label>
+   810→   810→                    )
+   811→   811→                  })}
+   812→   812→                </div>
+   813→   813→                <p className="text-[11px] text-muted-foreground">
+   814→   814→                  Sélectionnez les plateformes où l'article est publié. Au moment de la vente, seule la plateforme de vente effective sera conservée.
+   815→   815→                </p>
+   816→   816→              </div>
+   817→   817→              <div className="space-y-1.5">
+   818→   818→                <Label className="text-xs">Prix conseillé (€)</Label>
+   819→   819→                <Input type="number" step="0.01" value={form.suggestedPrice} onChange={e => setForm({ ...form, suggestedPrice: e.target.value })} placeholder="29.99" />
+   820→   820→              </div>
+   821→   821→            </div>
+   822→   822→            <div className="space-y-1.5 mt-3">
+   823→   823→              <Label className="text-xs">Description</Label>
+   824→   824→              <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Description courte..." />
+   825→   825→            </div>
+   826→   826→          </div>
+   827→   827→        </div>
+   828→   828→        <DialogFooter>
+   829→   829→          <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
+   830→   830→          <Button onClick={submit} disabled={saving}>
+   831→   831→            {saving ? 'Enregistrement...' : (item ? 'Modifier' : 'Créer l\'article')}
+   832→   832→          </Button>
+   833→   833→        </DialogFooter>
+   834→   834→      </DialogContent>
+   835→   835→    </Dialog>
+   836→   836→  )
+   837→   837→}
+   838→   838→
+   839→   839→function StockDetail({ open, onOpenChange, item }: {
+   840→   840→  open: boolean
+   841→   841→  onOpenChange: (o: boolean) => void
+   842→   842→  item: StockItem | null
+   843→   843→}) {
+   844→   844→  const { getLabel } = useSettings()
+   845→   845→
+   846→   846→  if (!item) return null
+   847→   847→  const photos: string[] = (() => {
+   848→   848→    try { return JSON.parse(item.photos) } catch { return [] }
+   849→   849→  })()
+   850→   850→  const location = [item.warehouse, item.rack, item.shelf ? `Étagère ${item.shelf}` : null, item.bin ? `Bac ${item.bin}` : null].filter(Boolean).join(' · ')
+   851→   851→
+   852→   852→  return (
+   853→   853→    <Dialog open={open} onOpenChange={onOpenChange}>
+   854→   854→      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+   855→   855→        <DialogHeader>
+   856→   856→          <DialogTitle className="flex items-center gap-2">
+   857→   857→            {item.brand}
+   858→   858→            <span className="font-mono text-xs text-muted-foreground">{item.sku}</span>
+   859→   859→          </DialogTitle>
+   860→   860→        </DialogHeader>
+   861→   861→        <div className="space-y-4">
+   862→   862→          {photos[0] && (
+   863→   863→            <div className="aspect-[4/3] w-full rounded-lg overflow-hidden bg-muted">
+   864→   864→              <img src={photos[0]} alt={item.brand} className="w-full h-full object-cover" />
+   865→   865→            </div>
+   866→   866→          )}
+   867→   867→          <div className="flex flex-wrap gap-2">
+   868→   868→            <span className={cn('text-xs font-semibold px-2 py-1 rounded-full', getPubStatusColor(item.status))}>
+   869→   869→              {getPubStatusLabel(item.status)}
+   870→   870→            </span>
+   871→   871→            {item.platform && (
+   872→   872→              <span className={cn('text-xs font-semibold px-2 py-1 rounded-full', getPlatformColor(item.platform))}>
+   873→   873→                {getPlatformLabel(item.platform)}
+   874→   874→              </span>
+   875→   875→            )}
+   876→   876→            <span className="text-xs font-semibold px-2 py-1 rounded-full bg-muted">
+   877→   877→              {getLabel('condition', item.condition)}
+   878→   878→            </span>
+   879→   879→          </div>
+   880→   880→          <div className="grid grid-cols-2 gap-3 text-sm">
+   881→   881→            <Detail label="Catégorie" value={getLabel('category', item.category)} />
+   882→   882→            <Detail label="Taille" value={item.size || '—'} />
+   883→   883→            <Detail label="Couleur" value={item.color || '—'} />
+   884→   884→            <Detail label="Lot" value={item.lotReference || '—'} />
+   885→   885→            <Detail label="Code-barres" value={item.barcode || '—'} icon={<Barcode className="h-3 w-3" />} />
+   886→   886→            <Detail label="Fournisseur" value={item.supplier?.name || '—'} />
+   887→   887→          </div>
+   888→   888→          <div className="grid grid-cols-2 gap-3 text-sm pt-3 border-t">
+   889→   889→            <Detail label="Coût d'achat" value={formatEUR(item.purchaseCost)} />
+   890→   890→            <Detail label="Prix conseillé" value={item.suggestedPrice ? formatEUR(item.suggestedPrice) : '—'} />
+   891→   891→            <Detail label="Date d'achat" value={formatDate(item.purchaseDate)} />
+   892→   892→            <Detail label="Emplacement" value={location || '—'} icon={<MapPin className="h-3 w-3" />} />
+   893→   893→          </div>
+   894→   894→          {item.description && (
+   895→   895→            <div className="text-sm bg-muted/40 p-3 rounded-lg">
+   896→   896→              <p className="text-xs text-muted-foreground uppercase mb-1">Description</p>
+   897→   897→              <p>{item.description}</p>
+   898→   898→            </div>
+   899→   899→          )}
+   900→   900→          {item.sale && (
+   901→   901→            <div className="text-sm bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-lg border border-emerald-200 dark:border-emerald-900">
+   902→   902→              <p className="text-xs text-emerald-700 dark:text-emerald-300 uppercase mb-1 font-semibold">Vendu</p>
+   903→   903→              <div className="flex items-center justify-between">
+   904→   904→                <span>Prix de vente</span>
+   905→   905→                <span className="font-semibold">{formatEUR(item.sale.salePrice)}</span>
+   906→   906→              </div>
+   907→   907→              <div className="flex items-center justify-between mt-1">
+   908→   908→                <span>Bénéfice</span>
+   909→   909→                <span className="font-semibold text-emerald-600">{formatEUR(item.sale.profit)}</span>
+   910→   910→              </div>
+   911→   911→            </div>
+   912→   912→          )}
+   913→   913→        </div>
+   914→   914→      </DialogContent>
+   915→   915→    </Dialog>
+   916→   916→  )
+   917→   917→}
+   918→   918→
+   919→   919→function Detail({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+   920→   920→  return (
+   921→   921→    <div>
+   922→   922→      <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+   923→   923→        {icon}{label}
+   924→   924→      </p>
+   925→   925→      <p className="font-medium mt-0.5">{value}</p>
+   926→   926→    </div>
+   927→   927→  )
+   928→   928→}
+   929→   929→

@@ -1,0 +1,2012 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import {
+  ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
+  Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
+  ChevronRight, Clock, Euro, FileText, Image as ImageIcon, Store, Shield,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { useSettings } from '@/hooks/use-settings'
+import { clearBoutiqueSettingsCache } from '@/hooks/use-boutique-settings'
+import { LinkEditor } from '@/components/boutique/link-editor'
+import { HoursEditor } from '@/components/boutique/hours-editor'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+import { formatEUR, formatDate } from '@/lib/constants'
+
+type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories'
+
+const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: 'orders', label: 'Commandes', icon: Package },
+  { id: 'clients', label: 'Clients', icon: Users },
+  { id: 'messages', label: 'Messagerie', icon: Mail },
+  { id: 'appearance', label: 'Apparence', icon: Palette },
+  { id: 'shipping', label: 'Livraison', icon: Truck },
+  { id: 'payments', label: 'Paiements', icon: Euro },
+  { id: 'categories', label: 'Catégories', icon: Layers },
+]
+
+export function BoutiqueAdminModule() {
+  const [tab, setTab] = useState<Tab>('orders')
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <ShoppingBag className="h-6 w-6" />
+          Boutique Admin
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Gérez votre boutique en ligne : commandes, clients, messagerie, apparence et livraison
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 flex-wrap">
+        {TABS.map(t => {
+          const Icon = t.icon
+          const active = tab === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all',
+                active
+                  ? 'border-foreground/30 bg-card shadow-sm text-foreground'
+                  : 'border-border/60 hover:border-foreground/20 bg-card/50 text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'orders' && <OrdersTab />}
+      {tab === 'clients' && <ClientsTab />}
+      {tab === 'messages' && <MessagesTab />}
+      {tab === 'appearance' && <AppearanceTab />}
+      {tab === 'shipping' && <ShippingTab />}
+      {tab === 'payments' && <PaymentsTab />}
+      {tab === 'categories' && <CategoriesTab />}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET 1 — COMMANDES
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface OrderItem {
+  sku: string
+  brand: string
+  category: string
+  size?: string | null
+  color?: string | null
+  price: number
+  qty: number
+}
+
+interface Order {
+  id: string
+  orderId: string
+  clientId: string | null
+  clientName: string
+  clientEmail: string
+  items: OrderItem[]
+  shippingMethod: string
+  shippingCost: number
+  paymentMethod: string | null
+  subtotal: number
+  total: number
+  status: string
+  invoiceNumbers: string[]
+  createdAt: string
+}
+
+const STATUS_OPTIONS = [
+  { value: 'pending', label: 'En attente', color: 'bg-amber-100 text-amber-700' },
+  { value: 'paid', label: 'Payée', color: 'bg-blue-100 text-blue-700' },
+  { value: 'shipped', label: 'Expédiée', color: 'bg-indigo-100 text-indigo-700' },
+  { value: 'delivered', label: 'Livrée', color: 'bg-green-100 text-green-700' },
+  { value: 'cancelled', label: 'Annulée', color: 'bg-red-100 text-red-700' },
+]
+
+const CATEGORY_LABELS: Record<string, string> = {
+  vetements: 'Vêtements', chaussures: 'Chaussures', accessoires: 'Accessoires',
+  luxe: 'Luxe', maison: 'Maison',
+}
+
+function OrdersTab() {
+  const { getByType } = useSettings()
+  const carriers = getByType('carrier')
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null)
+  const [editStatus, setEditStatus] = useState('')
+  const [editTracking, setEditTracking] = useState('')
+  const [editCarrier, setEditCarrier] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const fetchOrders = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/boutique/admin/orders')
+      const data = await res.json()
+      setOrders(data.orders || [])
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchOrders() }, [fetchOrders])
+
+  const filtered = statusFilter === 'all' ? orders : orders.filter(o => o.status === statusFilter)
+
+  const openEdit = (order: Order) => {
+    setEditingOrder(order)
+    setEditStatus(order.status)
+    setEditTracking('')
+    setEditCarrier('')
+  }
+
+  const saveEdit = async () => {
+    if (!editingOrder) return
+    setSaving(true)
+    try {
+      const body: any = { status: editStatus }
+      if (editTracking.trim()) {
+        body.trackingNumber = editTracking.trim()
+        body.carrier = editCarrier
+      }
+      const res = await fetch(`/api/boutique/admin/orders/${editingOrder.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        toast.error('Erreur')
+        return
+      }
+      toast.success('Commande mise à jour')
+      setEditingOrder(null)
+      fetchOrders()
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const deleteOrder = async (id: string) => {
+    if (!confirm('Supprimer cette commande ? Les articles seront remis en stock (PUBLIÉ).')) return
+    try {
+      const res = await fetch(`/api/boutique/admin/orders/${id}`, { method: 'DELETE' })
+      if (!res.ok) { toast.error('Erreur'); return }
+      toast.success('Commande supprimée, articles remis en stock')
+      fetchOrders()
+    } catch {
+      toast.error('Erreur réseau')
+    }
+  }
+
+  if (loading) {
+    return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Filter */}
+      <div className="flex items-center gap-3">
+        <Label className="text-xs text-muted-foreground">Filtrer par statut :</Label>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes ({orders.length})</SelectItem>
+            {STATUS_OPTIONS.map(s => {
+              const count = orders.filter(o => o.status === s.value).length
+              return <SelectItem key={s.value} value={s.value}>{s.label} ({count})</SelectItem>
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <Package className="h-12 w-12 text-muted-foreground mb-3" />
+            <p className="text-muted-foreground">Aucune commande pour ce filtre</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(order => {
+            const status = STATUS_OPTIONS.find(s => s.value === order.status) || STATUS_OPTIONS[0]
+            return (
+              <Card key={order.id}>
+                <CardContent className="p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <code className="text-xs font-mono font-semibold bg-muted px-2 py-0.5 rounded">{order.orderId}</code>
+                        <Badge className={status.color}>{status.label}</Badge>
+                      </div>
+                      <p className="text-sm font-medium">{order.clientName}</p>
+                      <p className="text-xs text-muted-foreground">{order.clientEmail}</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-primary">{formatEUR(order.total)}</p>
+                      <p className="text-xs text-muted-foreground">{order.items.length} article(s)</p>
+                      {order.paymentMethod && <p className="text-xs text-muted-foreground">{order.paymentMethod}</p>}
+                    </div>
+                  </div>
+
+                  {/* Items */}
+                  <div className="space-y-1 mb-3 pb-3 border-b">
+                    {order.items.map((item, i) => (
+                      <div key={i} className="flex justify-between text-xs">
+                        <span>{item.brand} · {CATEGORY_LABELS[item.category] || item.category}{item.size && ` · ${item.size}`}{item.qty > 1 && ` ×${item.qty}`}</span>
+                        <span className="font-medium">{(item.price * item.qty).toFixed(2)} €</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Invoices */}
+                  {order.invoiceNumbers.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {order.invoiceNumbers.map(n => (
+                        <span key={n} className="font-mono text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{n}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={() => openEdit(order)}>
+                      <Edit className="h-3.5 w-3.5 mr-1" /> Modifier statut
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                      onClick={() => window.open(`/api/boutique/admin/orders/${order.id}/preparation`, '_blank')}
+                    >
+                      <Package className="h-3.5 w-3.5 mr-1" /> Bon de préparation
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => deleteOrder(order.id)}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Edit dialog */}
+      <Dialog open={!!editingOrder} onOpenChange={(o) => !o && setEditingOrder(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Modifier la commande {editingOrder?.orderId}</DialogTitle>
+            <DialogDescription>Changez le statut et ajoutez un numéro de suivi si expédiée</DialogDescription>
+          </DialogHeader>
+          {editingOrder && (
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label>Statut</Label>
+                <Select value={editStatus} onValueChange={setEditStatus}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map(s => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {editStatus === 'shipped' && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Numéro de suivi</Label>
+                    <Input value={editTracking} onChange={e => setEditTracking(e.target.value)} placeholder="Ex: 1Z999AA10123456784" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Transporteur</Label>
+                    <Select value={editCarrier} onValueChange={setEditCarrier}>
+                      <SelectTrigger><SelectValue placeholder="Sélectionner..." /></SelectTrigger>
+                      <SelectContent>
+                        {carriers.map(c => (
+                          <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingOrder(null)}>Annuler</Button>
+            <Button onClick={saveEdit} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+              Sauvegarder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET 2 — CLIENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface ClientSummary {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  phone: string | null
+  city: string | null
+  ordersCount: number
+  messagesCount: number
+  lastVisitAt: string | null
+  createdAt: string
+}
+
+interface ClientDetail extends ClientSummary {
+  address: string | null
+  postalCode: string | null
+  country: string
+  newsletter: boolean
+  orders: any[]
+  messages: any[]
+}
+
+function ClientsTab() {
+  const [clients, setClients] = useState<ClientSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedClient, setSelectedClient] = useState<ClientDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  const fetchClients = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/boutique/admin/clients')
+      const data = await res.json()
+      setClients(data.clients || [])
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchClients() }, [fetchClients])
+
+  const openClient = async (id: string) => {
+    setDetailLoading(true)
+    try {
+      const res = await fetch(`/api/boutique/admin/clients/${id}`)
+      const data = await res.json()
+      setSelectedClient(data)
+    } catch {
+      toast.error('Erreur')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const deleteClient = async (id: string) => {
+    if (!confirm('Supprimer ce client ? Ses commandes seront conservées mais détachées.')) return
+    try {
+      await fetch(`/api/boutique/admin/clients/${id}`, { method: 'DELETE' })
+      toast.success('Client supprimé')
+      setSelectedClient(null)
+      fetchClients()
+    } catch {
+      toast.error('Erreur')
+    }
+  }
+
+  if (loading) {
+    return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
+  }
+
+  return (
+    <div className="space-y-4">
+      {clients.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <Users className="h-12 w-12 text-muted-foreground mb-3" />
+            <p className="text-muted-foreground">Aucun client inscrit pour le moment</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {clients.map(c => (
+            <Card key={c.id} className="cursor-pointer hover:shadow-md transition-shadow" >
+              <CardContent className="p-4 flex items-center gap-4" onClick={() => openClient(c.id)}>
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                  {c.firstName[0]}{c.lastName[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm">{c.firstName} {c.lastName}</p>
+                  <p className="text-xs text-muted-foreground truncate">{c.email}{c.phone && ` · ${c.phone}`}</p>
+                  <div className="flex gap-2 mt-1">
+                    <Badge variant="secondary" className="text-[10px]">{c.ordersCount} commande(s)</Badge>
+                    <Badge variant="secondary" className="text-[10px]">{c.messagesCount} message(s)</Badge>
+                    {c.lastVisitAt && <span className="text-[10px] text-muted-foreground">Vu le {formatDate(c.lastVisitAt)}</span>}
+                  </div>
+                </div>
+                <Eye className="h-4 w-4 text-muted-foreground shrink-0" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Client detail dialog */}
+      <Dialog open={!!selectedClient || detailLoading} onOpenChange={(o) => !o && setSelectedClient(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Détail client</DialogTitle>
+          </DialogHeader>
+          {detailLoading ? (
+            <div className="py-8 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto" /></div>
+          ) : selectedClient ? (
+            <>
+              <div className="space-y-1 -mt-2">
+                <DialogTitle className="text-lg">{selectedClient.firstName} {selectedClient.lastName}</DialogTitle>
+                <DialogDescription>{selectedClient.email}</DialogDescription>
+              </div>
+              <div className="space-y-4 py-2">
+                {/* Coordonnées */}
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-muted-foreground text-xs">Téléphone</span><p className="font-medium">{selectedClient.phone || '—'}</p></div>
+                  <div><span className="text-muted-foreground text-xs">Ville</span><p className="font-medium">{selectedClient.city || '—'}</p></div>
+                  <div className="col-span-2"><span className="text-muted-foreground text-xs">Adresse</span><p className="font-medium">{selectedClient.address || '—'}</p></div>
+                  <div><span className="text-muted-foreground text-xs">Inscrit le</span><p className="font-medium">{formatDate(selectedClient.createdAt)}</p></div>
+                  <div><span className="text-muted-foreground text-xs">Newsletter</span><p className="font-medium">{selectedClient.newsletter ? 'Oui' : 'Non'}</p></div>
+                </div>
+
+                {/* Commandes */}
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1"><Package className="h-4 w-4" /> Commandes ({selectedClient.orders.length})</h4>
+                  {selectedClient.orders.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Aucune commande</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedClient.orders.map((o: any) => {
+                        const st = STATUS_OPTIONS.find(s => s.value === o.status) || STATUS_OPTIONS[0]
+                        return (
+                          <div key={o.id} className="flex justify-between items-center text-xs p-2 border rounded">
+                            <div>
+                              <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{o.orderId}</code>
+                              <span className="ml-2">{formatDate(o.createdAt)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge className={st.color + ' text-[9px]'}>{st.label}</Badge>
+                              <span className="font-bold">{formatEUR(o.total)}</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Messages */}
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1"><Mail className="h-4 w-4" /> Messages ({selectedClient.messages.length})</h4>
+                  {selectedClient.messages.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Aucun message</p>
+                  ) : (
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {selectedClient.messages.map((m: any) => (
+                        <div key={m.id} className={cn('text-xs p-2 rounded', m.fromClient ? 'bg-blue-50 text-blue-900' : 'bg-muted')}>
+                          <span className="font-semibold">{m.fromClient ? 'Client' : 'Admin'}</span>
+                          {m.subject && <span className="text-muted-foreground"> · {m.subject}</span>}
+                          <p className="mt-0.5">{m.body.slice(0, 100)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="destructive" size="sm" onClick={() => deleteClient(selectedClient.id)}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer le client
+                </Button>
+                <Button variant="outline" onClick={() => setSelectedClient(null)}>Fermer</Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET 3 — MESSAGERIE
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface Conversation {
+  clientId: string
+  clientName: string
+  clientEmail: string
+  lastMessage: string
+  lastDate: string
+  unreadCount: number
+}
+
+interface Message {
+  id: string
+  fromClient: boolean
+  subject: string
+  body: string
+  read: boolean
+  createdAt: string
+}
+
+function MessagesTab() {
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [replySubject, setReplySubject] = useState('')
+  const [replyBody, setReplyBody] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const fetchConversations = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/boutique/admin/messages')
+      const data = await res.json()
+      setConversations(data.conversations || [])
+    } catch {
+      toast.error('Erreur')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchConversations() }, [fetchConversations])
+
+  const openConversation = async (clientId: string) => {
+    setSelectedClientId(clientId)
+    try {
+      const res = await fetch(`/api/boutique/admin/messages?clientId=${clientId}`)
+      const data = await res.json()
+      setMessages(data.messages || [])
+      // Refresh conversations to mark as read
+      fetchConversations()
+    } catch {
+      toast.error('Erreur')
+    }
+  }
+
+  const sendReply = async () => {
+    if (!selectedClientId || !replySubject.trim() || !replyBody.trim()) return
+    setSending(true)
+    try {
+      const res = await fetch('/api/boutique/admin/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: selectedClientId, subject: replySubject, body: replyBody }),
+      })
+      if (!res.ok) { toast.error('Erreur'); return }
+      toast.success('Message envoyé')
+      setReplySubject('')
+      setReplyBody('')
+      openConversation(selectedClientId)
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const deleteConversation = async (clientId: string) => {
+    if (!confirm('Supprimer toute cette conversation ? Cette action est irréversible.')) return
+    try {
+      const res = await fetch(`/api/boutique/admin/messages/${clientId}`, { method: 'DELETE' })
+      if (!res.ok) { toast.error('Erreur'); return }
+      toast.success('Conversation supprimée')
+      if (selectedClientId === clientId) {
+        setSelectedClientId(null)
+        setMessages([])
+      }
+      fetchConversations()
+    } catch {
+      toast.error('Erreur réseau')
+    }
+  }
+
+  if (loading) {
+    return <Skeleton className="h-64" />
+  }
+
+  const selectedConv = conversations.find(c => c.clientId === selectedClientId)
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Conversation list */}
+      <div className="lg:col-span-1 space-y-2">
+        <h3 className="text-sm font-semibold mb-2">Boîte de réception</h3>
+        {conversations.length === 0 ? (
+          <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Aucun message</CardContent></Card>
+        ) : (
+          conversations.map(c => (
+            <Card
+              key={c.clientId}
+              className={cn('cursor-pointer hover:shadow-md transition-shadow group relative', selectedClientId === c.clientId && 'border-primary')}
+            >
+              <CardContent className="p-3" onClick={() => openConversation(c.clientId)}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{c.clientName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{c.lastMessage}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{formatDate(c.lastDate)}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {c.unreadCount > 0 && (
+                      <Badge className="bg-red-600 text-white text-[10px]">{c.unreadCount}</Badge>
+                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteConversation(c.clientId) }}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 text-red-600 transition-opacity"
+                      title="Supprimer la conversation"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Conversation detail */}
+      <div className="lg:col-span-2">
+        {selectedClientId ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                {selectedConv?.clientName || 'Conversation'}
+              </CardTitle>
+              <CardDescription>{selectedConv?.clientEmail}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {/* Messages */}
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {messages.map(m => (
+                  <div key={m.id} className={cn('flex', m.fromClient ? 'justify-start' : 'justify-end')}>
+                    <div className={cn('max-w-[80%] rounded-lg p-2.5 text-sm', m.fromClient ? 'bg-muted' : 'bg-primary text-primary-foreground')}>
+                      {m.subject && <p className="text-xs font-semibold mb-0.5 opacity-80">{m.subject}</p>}
+                      <p className="whitespace-pre-wrap">{m.body}</p>
+                      <p className={cn('text-[10px] mt-1', m.fromClient ? 'text-muted-foreground' : 'text-primary-foreground/70')}>
+                        {new Date(m.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Reply */}
+              <div className="border-t pt-3 space-y-2">
+                <Input value={replySubject} onChange={e => setReplySubject(e.target.value)} placeholder="Sujet de la réponse" className="h-9" />
+                <Textarea value={replyBody} onChange={e => setReplyBody(e.target.value)} placeholder="Votre réponse..." rows={2} />
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={sendReply} disabled={sending || !replySubject.trim() || !replyBody.trim()}>
+                    {sending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1" />}
+                    Envoyer
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <Mail className="h-12 w-12 text-muted-foreground mb-3" />
+              <p className="text-muted-foreground">Sélectionnez une conversation</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET 4 — APPARENCE (couleurs, hero, CGV, horaires)
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface BoutiqueSettingsData {
+  heroTitle: string
+  heroSubtitle: string
+  heroCtaLabel: string
+  heroCtaLink: string
+  heroImage: string | null
+  topBarText: string
+  footerAbout: string
+  footerEmail: string
+  footerPhone: string | null
+  logoText: string
+  logoSubtitle: string
+  logoImage: string | null
+  primaryColor: string
+  primaryDarkColor: string
+  headerBgColor: string
+  topbarBgColor: string
+  footerBgColor: string
+  freeShippingThreshold: number
+  hoursJson: string
+  hoursVisible: boolean
+  cgvText: string | null
+  trustBadge1Icon: string
+  trustBadge1Title: string
+  trustBadge1Desc: string
+  trustBadge2Icon: string
+  trustBadge2Title: string
+  trustBadge2Desc: string
+  trustBadge3Icon: string
+  trustBadge3Title: string
+  trustBadge3Desc: string
+  trustBadge4Icon: string
+  trustBadge4Title: string
+  trustBadge4Desc: string
+  newProductsTitle: string
+  newProductsSubtitle: string
+  contactTitle: string
+  contactSubtitle: string
+  contactButtonText: string
+  categoriesTitle: string
+  categoriesSubtitle: string
+  footerLinksJson: string
+  footerBoutiqueTitle: string
+  footerInfosTitle: string
+  footerContactTitle: string
+  footerBoutiqueLinksJson: string
+  footerInfosLinksJson: string
+  navMenuJson: string
+  trustPagePaymentTitle: string
+  trustPagePaymentContent: string | null
+  trustPageShippingTitle: string
+  trustPageShippingContent: string | null
+  trustPageReturnsTitle: string
+  trustPageReturnsContent: string | null
+}
+
+function AppearanceTab() {
+  const [form, setForm] = useState<BoutiqueSettingsData | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [subTab, setSubTab] = useState<'general' | 'colors' | 'hero' | 'badges' | 'sections' | 'menu' | 'footer' | 'pages' | 'misc'>('general')
+
+  useEffect(() => {
+    fetch('/api/boutique/admin/settings')
+      .then(r => r.json())
+      .then(data => {
+        // Initialize default links if empty so they appear in the editor
+        const withDefaults = { ...data }
+        if (!withDefaults.navMenuJson || withDefaults.navMenuJson === '[]') {
+          withDefaults.navMenuJson = JSON.stringify([
+            { label: 'Vêtements', url: '/boutique/categorie/vetements', visible: true, order: 1 },
+            { label: 'Chaussures', url: '/boutique/categorie/chaussures', visible: true, order: 2 },
+            { label: 'Accessoires', url: '/boutique/categorie/accessoires', visible: true, order: 3 },
+          ])
+        }
+        if (!withDefaults.footerInfosLinksJson || withDefaults.footerInfosLinksJson === '[]') {
+          withDefaults.footerInfosLinksJson = JSON.stringify([
+            { label: 'CGV', url: '/boutique/cgv', visible: true },
+            { label: 'Mon panier', url: '/boutique/panier', visible: true },
+            { label: 'Contact', url: '/boutique/contact', visible: true },
+            { label: 'Espace gestion', url: '/', visible: true },
+          ])
+        }
+        // Initialize horaires with default days so they appear in the editor AND in the footer
+        if (!withDefaults.hoursJson || withDefaults.hoursJson === '[]') {
+          withDefaults.hoursJson = JSON.stringify([
+            { day: 'Lundi', hours: '9h - 18h', closed: false, visible: true },
+            { day: 'Mardi', hours: '9h - 18h', closed: false, visible: true },
+            { day: 'Mercredi', hours: '9h - 18h', closed: false, visible: true },
+            { day: 'Jeudi', hours: '9h - 18h', closed: false, visible: true },
+            { day: 'Vendredi', hours: '9h - 18h', closed: false, visible: true },
+            { day: 'Samedi', hours: '10h - 17h', closed: false, visible: true },
+            { day: 'Dimanche', hours: '', closed: true, visible: false },
+          ])
+        }
+        setForm(withDefaults)
+      })
+      .catch(() => {})
+  }, [])
+
+  const set = (k: keyof BoutiqueSettingsData, v: any) => {
+    setForm(prev => prev ? { ...prev, [k]: v } : null)
+  }
+
+  const save = async () => {
+    if (!form) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/boutique/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!res.ok) { toast.error('Erreur'); return }
+      clearBoutiqueSettingsCache()
+      toast.success('Apparence sauvegardée')
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!form) return <Skeleton className="h-64" />
+
+  return (
+    <div className="space-y-4">
+      {/* Sub-tabs */}
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { id: 'general' as const, label: '⚙️ Général' },
+          { id: 'colors' as const, label: '🎨 Couleurs' },
+          { id: 'hero' as const, label: '🖼️ Hero' },
+          { id: 'badges' as const, label: '✅ Confiance' },
+          { id: 'sections' as const, label: '📋 Sections' },
+          { id: 'menu' as const, label: '🧭 Menu' },
+          { id: 'footer' as const, label: '📄 Footer' },
+          { id: 'pages' as const, label: '📑 Pages confiance' },
+          { id: 'misc' as const, label: '🕐 Horaires/CGV' },
+        ].map(t => (
+          <button
+            key={t.id}
+            onClick={() => setSubTab(t.id)}
+            className={cn(
+              'px-3 py-1.5 text-xs font-medium rounded-md border transition-colors',
+              subTab === t.id
+                ? 'border-foreground/30 bg-card shadow-sm'
+                : 'border-border/60 hover:border-foreground/20 text-muted-foreground'
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Général — logo, top bar, about, seuil livraison */}
+      {subTab === 'general' && (
+      <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Store className="h-4 w-4" /> Logo & Marque</CardTitle>
+          <CardDescription className="text-xs">Logo affiché dans l'en-tête et le footer de la boutique</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Logo upload */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Image du logo (optionnel)</Label>
+            <div className="flex gap-2 items-start">
+              <div className="w-20 h-20 rounded-md border-2 border-dashed flex items-center justify-center overflow-hidden bg-muted/40 shrink-0">
+                {form.logoImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={form.logoImage} alt="Logo" className="w-full h-full object-contain" />
+                ) : (
+                  <Store className="h-8 w-8 text-muted-foreground/50" />
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <Input value={form.logoImage || ''} onChange={e => set('logoImage', e.target.value)} placeholder="/api/uploads/boutique-logo/..." className="text-xs font-mono" />
+                <div className="flex gap-2">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0]
+                        if (!f) return
+                        const fd = new FormData()
+                        fd.append('file', f)
+                        const res = await fetch('/api/boutique/admin/logo-upload', { method: 'POST', body: fd })
+                        const data = await res.json()
+                        if (res.ok && data.path) {
+                          set('logoImage', data.path)
+                          toast.success('Logo uploadé')
+                        } else {
+                          toast.error(data.error || 'Erreur upload')
+                        }
+                      }}
+                    />
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 border rounded-md text-xs font-medium hover:bg-muted cursor-pointer">
+                      <Upload className="h-3.5 w-3.5" /> Uploader
+                    </span>
+                  </label>
+                  {form.logoImage && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => set('logoImage', null)}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Retirer
+                    </Button>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground">Si aucun logo, la 1ère lettre du nom est utilisée comme avatar. Format conseillé : PNG transparent, 200×200px max.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Text fields */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nom de la boutique (texte à côté du logo)</Label>
+              <Input value={form.logoText || ''} onChange={e => set('logoText', e.target.value)} placeholder="DBoxPro" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Sous-titre (sous le nom)</Label>
+              <Input value={form.logoSubtitle || ''} onChange={e => set('logoSubtitle', e.target.value)} placeholder="Boutique" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Barre supérieure (top bar)</CardTitle>
+          <CardDescription className="text-xs">Bandeau fin affiché tout en haut du site</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          <Label className="text-xs">Texte du top bar</Label>
+          <Input value={form.topBarText || ''} onChange={e => set('topBarText', e.target.value)} placeholder="Livraison offerte dès 50€ d'achat · Paiement sécurisé" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">À propos (footer, 1ère colonne)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          <Label className="text-xs">Texte de présentation</Label>
+          <Textarea value={form.footerAbout || ''} onChange={e => set('footerAbout', e.target.value)} rows={3} placeholder="Votre boutique de vêtements et accessoires seconde main..." />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Contact (footer, colonne Contact)</CardTitle>
+          <CardDescription className="text-xs">Email et téléphone affichés dans la colonne Contact du footer</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Email de contact</Label>
+            <Input type="email" value={form.footerEmail || ''} onChange={e => set('footerEmail', e.target.value)} placeholder="contact@maboutique.fr" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Téléphone (optionnel)</Label>
+            <Input value={form.footerPhone || ''} onChange={e => set('footerPhone', e.target.value)} placeholder="06 12 34 56 78" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Livraison</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          <Label className="text-xs">Seuil de livraison offerte (€)</Label>
+          <Input
+            type="number"
+            value={form.freeShippingThreshold ?? 50}
+            onChange={e => set('freeShippingThreshold', parseFloat(e.target.value) || 0)}
+            placeholder="50"
+          />
+          <p className="text-[11px] text-muted-foreground">Au-dessus de ce montant, la livraison est offerte.</p>
+        </CardContent>
+      </Card>
+      </>
+      )}
+
+      {/* Couleurs */}
+      {subTab === 'colors' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Palette className="h-4 w-4" /> Couleurs</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {[
+            { key: 'primaryColor' as const, label: 'Couleur principale', hint: '007bff' },
+            { key: 'primaryDarkColor' as const, label: 'Couleur foncée (hover)', hint: '0056b3' },
+            { key: 'headerBgColor' as const, label: 'Fond header', hint: 'ffffff' },
+            { key: 'topbarBgColor' as const, label: 'Fond top bar', hint: '0a3d62' },
+            { key: 'footerBgColor' as const, label: 'Fond footer', hint: '0a3d62' },
+          ].map(c => (
+            <div key={c.key} className="space-y-1.5">
+              <Label className="text-xs">{c.label}</Label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="color"
+                  value={'#' + form[c.key]}
+                  onChange={e => set(c.key, e.target.value.replace('#', ''))}
+                  className="w-10 h-9 rounded border cursor-pointer shrink-0"
+                  title="Sélecteur de couleur"
+                />
+                <Input
+                  value={'#' + form[c.key]}
+                  onChange={e => set(c.key, e.target.value.replace('#', ''))}
+                  className="font-mono text-xs flex-1"
+                  placeholder={'#' + c.hint}
+                />
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Hero */}
+      {subTab === 'hero' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Hero (page d'accueil)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Titre</Label>
+            <Input value={form.heroTitle} onChange={e => set('heroTitle', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Sous-titre</Label>
+            <Textarea value={form.heroSubtitle} onChange={e => set('heroSubtitle', e.target.value)} rows={2} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Bouton CTA - texte</Label>
+              <Input value={form.heroCtaLabel} onChange={e => set('heroCtaLabel', e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Bouton CTA - lien</Label>
+              <Input value={form.heroCtaLink} onChange={e => set('heroCtaLink', e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Image de fond</Label>
+            <div className="flex gap-2">
+              <Input value={form.heroImage || ''} onChange={e => set('heroImage', e.target.value)} placeholder="/api/uploads/boutique-hero/..." className="flex-1" />
+              <label className="cursor-pointer shrink-0">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0]
+                    if (!f) return
+                    const fd = new FormData()
+                    fd.append('file', f)
+                    const res = await fetch('/api/boutique/admin/hero-upload', { method: 'POST', body: fd })
+                    const data = await res.json()
+                    if (res.ok && data.path) {
+                      set('heroImage', data.path)
+                      toast.success('Image uploadée')
+                    } else {
+                      toast.error(data.error || 'Erreur upload')
+                    }
+                  }}
+                />
+                <span className="inline-flex items-center gap-1 px-3 py-2 border rounded-md text-xs font-medium hover:bg-muted cursor-pointer whitespace-nowrap">
+                  <Upload className="h-3.5 w-3.5" /> Upload
+                </span>
+              </label>
+            </div>
+            {form.heroImage && (
+              <div className="mt-2 relative rounded-lg overflow-hidden border aspect-video bg-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={form.heroImage} alt="Hero" className="w-full h-full object-cover" />
+                <button
+                  onClick={() => set('heroImage', null)}
+                  className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-full"
+                  title="Supprimer l'image"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Trust badges (4 cartes sous le hero) */}
+      {subTab === 'badges' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Cartes de confiance (sous le hero)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {[1, 2, 3, 4].map(n => {
+            const iconKey = `trustBadge${n}Icon` as keyof BoutiqueSettingsData
+            const titleKey = `trustBadge${n}Title` as keyof BoutiqueSettingsData
+            const descKey = `trustBadge${n}Desc` as keyof BoutiqueSettingsData
+            return (
+              <div key={n} className="grid grid-cols-3 gap-3 pb-3 border-b last:border-0">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Badge {n} - Icône</Label>
+                  <Input value={form[iconKey] as string || ''} onChange={e => set(iconKey, e.target.value)} placeholder="truck" className="font-mono text-xs" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Badge {n} - Titre</Label>
+                  <Input value={form[titleKey] as string || ''} onChange={e => set(titleKey, e.target.value)} placeholder="Livraison rapide" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Badge {n} - Description</Label>
+                  <Input value={form[descKey] as string || ''} onChange={e => set(descKey, e.target.value)} placeholder="Expédition sous 48h" />
+                </div>
+              </div>
+            )
+          })}
+          <p className="text-[11px] text-muted-foreground">Icônes disponibles : truck, shield, refresh, headphones, package, star, check, clock</p>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Sections page d'accueil */}
+      {subTab === 'sections' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Sections page d'accueil</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Titre section "Nouveautés"</Label>
+            <Input value={form.newProductsTitle || ''} onChange={e => set('newProductsTitle', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Sous-titre section "Nouveautés"</Label>
+            <Input value={form.newProductsSubtitle || ''} onChange={e => set('newProductsSubtitle', e.target.value)} />
+          </div>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Section contact */}
+      {subTab === 'sections' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Section contact (bas de page)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Titre</Label>
+            <Input value={form.contactTitle || ''} onChange={e => set('contactTitle', e.target.value)} placeholder="Une question ?" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Sous-titre</Label>
+            <Input value={form.contactSubtitle || ''} onChange={e => set('contactSubtitle', e.target.value)} placeholder="Notre équipe est à votre écoute" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Texte bouton</Label>
+            <Input value={form.contactButtonText || ''} onChange={e => set('contactButtonText', e.target.value)} placeholder="Nous contacter" />
+          </div>
+          <p className="text-[11px] text-muted-foreground">Le bouton ouvre un formulaire de contact qui envoie vers la messagerie interne.</p>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Section catégories */}
+      {subTab === 'sections' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Section "Explorer par catégorie"</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Titre</Label>
+            <Input value={form.categoriesTitle || ''} onChange={e => set('categoriesTitle', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Sous-titre</Label>
+            <Input value={form.categoriesSubtitle || ''} onChange={e => set('categoriesSubtitle', e.target.value)} />
+          </div>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Menu de navigation personnalisable */}
+      {subTab === 'menu' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Layers className="h-4 w-4" /> Menu de navigation</CardTitle>
+          <CardDescription className="text-xs">Ajoutez des liens au menu principal. Si vide, les catégories sont utilisées par défaut.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LinkEditor
+            value={form.navMenuJson || '[]'}
+            onChange={(json) => set('navMenuJson', json)}
+            placeholder="/boutique/categorie/vetements"
+            showOrder
+          />
+          <p className="text-[11px] text-muted-foreground mt-2">Si vide, les catégories sont utilisées par défaut. Cliquez sur l'œil pour masquer/afficher un lien.</p>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Footer complet - 3 colonnes éditables */}
+      {subTab === 'footer' && (
+      <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Store className="h-4 w-4" /> Logo & texte du footer</CardTitle>
+          <CardDescription className="text-xs">Logo affiché en haut de la 1ère colonne du footer (même logo que l'en-tête par défaut)</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Logo preview + upload */}
+          <div className="flex gap-3 items-start">
+            <div className="w-20 h-20 rounded-md border-2 border-dashed flex items-center justify-center overflow-hidden bg-muted/40 shrink-0">
+              {form.logoImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={form.logoImage} alt="Logo" className="w-full h-full object-contain" />
+              ) : (
+                <Store className="h-8 w-8 text-muted-foreground/50" />
+              )}
+            </div>
+            <div className="flex-1 space-y-2">
+              <Input value={form.logoImage || ''} onChange={e => set('logoImage', e.target.value)} placeholder="/api/uploads/boutique-logo/..." className="text-xs font-mono" />
+              <div className="flex gap-2">
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0]
+                      if (!f) return
+                      const fd = new FormData()
+                      fd.append('file', f)
+                      const res = await fetch('/api/boutique/admin/logo-upload', { method: 'POST', body: fd })
+                      const data = await res.json()
+                      if (res.ok && data.path) {
+                        set('logoImage', data.path)
+                        toast.success('Logo uploadé')
+                      } else {
+                        toast.error(data.error || 'Erreur upload')
+                      }
+                    }}
+                  />
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 border rounded-md text-xs font-medium hover:bg-muted cursor-pointer">
+                    <Upload className="h-3.5 w-3.5" /> Uploader
+                  </span>
+                </label>
+                {form.logoImage && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => set('logoImage', null)}>
+                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Retirer
+                  </Button>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">Ce logo est partagé entre l'en-tête et le footer.</p>
+            </div>
+          </div>
+          {/* Logo text fields */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nom de la boutique</Label>
+              <Input value={form.logoText || ''} onChange={e => set('logoText', e.target.value)} placeholder="DBoxPro" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Sous-titre</Label>
+              <Input value={form.logoSubtitle || ''} onChange={e => set('logoSubtitle', e.target.value)} placeholder="Boutique" />
+            </div>
+          </div>
+          {/* Footer about text */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Texte de présentation (sous le logo)</Label>
+            <Textarea value={form.footerAbout || ''} onChange={e => set('footerAbout', e.target.value)} rows={3} placeholder="Votre boutique de vêtements et accessoires seconde main..." />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Footer — 3 colonnes éditables</CardTitle>
+          <CardDescription className="text-xs">Personnalisez les titres et liens de chaque colonne du footer</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Colonne Boutique */}
+          <div className="space-y-2 pb-3 border-b">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Colonne 1 — Titre</Label>
+              <Input value={form.footerBoutiqueTitle || ''} onChange={e => set('footerBoutiqueTitle', e.target.value)} placeholder="Boutique" />
+            </div>
+            <Label className="text-xs">Liens supplémentaires</Label>
+            <LinkEditor
+              value={form.footerBoutiqueLinksJson || '[]'}
+              onChange={(json) => set('footerBoutiqueLinksJson', json)}
+              placeholder="/boutique"
+            />
+          </div>
+          {/* Colonne Informations */}
+          <div className="space-y-2 pb-3 border-b">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Colonne 2 — Titre</Label>
+              <Input value={form.footerInfosTitle || ''} onChange={e => set('footerInfosTitle', e.target.value)} placeholder="Informations" />
+            </div>
+            <Label className="text-xs">Liens</Label>
+            <LinkEditor
+              value={form.footerInfosLinksJson || '[]'}
+              onChange={(json) => set('footerInfosLinksJson', json)}
+              placeholder="/boutique/cgv"
+            />
+            <p className="text-[11px] text-muted-foreground">Si vide, liens par défaut (CGV, Mon panier, Contact, Espace gestion).</p>
+          </div>
+          {/* Colonne Contact */}
+          <div className="space-y-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Colonne 3 — Titre</Label>
+              <Input value={form.footerContactTitle || ''} onChange={e => set('footerContactTitle', e.target.value)} placeholder="Contact" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Email de contact</Label>
+                <Input type="email" value={form.footerEmail || ''} onChange={e => set('footerEmail', e.target.value)} placeholder="contact@maboutique.fr" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Téléphone (optionnel)</Label>
+                <Input value={form.footerPhone || ''} onChange={e => set('footerPhone', e.target.value)} placeholder="06 12 34 56 78" />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Les horaires sont éditables dans l'onglet « Horaires/CGV ».</p>
+          </div>
+        </CardContent>
+      </Card>
+      </>
+      )}
+
+      {/* Pages confiance — Paiement sécurisé, Livraison rapide, Retours 14 jours */}
+      {subTab === 'pages' && (
+      <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4" /> Page « Paiement sécurisé »</CardTitle>
+          <CardDescription className="text-xs">Page dédiée accessible depuis les badges de confiance. URL : /boutique/paiement-securise</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Titre de la page</Label>
+            <Input value={form.trustPagePaymentTitle || ''} onChange={e => set('trustPagePaymentTitle', e.target.value)} placeholder="Paiement sécurisé" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Contenu (HTML autorisé)</Label>
+            <Textarea
+              value={form.trustPagePaymentContent || ''}
+              onChange={e => set('trustPagePaymentContent', e.target.value)}
+              rows={8}
+              placeholder="<h2>Paiement 100% sécurisé</h2><p>Nous utilisons Stripe et PayPal pour protéger vos transactions...</p>"
+              className="text-sm font-mono"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Truck className="h-4 w-4" /> Page « Livraison rapide »</CardTitle>
+          <CardDescription className="text-xs">URL : /boutique/livraison-rapide</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Titre de la page</Label>
+            <Input value={form.trustPageShippingTitle || ''} onChange={e => set('trustPageShippingTitle', e.target.value)} placeholder="Livraison rapide" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Contenu (HTML autorisé)</Label>
+            <Textarea
+              value={form.trustPageShippingContent || ''}
+              onChange={e => set('trustPageShippingContent', e.target.value)}
+              rows={8}
+              placeholder="<h2>Livraison rapide</h2><p>Toutes nos commandes sont expédiées sous 48h...</p>"
+              className="text-sm font-mono"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><RefreshCw className="h-4 w-4" /> Page « Retours 14 jours »</CardTitle>
+          <CardDescription className="text-xs">URL : /boutique/retours-14-jours</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Titre de la page</Label>
+            <Input value={form.trustPageReturnsTitle || ''} onChange={e => set('trustPageReturnsTitle', e.target.value)} placeholder="Retours 14 jours" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Contenu (HTML autorisé)</Label>
+            <Textarea
+              value={form.trustPageReturnsContent || ''}
+              onChange={e => set('trustPageReturnsContent', e.target.value)}
+              rows={8}
+              placeholder="<h2>Retours sous 14 jours</h2><p>Vous disposez de 14 jours pour retourner votre commande...</p>"
+              className="text-sm font-mono"
+            />
+          </div>
+        </CardContent>
+      </Card>
+      </>
+      )}
+
+      {/* Horaires */}
+      {subTab === 'misc' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Clock className="h-4 w-4" /> Horaires (footer)</CardTitle>
+          <CardDescription className="text-xs">
+            Activez ou désactivez l'affichage des horaires dans le footer de la boutique, et personnalisez chaque jour.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <HoursEditor
+            value={form.hoursJson}
+            onChange={(json) => set('hoursJson', json)}
+            visible={form.hoursVisible !== false}
+            onVisibleChange={(v) => set('hoursVisible', v)}
+          />
+        </CardContent>
+      </Card>
+      )}
+
+      {/* CGV */}
+      {subTab === 'misc' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4" /> CGV personnalisées</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Texte des CGV (HTML autorisé)</Label>
+            <Textarea
+              value={form.cgvText || ''}
+              onChange={e => set('cgvText', e.target.value)}
+              rows={10}
+              placeholder="Rédigez vos CGV ici. Si vide, les CGV par défaut seront utilisées."
+              className="text-sm"
+            />
+          </div>
+        </CardContent>
+      </Card>
+      )}
+
+      <div className="sticky bottom-4 z-20 flex justify-end bg-gradient-to-t from-background via-background/95 to-transparent pt-4 pb-2 -mx-2 px-2">
+        <Button onClick={save} disabled={saving} size="lg" className="shadow-lg">
+          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+          Sauvegarder l'apparence
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET 5 — LIVRAISON (modes + tranches de poids)
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface ShippingMethodData {
+  id: string
+  code: string
+  label: string
+  price: number
+  delay: string
+  active: boolean
+  order: number
+}
+
+interface WeightRule {
+  id: string
+  weightMin: number
+  weightMax: number
+  price: number
+}
+
+function ShippingTab() {
+  const { getByType } = useSettings()
+  const carriers = getByType('carrier')
+  const [methods, setMethods] = useState<ShippingMethodData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expandedMethod, setExpandedMethod] = useState<string | null>(null)
+  const [weightRules, setWeightRules] = useState<Record<string, WeightRule[]>>({})
+  const [newRule, setNewRule] = useState({ weightMin: '', weightMax: '', price: '' })
+  const [showCarrierForm, setShowCarrierForm] = useState(false)
+  const [carrierForm, setCarrierForm] = useState({ value: '', code: '', trackingUrl: '' })
+  const { attributes: allAttrs, refresh: refreshAttrs } = useSettings()
+
+  const fetchMethods = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/boutique/admin/shipping')
+      const data = await res.json()
+      setMethods(data.methods || [])
+    } catch {
+      toast.error('Erreur')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchMethods() }, [fetchMethods])
+
+  const toggleActive = async (m: ShippingMethodData) => {
+    await fetch(`/api/boutique/admin/shipping/${m.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !m.active }),
+    })
+    fetchMethods()
+  }
+
+  const removeMethod = async (id: string) => {
+    if (!confirm('Supprimer ce mode de livraison ?')) return
+    await fetch(`/api/boutique/admin/shipping/${id}`, { method: 'DELETE' })
+    toast.success('Supprimé')
+    fetchMethods()
+  }
+
+  const fetchWeightRules = async (methodId: string) => {
+    try {
+      const res = await fetch(`/api/boutique/admin/shipping-weight-rules?shippingMethodId=${methodId}`)
+      const data = await res.json()
+      setWeightRules(prev => ({ ...prev, [methodId]: data.rules || [] }))
+    } catch {}
+  }
+
+  const toggleExpand = (methodId: string) => {
+    if (expandedMethod === methodId) {
+      setExpandedMethod(null)
+    } else {
+      setExpandedMethod(methodId)
+      fetchWeightRules(methodId)
+    }
+  }
+
+  const addCarrier = async () => {
+    if (!carrierForm.value || !carrierForm.code) {
+      toast.error('Nom et code requis')
+      return
+    }
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'carrier',
+        value: carrierForm.value,
+        code: carrierForm.code,
+        trackingUrl: carrierForm.trackingUrl || null,
+      }),
+    })
+    if (res.ok) {
+      toast.success('Transporteur ajouté')
+      setCarrierForm({ value: '', code: '', trackingUrl: '' })
+      setShowCarrierForm(false)
+      refreshAttrs()
+    } else {
+      toast.error('Erreur')
+    }
+  }
+
+  const addWeightRule = async (methodId: string) => {
+    if (!newRule.weightMin || !newRule.weightMax || !newRule.price) {
+      toast.error('Tous les champs requis')
+      return
+    }
+    await fetch('/api/boutique/admin/shipping-weight-rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shippingMethodId: methodId,
+        weightMin: parseFloat(newRule.weightMin),
+        weightMax: parseFloat(newRule.weightMax),
+        price: parseFloat(newRule.price),
+      }),
+    })
+    setNewRule({ weightMin: '', weightMax: '', price: '' })
+    fetchWeightRules(methodId)
+    toast.success('Tranche ajoutée')
+  }
+
+  const removeWeightRule = async (ruleId: string, methodId: string) => {
+    await fetch(`/api/boutique/admin/shipping-weight-rules/${ruleId}`, { method: 'DELETE' })
+    fetchWeightRules(methodId)
+    toast.success('Tranche supprimée')
+  }
+
+  if (loading) return <Skeleton className="h-32" />
+
+  return (
+    <div className="space-y-4">
+      {/* Transporteurs depuis attributs */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2"><Truck className="h-4 w-4" /> Transporteurs disponibles</CardTitle>
+          <CardDescription className="text-xs">Gérés depuis Paramètres → Attributs → Transporteurs. Utilisés pour le suivi des colis.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {carriers.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-2">Aucun transporteur configuré.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {carriers.map(c => (
+                <Badge key={c.id} variant="secondary" className="gap-1 text-xs py-1.5">
+                  <Truck className="h-3 w-3" />
+                  {c.value}
+                  {c.trackingUrl && <span className="text-[9px] text-green-600 ml-1">✓ suivi</span>}
+                </Badge>
+              ))}
+            </div>
+          )}
+          {showCarrierForm ? (
+            <div className="border rounded-md p-3 space-y-2 bg-muted/30">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Nom</Label>
+                  <Input value={carrierForm.value} onChange={e => setCarrierForm({ ...carrierForm, value: e.target.value })} placeholder="Chronopost" className="h-8 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Code</Label>
+                  <Input value={carrierForm.code} onChange={e => setCarrierForm({ ...carrierForm, code: e.target.value })} placeholder="chronopost" className="h-8 text-sm font-mono" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">URL de suivi (optionnel)</Label>
+                <Input value={carrierForm.trackingUrl} onChange={e => setCarrierForm({ ...carrierForm, trackingUrl: e.target.value })} placeholder="https://...{tracking}" className="h-8 text-xs font-mono" />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="outline" onClick={() => setShowCarrierForm(false)}>Annuler</Button>
+                <Button size="sm" onClick={addCarrier}>Ajouter</Button>
+              </div>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setShowCarrierForm(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Ajouter un transporteur
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Modes de livraison */}
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200">
+        💡 Les tranches de poids permettent de calculer automatiquement les frais de port selon le poids total des articles du panier. Si aucune tranche n'est définie, le prix de base est utilisé.
+      </div>
+
+      {methods.length === 0 ? (
+        <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
+          Aucun mode de livraison. Cliquez sur "Ajouter un mode" ci-dessous.
+        </CardContent></Card>
+      ) : (
+        methods.map(m => (
+          <Card key={m.id}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <p className="font-medium text-sm">{m.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{m.code}</code>
+                    {m.delay && ` · ${m.delay}`}
+                    {' · '}Prix base : {m.price === 0 ? 'Gratuit' : `${m.price.toFixed(2)} €`}
+                  </p>
+                </div>
+                <Badge variant={m.active ? 'default' : 'secondary'}>{m.active ? 'Actif' : 'Inactif'}</Badge>
+                <Button size="sm" variant="outline" onClick={() => toggleActive(m)}>
+                  {m.active ? 'Désactiver' : 'Activer'}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => toggleExpand(m.id)}>
+                  <Truck className="h-3.5 w-3.5 mr-1" /> Tranches de poids
+                </Button>
+                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => removeMethod(m.id)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+
+              {/* Weight rules */}
+              {expandedMethod === m.id && (
+                <div className="mt-4 pt-3 border-t space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">Tranches de poids (grammes)</p>
+                  {(weightRules[m.id] || []).length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-2">Aucune tranche définie — le prix de base ({m.price.toFixed(2)} €) est utilisé.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {(weightRules[m.id] || []).map(r => (
+                        <div key={r.id} className="flex items-center gap-2 text-xs p-2 border rounded">
+                          <span className="flex-1">{r.weightMin}g - {r.weightMax}g</span>
+                          <Badge variant="secondary">{r.price.toFixed(2)} €</Badge>
+                          <Button size="sm" variant="ghost" className="text-red-600 h-6" onClick={() => removeWeightRule(r.id, m.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Add rule */}
+                  <div className="flex gap-2 items-end">
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Min (g)</Label>
+                      <Input type="number" value={newRule.weightMin} onChange={e => setNewRule({ ...newRule, weightMin: e.target.value })} className="w-20 h-8 text-xs" placeholder="0" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Max (g)</Label>
+                      <Input type="number" value={newRule.weightMax} onChange={e => setNewRule({ ...newRule, weightMax: e.target.value })} className="w-20 h-8 text-xs" placeholder="500" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px]">Prix (€)</Label>
+                      <Input type="number" step="0.01" value={newRule.price} onChange={e => setNewRule({ ...newRule, price: e.target.value })} className="w-20 h-8 text-xs" placeholder="3.50" />
+                    </div>
+                    <Button size="sm" onClick={() => addWeightRule(m.id)}>
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET 6 — CATÉGORIES (placeholder — déjà géré dans Paramètres → Boutique)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function CategoriesTab() {
+  const [cats, setCats] = useState<Array<{ slug: string; label: string; backgroundImage: string | null; emoji: string; order: number }>>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState<string | null>(null)
+
+  const fetchCats = () => {
+    fetch('/api/boutique/admin/categories')
+      .then(r => r.json())
+      .then(data => setCats(data.categories || []))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { fetchCats() }, [])
+
+  const uploadImage = async (slug: string, file: File) => {
+    setUploading(slug)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/boutique/admin/categories/upload', {
+        method: 'POST',
+        headers: { 'X-Category-Slug': slug },
+        body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erreur upload'); return }
+      await fetch('/api/boutique/admin/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug,
+          label: cats.find(c => c.slug === slug)?.label || slug,
+          emoji: cats.find(c => c.slug === slug)?.emoji || '📦',
+          backgroundImage: data.path,
+        }),
+      })
+      toast.success('Image mise à jour')
+      fetchCats()
+    } catch { toast.error('Erreur réseau') }
+    finally { setUploading(null) }
+  }
+
+  if (loading) return <Skeleton className="h-32" />
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground uppercase">
+            <th className="px-3 py-2 font-medium">Catégorie</th>
+            <th className="px-3 py-2 font-medium">Slug</th>
+            <th className="px-3 py-2 font-medium">Image</th>
+            <th className="px-3 py-2 font-medium text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cats.map(c => (
+            <tr key={c.slug} className="border-b last:border-0 hover:bg-muted/20">
+              <td className="px-3 py-3 font-medium">{c.emoji} {c.label}</td>
+              <td className="px-3 py-3"><code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{c.slug}</code></td>
+              <td className="px-3 py-3">
+                <div className="w-20 h-14 rounded-md overflow-hidden border bg-muted">
+                  {c.backgroundImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.backgroundImage} alt={c.label} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="flex items-center justify-center w-full h-full text-2xl opacity-30">{c.emoji}</div>
+                  )}
+                </div>
+              </td>
+              <td className="px-3 py-3 text-right">
+                <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                  <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(c.slug, f) }} />
+                  {uploading === c.slug ? 'Upload...' : 'Changer image'}
+                </label>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET PAIEMENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function PaymentsTab() {
+  const [methods, setMethods] = useState<Array<{
+    id: string; code: string; label: string; description: string | null;
+    icon: string | null; provider: string; active: boolean; order: number
+  }>>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({
+    code: '', label: '', description: '', icon: '💳', provider: 'demo',
+  })
+
+  const fetchMethods = () => {
+    fetch('/api/boutique/admin/payments')
+      .then(r => r.json())
+      .then(data => setMethods(data.methods || []))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { fetchMethods() }, [])
+
+  const create = async () => {
+    if (!form.code || !form.label) {
+      toast.error('Code et libellé requis')
+      return
+    }
+    const res = await fetch('/api/boutique/admin/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    if (res.ok) {
+      toast.success('Mode de paiement ajouté')
+      setForm({ code: '', label: '', description: '', icon: '💳', provider: 'demo' })
+      setShowForm(false)
+      fetchMethods()
+    } else {
+      toast.error('Erreur')
+    }
+  }
+
+  const toggleActive = async (m: typeof methods[0]) => {
+    await fetch(`/api/boutique/admin/payments/${m.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !m.active }),
+    })
+    fetchMethods()
+  }
+
+  const remove = async (id: string) => {
+    if (!confirm('Supprimer ce mode de paiement ?')) return
+    await fetch(`/api/boutique/admin/payments/${id}`, { method: 'DELETE' })
+    toast.success('Supprimé')
+    fetchMethods()
+  }
+
+  const PROVIDERS = [
+    { value: 'demo', label: 'Démo (simulation)' },
+    { value: 'stripe', label: 'Stripe (CB réelle)' },
+    { value: 'paypal', label: 'PayPal (réel)' },
+    { value: 'manual', label: 'Manuel (virement, chèque...)' },
+  ]
+
+  if (loading) return <Skeleton className="h-32" />
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200">
+        💡 <strong>Mode démo :</strong> simule un paiement (aucune transaction réelle). <strong>Stripe/PayPal :</strong> nécessite clés API. <strong>Manuel :</strong> virement, chèque, etc.
+      </div>
+
+      {methods.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">
+          Aucun mode de paiement configuré. Les clients verront 3 modes par défaut (CB démo, PayPal démo, Virement).
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {methods.map(m => (
+            <div key={m.id} className="flex items-center gap-3 p-3 border rounded-md">
+              <span className="text-2xl">{m.icon || '💳'}</span>
+              <div className="flex-1">
+                <p className="font-medium text-sm">{m.label}</p>
+                <p className="text-xs text-muted-foreground">
+                  Code: <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{m.code}</code>
+                  {' · '}
+                  {PROVIDERS.find(p => p.value === m.provider)?.label || m.provider}
+                  {m.description && ` · ${m.description}`}
+                </p>
+              </div>
+              <Badge variant={m.active ? 'default' : 'secondary'}>
+                {m.active ? 'Actif' : 'Inactif'}
+              </Badge>
+              <Button size="sm" variant="outline" onClick={() => toggleActive(m)}>
+                {m.active ? 'Désactiver' : 'Activer'}
+              </Button>
+              <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(m.id)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showForm ? (
+        <div className="border rounded-md p-3 space-y-3 bg-muted/30">
+          <p className="text-sm font-semibold">Nouveau mode de paiement</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Code (unique)</Label>
+              <Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="cb_stripe" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Libellé</Label>
+              <Input value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="Carte bancaire (Stripe)" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Icône (emoji)</Label>
+              <Input value={form.icon} onChange={e => setForm({ ...form, icon: e.target.value })} placeholder="💳" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Type</Label>
+              <Select value={form.provider} onValueChange={v => setForm({ ...form, provider: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PROVIDERS.map(p => (
+                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 col-span-2">
+              <Label className="text-xs">Description</Label>
+              <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Paiement sécurisé par carte bancaire" />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Annuler</Button>
+            <Button size="sm" onClick={create}>Créer</Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+          <Plus className="h-4 w-4 mr-1" /> Ajouter un mode
+        </Button>
+      )}
+    </div>
+  )
+}
