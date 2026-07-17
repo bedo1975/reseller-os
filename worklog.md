@@ -654,3 +654,68 @@ Stage Summary:
 - New file: src/app/api/email-settings/test/route.ts
 - TypeScript clean, no errors
 - User must pull this change on their server, rebuild, and restart
+
+---
+Task ID: regenerate-zip-with-email-test
+Agent: main
+Task: User reports "les modifications ne sont pas dans le zip" — zip was stale (12 July), missing the email-settings/test route created today (17 July)
+
+Fix applied:
+1. Verified old zip (cb9c3af75f3845bde9ca38696b52b8c2, dated 2026-07-12) did NOT contain `src/app/api/email-settings/test/route.ts`
+2. Found `.env` had been overwritten back to Linux absolute path (`file:/home/z/my-project/db/custom.db`) by the running server
+3. Fixed `.env` back to relative path `file:./db/custom.db`
+4. Regenerated zip via `scripts/make-zip.sh`
+5. Copied new zip to all 4 locations (public/, download/, .next/standalone/public/, .next/standalone/download/)
+6. Rebuilt standalone server
+7. Verified download: HTTP 200, 817KB, MD5 = 59f8280d1e6fcd6d3f0e4b8436f8bd30
+8. Verified zip contains:
+   - `src/app/api/email-settings/test/route.ts` ✅
+   - `.env` with relative DATABASE_URL ✅
+   - `hoursVisible`, `logoImage`, `trustPagePaymentTitle` in schema ✅
+
+Stage Summary:
+- New zip: 817KB, MD5 59f8280d1e6fcd6d3f0e4b8436f8bd30
+- Contains all recent fixes: email test route, .env relative path, all boutique features
+
+---
+Task ID: deploy-scripts
+Agent: main
+Task: Create push.sh and pull.sh scripts to avoid future deployment mistakes
+
+Files created:
+1. scripts/push.sh — for local PC
+   - Checks for sensitive files (.env, db/custom.db) being tracked and auto-removes them
+   - Shows git status before committing
+   - Auto-commit with custom or dated message
+   - Pull --rebase before push (avoids "push rejected")
+   - Pushes to origin/main
+   - Usage: ./push.sh "commit message"
+
+2. scripts/pull.sh — for production server
+   - 7-step safe deployment:
+     1. Backup DB + .env + .user.ini to /tmp/junashop-backup-TIMESTAMP/
+     2. Stash local uncommitted changes
+     3. git fetch + reset --hard origin/main (force adopt GitHub version)
+     4. Restore DB + .env + .user.ini from backup
+     5. npm install --omit=dev + prisma generate + prisma db push
+     6. rm -rf .next + npm run build
+     7. pm2 restart (auto-detects process name: junashop, dboxpro, reseller-os, or all)
+   - Final verification: checks hoursVisible count, email test route presence, PM2 status
+   - Usage: ./pull.sh
+
+3. .gitignore — rewritten with clear sections:
+   - SENSITIVE FILES: .env, db/*.db, prisma/db/*.db, backups
+   - SERVER-SPECIFIC: .user.ini, deploy.sh, diag.sh, reseller-os.zip
+   - Standard Next.js ignores
+
+4. scripts/README.md — full documentation of both scripts
+
+Zip regenerated:
+- 823KB, MD5: 041331629adc54cd9df51f490881763b
+- Contains push.sh, pull.sh, README.md, updated .gitignore
+- Copied to all 4 locations (public/, download/, .next/standalone/public/, .next/standalone/download/)
+- Server restarted, download verified (HTTP 200, MD5 matches)
+
+User workflow:
+- LOCAL: ./push.sh "commit message" → pushes to GitHub
+- SERVER: ./pull.sh → safe deploy with auto-backup
