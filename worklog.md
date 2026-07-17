@@ -588,3 +588,69 @@ User action:
 Stage Summary:
 - Root cause: multiple stale zip copies + middleware blocking the download path
 - Fix: synchronized all 4 zip locations + updated middleware + rebuilt
+
+---
+Task ID: fix-p2021-env-path
+Agent: main
+Task: User reports P2021 error "The table main.BoutiqueSettings does not exist" on Windows (D:\vinted-business)
+
+ROOT CAUSE:
+- The .env file in the zip contained `DATABASE_URL=file:/home/z/my-project/db/custom.db` (Linux absolute path)
+- On Windows, Prisma cannot create a file at `/home/z/my-project/db/custom.db` — the path doesn't exist
+- So `npx prisma db push` either failed silently or created the DB in a wrong location
+- Result: the BoutiqueSettings table was never created → P2021 error on first API call
+
+Fix applied:
+1. Changed `.env` to use relative path: `DATABASE_URL=file:./db/custom.db` (works on all OS)
+2. Added `NEXTAUTH_SECRET` and `NEXTAUTH_URL` to `.env` (were missing — caused NextAuth warnings)
+3. Created `.env.example` for documentation
+4. Updated README.md with a new troubleshooting section for P2021 error:
+   - Explains the Windows path issue
+   - Steps to delete corrupt DB, recreate folder, push schema
+   - Windows tip: `attrib +r .env` to prevent Prisma from overwriting .env
+5. Fixed `scripts/make-zip.sh` to exclude `download/` and `upload/` directories (was causing recursive zip inclusion — zip grew from 1.4MB to 2.3MB)
+6. Regenerated zip: 711KB, MD5 = cb9c3af75f3845bde9ca38696b52b8c2
+7. Copied new zip to all 4 locations (public/, download/, .next/standalone/public/, .next/standalone/download/)
+8. Rebuilt standalone server (middleware already updated in previous task)
+9. Verified download: HTTP 200, 727616 bytes, MD5 matches, .env contains relative path
+
+User action required:
+1. Download the NEW zip (711KB, MD5: cb9c3af75f3845bde9ca38696b52b8c2)
+2. Extract to a fresh folder
+3. Run:
+   ```
+   npm install
+   npx prisma db push    # will create db/custom.db with all tables
+   npx prisma generate
+   npm run dev
+   ```
+4. On Windows, protect .env: `attrib +r .env`
+
+Stage Summary:
+- Root cause: Linux absolute path in .env didn't work on Windows
+- Fix: relative path `file:./db/custom.db` + README troubleshooting section
+- New zip: 711KB, MD5 cb9c3af75f3845bde9ca38696b52b8c2
+
+---
+Task ID: fix-email-test-404
+Agent: main
+Task: User reports "ERREUR RESEAU" when testing email config. Logs show POST /api/email-settings/test returns 404
+
+Root cause:
+- The settings-module.tsx frontend calls `POST /api/email-settings/test` when the user clicks "Tester"
+- But the route didn't exist — only `/api/email-settings/route.ts` (GET/PUT) was present
+- Hence the 404 → frontend catches the error → shows "Erreur réseau"
+
+Fix applied:
+- Created `src/app/api/email-settings/test/route.ts` with a POST handler that:
+  1. Authenticates the admin
+  2. Reads the admin user's email (the recipient)
+  3. Checks that SMTP is configured (host/user/password)
+  4. Sends a test email with subject "[DBoxPro] Email de test" containing both plain text + HTML version with config details (server, port, secure, user, from)
+  5. Returns { ok: true, sentTo } on success or a descriptive error message on failure
+- The error responses are user-friendly French messages so the toast displays them properly
+
+Stage Summary:
+- New file: src/app/api/email-settings/test/route.ts
+- TypeScript clean, no errors
+- User must pull this change on their server, rebuild, and restart
