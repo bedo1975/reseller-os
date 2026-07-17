@@ -58,3 +58,15 @@ public/uploads/sessions/
 
 # Backups
 backups/
+
+# Database (NE JAMAIS committer la DB)
+db/*.db
+db/*.db-journal
+prisma/db/*.db
+prisma/db/*.db-journal
+
+# Config serveur
+.user.ini
+deploy.sh
+diag.sh
+reseller-os.tar.gz
