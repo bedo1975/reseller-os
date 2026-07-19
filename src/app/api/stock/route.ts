@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/session'
+import { revalidatePath } from 'next/cache'
 
 export async function GET(req: NextRequest) {
   try {
@@ -95,6 +96,16 @@ export async function POST(req: NextRequest) {
       },
       include: { supplier: true },
     })
+
+    // Invalidate sitemap if the new item is published to the boutique
+    if (item.status === 'PUBLIE' && item.suggestedPrice && item.suggestedPrice > 0) {
+      try {
+        revalidatePath('/sitemap.xml')
+        revalidatePath('/boutique')
+      } catch (e) {
+        console.error('[sitemap] revalidatePath failed:', e)
+      }
+    }
 
     return NextResponse.json(item)
   } catch (error: any) {

@@ -12,3 +12,9 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+# Boutique pages accessible to crawlers
+# Admin and API routes are not blocked (protected by auth)
+
+# Sitemap
+Sitemap: https://junashop.fr/sitemap.xml

@@ -19,20 +19,44 @@ interface Product {
   mainPhoto?: string | null
 }
 
-const CATEGORY_CARDS = [
-  { slug: 'vetements', label: 'Vêtements', emoji: '👕', gradient: 'from-blue-400 to-blue-600' },
-  { slug: 'chaussures', label: 'Chaussures', emoji: '👟', gradient: 'from-cyan-400 to-blue-500' },
-  { slug: 'accessoires', label: 'Accessoires', emoji: '👜', gradient: 'from-sky-400 to-indigo-500' },
-  { slug: 'luxe', label: 'Luxe', emoji: '💎', gradient: 'from-indigo-400 to-purple-500' },
-  { slug: 'maison', label: 'Maison', emoji: '🏠', gradient: 'from-teal-400 to-cyan-500' },
+interface CategoryCard {
+  slug: string
+  label: string
+  emoji: string
+  backgroundImage: string | null
+  bgColor: string | null
+  bgOpacity: number
+  order: number
+}
+
+// Fallback if API fails
+const FALLBACK_CATEGORIES: CategoryCard[] = [
+  { slug: 'vetements', label: 'Vêtements', emoji: '👕', backgroundImage: null, bgColor: '3b82f6', bgOpacity: 0.5, order: 0 },
+  { slug: 'chaussures', label: 'Chaussures', emoji: '👟', backgroundImage: null, bgColor: '06b6d4', bgOpacity: 0.5, order: 1 },
+  { slug: 'accessoires', label: 'Accessoires', emoji: '👜', backgroundImage: null, bgColor: '6366f1', bgOpacity: 0.5, order: 2 },
+  { slug: 'luxe', label: 'Luxe', emoji: '💎', backgroundImage: null, bgColor: '8b5cf6', bgOpacity: 0.5, order: 3 },
+  { slug: 'maison', label: 'Maison', emoji: '🏠', backgroundImage: null, bgColor: '14b8a6', bgOpacity: 0.5, order: 4 },
 ]
 
 export default function BoutiqueHomePage() {
   const { data, loading } = useFetch<{ products: Product[]; count: number }>('/api/boutique/products?limit=20')
   const settings = useBoutiqueSettings()
+  const [categories, setCategories] = useState<CategoryCard[]>(FALLBACK_CATEGORIES)
   const products = data?.products || []
   const featured = products.slice(0, 10)
   const newProducts = products.slice(0, 10)
+
+  // Fetch categories from DB
+  useEffect(() => {
+    fetch('/api/boutique/admin/categories')
+      .then(r => r.json())
+      .then(data => {
+        if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
+          setCategories(data.categories)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const primaryColor = '#' + settings.primaryColor
   const primaryDarkColor = '#' + settings.primaryDarkColor
@@ -125,23 +149,39 @@ export default function BoutiqueHomePage() {
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {CATEGORY_CARDS.map(c => (
-            <Link
-              key={c.slug}
-              href={`/boutique/categorie/${c.slug}`}
-              className={`group relative rounded-xl overflow-hidden bg-gradient-to-br ${c.gradient} aspect-square flex items-end p-4 hover:shadow-lg transition-shadow`}
-            >
-              <div className="absolute top-4 right-4 text-4xl opacity-30 group-hover:scale-110 transition-transform">
-                {c.emoji}
-              </div>
-              <div className="relative">
-                <p className="text-white font-bold text-lg leading-tight">{c.label}</p>
-                <p className="text-white/80 text-xs mt-1 flex items-center gap-1">
-                  Découvrir <ArrowRight className="h-3 w-3" />
-                </p>
-              </div>
-            </Link>
-          ))}
+          {categories.map(c => {
+            const bgColor = c.bgColor ? '#' + c.bgColor : primaryColor
+            return (
+              <Link
+                key={c.slug}
+                href={`/boutique/categorie/${c.slug}`}
+                className="group relative rounded-xl overflow-hidden aspect-square flex items-end p-4 hover:shadow-lg transition-shadow"
+                style={{ backgroundColor: bgColor }}
+              >
+                {/* Background image with opacity overlay */}
+                {c.backgroundImage && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={c.backgroundImage}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover"
+                    style={{ opacity: c.bgOpacity }}
+                  />
+                )}
+                {/* Gradient overlay for better text readability */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                <div className="absolute top-4 right-4 text-4xl opacity-80 group-hover:scale-110 transition-transform">
+                  {c.emoji}
+                </div>
+                <div className="relative z-10">
+                  <p className="text-white font-bold text-lg leading-tight drop-shadow">{c.label}</p>
+                  <p className="text-white/80 text-xs mt-1 flex items-center gap-1">
+                    Découvrir <ArrowRight className="h-3 w-3" />
+                  </p>
+                </div>
+              </Link>
+            )
+          })}
         </div>
       </section>
 

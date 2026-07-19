@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/session'
+import { revalidatePath } from 'next/cache'
+
+// Helper: check if a stock item is "visible on the boutique"
+function isBoutiqueVisible(item: { status: string; suggestedPrice: number | null }): boolean {
+  return item.status === 'PUBLIE' && !!item.suggestedPrice && item.suggestedPrice > 0
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -16,6 +22,8 @@ export async function PATCH(
     if (!existing || existing.userId !== user.id) {
       return NextResponse.json({ error: 'Article introuvable' }, { status: 404 })
     }
+
+    const wasVisible = isBoutiqueVisible(existing)
 
     const updateData: Record<string, unknown> = {}
     const allowed = [
@@ -60,6 +68,17 @@ export async function PATCH(
       include: { supplier: true, sale: true },
     })
 
+    // Invalidate sitemap if boutique visibility changed
+    const isVisibleNow = isBoutiqueVisible(item)
+    if (wasVisible !== isVisibleNow) {
+      try {
+        revalidatePath('/sitemap.xml')
+        revalidatePath('/boutique')
+      } catch (e) {
+        console.error('[sitemap] revalidatePath failed:', e)
+      }
+    }
+
     return NextResponse.json(item)
   } catch (error) {
     console.error('PATCH /api/stock/[id] error:', error)
@@ -83,7 +102,20 @@ export async function DELETE(
       return NextResponse.json({ error: 'Article introuvable' }, { status: 404 })
     }
 
+    const wasVisible = isBoutiqueVisible(existing)
+
     await db.stockItem.delete({ where: { id } })
+
+    // Invalidate sitemap if a published item was removed
+    if (wasVisible) {
+      try {
+        revalidatePath('/sitemap.xml')
+        revalidatePath('/boutique')
+      } catch (e) {
+        console.error('[sitemap] revalidatePath failed:', e)
+      }
+    }
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('DELETE /api/stock/[id] error:', error)

@@ -719,3 +719,211 @@ Zip regenerated:
 User workflow:
 - LOCAL: ./push.sh "commit message" → pushes to GitHub
 - SERVER: ./pull.sh → safe deploy with auto-backup
+
+---
+Task ID: 3-new-features-categories-shipping-sitemap
+Agent: main
+Task: 3 new features: (1) categories bg color + opacity, (2) shipping carriers pricing + visibility, (3) sitemap auto-update
+
+## Task 1 — Categories bg color + opacity ✅
+
+### Schema changes
+- Added 2 fields to `BoutiqueCategory` model in `prisma/schema.prisma`:
+  - `bgColor String?` — hex color without # (e.g., "007bff")
+  - `bgOpacity Float @default(0.5)` — 0.0 to 1.0
+- Ran `bunx prisma db push` — columns added to DB
+
+### API changes
+- `src/app/api/boutique/admin/categories/route.ts` (POST): added bgColor + bgOpacity validation + persistence
+- `src/app/api/boutique/admin/categories/[slug]/route.ts`: added PATCH method (partial update of label, emoji, backgroundImage, bgColor, bgOpacity, order)
+- Created `src/app/api/boutique/admin/categories/upload/route.ts` (was missing! the old `uploadImage` function was calling a non-existent endpoint) — saves to `public/uploads/boutique-categories/`
+
+### Admin UI changes (`boutique-admin-module.tsx`)
+- Refactored `CategoriesTab` from a read-only table to a full edit interface:
+  - "Nouvelle catégorie" button + form (slug, label, emoji)
+  - Edit mode per category: label, emoji, order, image upload, bgColor color picker, bgOpacity slider (range 0-1, step 0.1)
+  - Live preview of the category card with bgColor background + image at chosen opacity
+  - Delete category button
+  - Remove image button
+- Added `CategoryData` interface with all new fields
+
+### Storefront changes
+- `src/app/boutique/page.tsx`: 
+  - Replaced hardcoded `CATEGORY_CARDS` (with Tailwind gradient classes) by DB-fetched categories via `/api/boutique/admin/categories`
+  - Added `FALLBACK_CATEGORIES` with default bg colors if API fails
+  - Category cards now render with `style={{ backgroundColor: bgColor }}` + `<img style={{ opacity: bgOpacity }}>` + dark gradient overlay for text readability
+
+## Task 2 — Shipping carriers pricing + visibility ✅
+
+### Discoveries
+- All required Prisma fields already existed: `ShippingMethod.active` (visibility toggle), `ShippingWeightRule` (weightMin/weightMax/price per method)
+- Main bug: `GET /api/boutique/admin/shipping` filtered by `active: true` — admin couldn't see inactive methods
+- Missing feature: no "Add shipping method" form in admin UI
+
+### API changes
+- `src/app/api/boutique/admin/shipping/route.ts` (GET): 
+  - Added support for `?all=true` query param (admin-only) — returns ALL methods (active + inactive)
+  - Without `?all=true`: returns only active methods (for storefront checkout)
+  - Uses `requireAdmin()` to verify admin status when `?all=true` is requested
+
+### Admin UI changes (`boutique-admin-module.tsx` ShippingTab)
+- Changed `fetchMethods` to use `/api/boutique/admin/shipping?all=true` — admin now sees ALL methods including inactive ones
+- Added "Nouveau mode" button + form (code, label, price, delay, order) — calls POST /api/boutique/admin/shipping
+- Refactored weight rule form: each method has its own `newRules[methodId]` state instead of a shared `newRule` object (was causing input collisions between methods)
+- Improved help banner: explains that deactivating a method hides it from client checkout
+- The "Actif/Inactif" toggle badge + "Activer/Désactiver" button was already there (PATCH /api/boutique/admin/shipping/[id] with `{ active: !m.active }`)
+
+## Task 3 — Sitemap auto-update ✅
+
+### Created `src/app/sitemap.ts`
+- Native Next.js MetadataRoute.Sitemap (App Router convention)
+- `export const dynamic = 'force-dynamic'` + `revalidate = 0` — regenerated on every request
+- Base URL from `NEXTAUTH_URL` env var (fallback: localhost:3000)
+- Generates URLs for:
+  - 8 static boutique pages (boutique, contact, cgv, connexion, panier, paiement-securise, livraison-rapide, retours-14-jours)
+  - All boutique categories from DB (with `updatedAt` as lastModified)
+  - All published products (`status: 'PUBLIE' AND suggestedPrice > 0`) → `/boutique/produit/[sku]`
+- Each URL has: loc, lastModified, changeFrequency, priority
+
+### Updated `public/robots.txt`
+- Added `Sitemap: https://junashop.fr/sitemap.xml` directive
+
+### Updated `src/middleware.ts`
+- Added `sitemap.xml` to the public exceptions regex (was being blocked by NextAuth, redirecting to /login)
+
+### Auto-update hooks in Stock API
+- `src/app/api/stock/route.ts` (POST): after creating a stock item, if `status === 'PUBLIE' AND suggestedPrice > 0`, calls `revalidatePath('/sitemap.xml')` + `revalidatePath('/boutique')`
+- `src/app/api/stock/[id]/route.ts` (PATCH): compares `wasVisible` (before) vs `isVisibleNow` (after) using the `isBoutiqueVisible(item)` helper. If visibility changed, revalidates sitemap + boutique
+- `src/app/api/stock/[id]/route.ts` (DELETE): if the deleted item was visible, revalidates sitemap + boutique
+- All revalidate calls are wrapped in try/catch with `[sitemap]` log prefix — never breaks the main operation
+
+## Build & Tests
+
+- `bunx next build`: ✅ success, route manifest shows `/sitemap.xml` as dynamic (ƒ)
+- TypeScript: only pre-existing errors (stock/route.ts had `Cannot find name 'user'` and `body` before, unrelated to my changes)
+- Runtime test with standalone server:
+  - `GET /sitemap.xml` → 200, returns valid XML (2496 bytes)
+  - Sitemap contains 8 static pages + 5 categories + 1 published product (`/boutique/produit/CH-PANTS-00155`)
+  - `GET /api/boutique/admin/categories` → returns bgColor + bgOpacity fields (null by default for existing categories)
+
+## Files changed
+
+**Created:**
+- `src/app/sitemap.ts`
+- `src/app/api/boutique/admin/categories/upload/route.ts`
+
+**Modified:**
+- `prisma/schema.prisma` (+bgColor, +bgOpacity on BoutiqueCategory)
+- `src/app/api/boutique/admin/categories/route.ts` (POST accepts bgColor + bgOpacity)
+- `src/app/api/boutique/admin/categories/[slug]/route.ts` (+PATCH method)
+- `src/app/api/boutique/admin/shipping/route.ts` (GET supports ?all=true for admin)
+- `src/app/api/stock/route.ts` (+revalidatePath on PUBLIE create)
+- `src/app/api/stock/[id]/route.ts` (+revalidatePath on PATCH/DELETE when visibility changes)
+- `src/components/modules/boutique-admin-module.tsx` (refactored CategoriesTab + ShippingTab)
+- `src/app/boutique/page.tsx` (DB-fetched categories with bgColor + bgOpacity rendering)
+- `public/robots.txt` (+Sitemap directive)
+- `src/middleware.ts` (+sitemap.xml to public exceptions)
+
+## Zip regenerated
+- 813 KB, MD5: 9c4f2328900011171dab7bbe532a2c49
+- Verified zip contains: sitemap.ts, categories/upload route, push.bat, schema with bgColor/bgOpacity
+
+---
+Task ID: fix-categories-error-and-shipping-carrier
+Agent: main
+Task: Fix React "uncontrolled input" error on bgOpacity slider + add carrier selector to shipping methods
+
+## Fix 1: React "uncontrolled input" error on bgOpacity slider ✅
+
+### Root cause
+The `getBoutiqueCategories()` function in `src/lib/boutique-settings.ts` returned hardcoded default categories WITHOUT the new `bgColor` and `bgOpacity` fields when the DB was empty. When the user clicked "Modifier" on one of these defaults, `editForm.bgOpacity` was `undefined`, making the `<input type="range">` uncontrolled. When the user interacted with it, React threw the "changing uncontrolled to controlled" error.
+
+### Fixes applied
+1. `src/lib/boutique-settings.ts`: updated the 5 default categories to include `bgColor: null, bgOpacity: 0.5`
+2. `src/components/modules/boutique-admin-module.tsx` `startEdit()`: now explicitly defaults `bgColor` to null and `bgOpacity` to 0.5 when copying the category into `editForm`
+3. All references to `editForm.bgOpacity` and `c.bgOpacity` in the JSX now use `?? 0.5` as a safety net (slider value, % display, image opacity in preview, image opacity in list view)
+4. The `Math.round()` calls now use `(editForm.bgOpacity ?? 0.5) * 100` instead of `editForm.bgOpacity * 100`
+
+## Feature 2: Carrier selector on shipping methods ✅
+
+### Schema change
+- Added `carrierCode String?` to `ShippingMethod` model in `prisma/schema.prisma`
+- This links a shipping method to a carrier Attribute (type='carrier', code='colissimo' etc.)
+- Ran `bunx prisma db push` — column added
+
+### API changes
+- `src/app/api/boutique/admin/shipping/route.ts` (POST): accepts and persists `carrierCode`
+- `src/app/api/boutique/admin/shipping/[id]/route.ts` (PATCH): accepts `carrierCode` (set to null if empty)
+
+### Admin UI changes (`boutique-admin-module.tsx` ShippingTab)
+1. `ShippingMethodData` interface: added `carrierCode: string | null`
+2. `methodForm` state: added `carrierCode: ''` field
+3. `createMethod()`: sends `carrierCode` in the POST body
+4. New `updateMethodCarrier(methodId, carrierCode)` function: PATCHes the carrier code in real-time when the dropdown changes
+5. New method form: redesigned as a 2-row grid (3+3 columns) with a carrier `<select>` dropdown populated from `carriers` (from `useSettings().getByType('carrier')`)
+6. Each method card now has an inline carrier selector below the main row:
+   - Label "Transporteur :"
+   - `<select>` dropdown with all available carriers
+   - Badge showing the selected carrier name with a truck icon
+   - Help text explaining the carrier is linked to parcel tracking
+7. Weight rules section: added "Calcul auto selon le poids total du panier" hint next to the section title
+
+### How it works for the user
+- The admin creates shipping methods (e.g., "Colissimo Standard", "Chronopost Express")
+- For each method, they select a carrier from the dropdown (carriers are managed in Paramètres → Attributs → Transporteurs)
+- They define weight tranches (e.g., 0-500g → 3.50€, 500-1000g → 4.90€)
+- When a client checks out, the cart total weight is calculated and the matching tranche's price is applied
+- The carrier code is stored for future use (tracking URL generation when the order is shipped)
+
+## Build & zip
+- `bunx next build`: ✅ success, no errors
+- `bunx tsc --noEmit`: no errors on modified files
+- Zip regenerated: 824 KB, MD5: 381fad8a345cd861b2b56cabd0dce3c9
+- Verified zip contains: `carrierCode` in schema, `bgOpacity` in schema, all admin UI changes
+- Server restarted, download verified (HTTP 200, 843375 bytes, MD5 matches)
+
+---
+Task ID: fix-categories-patch-p2025
+Agent: main
+Task: Fix P2025 error "No record was found for an update" when PATCHing a category
+
+Root cause:
+- When the DB has no BoutiqueCategory rows, `getBoutiqueCategories()` returns 5 hardcoded default categories (vetements, chaussures, etc.) as a fallback — these are NOT persisted in the DB
+- The admin UI shows these defaults and lets the user click "Modifier" and save
+- The PATCH route called `db.boutiqueCategory.update({ where: { slug } })` which fails with P2025 because the row doesn't exist
+
+Fix applied:
+- `src/app/api/boutique/admin/categories/[slug]/route.ts` PATCH: converted `update()` to `upsert()` — if the category doesn't exist, it's created with the provided data + sensible defaults for any missing fields
+- Same route DELETE: wrapped in try/catch to ignore P2025 (if the category was a non-persisted default, the delete is a no-op)
+
+Verification:
+- TypeScript: no errors
+- Build: success
+- Zip regenerated: 826 KB, MD5: 477c0cd88b4e9045059f5cf57ce00664
+- Verified zip contains the upsert (2 occurrences in [slug]/route.ts)
+
+---
+Task ID: fix-sitemap-category-update
+Agent: main
+Task: Sitemap doesn't update when a category is created/modified/deleted
+
+Root cause:
+- The categories API routes (POST in route.ts, PATCH/DELETE in [slug]/route.ts) didn't call `revalidatePath('/sitemap.xml')` after DB mutations
+- The sitemap.ts route uses `export const dynamic = 'force-dynamic'` so it regenerates on every request, but Next.js can cache the response at the route-handler level unless explicitly invalidated
+
+Fix applied:
+- `src/app/api/boutique/admin/categories/route.ts` (POST): added revalidatePath for /sitemap.xml, /boutique, /boutique/categorie/[slug], and the dynamic [cat] page layout
+- `src/app/api/boutique/admin/categories/[slug]/route.ts` (PATCH): same revalidatePath calls after upsert
+- `src/app/api/boutique/admin/categories/[slug]/route.ts` (DELETE): same revalidatePath calls after delete
+- All revalidate calls wrapped in try/catch with `[sitemap]` log prefix — never breaks the main operation
+
+What gets invalidated on category CRUD:
+- `/sitemap.xml` — the category URL appears/disappears from the sitemap
+- `/boutique` — the homepage shows category cards (label, emoji, bgColor, bgOpacity)
+- `/boutique/categorie/[slug]` — the category page itself (in case label/emoji changed)
+- `/boutique/categorie/[cat]` (page layout) — revalidates all category pages
+
+Verification:
+- TypeScript: no errors
+- Build: success
+- Zip regenerated: 826 KB, MD5: f3ca159dc5137b2ecbd5076baec30910

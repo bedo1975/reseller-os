@@ -33,11 +33,11 @@ export async function getBoutiqueCategories() {
   if (cats.length === 0) {
     // Return defaults (without persisting — admin can edit later)
     return [
-      { slug: 'vetements', label: 'Vêtements', emoji: '👕', backgroundImage: null, order: 0 },
-      { slug: 'chaussures', label: 'Chaussures', emoji: '👟', backgroundImage: null, order: 1 },
-      { slug: 'accessoires', label: 'Accessoires', emoji: '👜', backgroundImage: null, order: 2 },
-      { slug: 'luxe', label: 'Luxe', emoji: '💎', backgroundImage: null, order: 3 },
-      { slug: 'maison', label: 'Maison', emoji: '🏠', backgroundImage: null, order: 4 },
+      { slug: 'vetements', label: 'Vêtements', emoji: '👕', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 0 },
+      { slug: 'chaussures', label: 'Chaussures', emoji: '👟', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 1 },
+      { slug: 'accessoires', label: 'Accessoires', emoji: '👜', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 2 },
+      { slug: 'luxe', label: 'Luxe', emoji: '💎', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 3 },
+      { slug: 'maison', label: 'Maison', emoji: '🏠', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 4 },
     ]
   }
   return cats

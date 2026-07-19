@@ -18,6 +18,7 @@ export async function PATCH(
     if (typeof body.delay === 'string') data.delay = body.delay
     if (typeof body.active === 'boolean') data.active = body.active
     if (typeof body.order === 'number') data.order = body.order
+    if (body.carrierCode !== undefined) data.carrierCode = body.carrierCode || null
 
     const method = await db.shippingMethod.update({ where: { id }, data })
     return NextResponse.json(method)

@@ -2,11 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/session'
 import { db } from '@/lib/db'
 
-// GET — public (returns active shipping methods for the storefront)
-export async function GET() {
+// GET — returns shipping methods
+// - Public: returns only active methods (for the storefront checkout)
+// - Admin (with ?all=true): returns ALL methods (active + inactive) for the admin UI
+export async function GET(req: NextRequest) {
   try {
+    const url = new URL(req.url)
+    const wantAll = url.searchParams.get('all') === 'true'
+
+    // If ?all=true, require admin
+    let isAdmin = false
+    if (wantAll) {
+      try {
+        await requireAdmin()
+        isAdmin = true
+      } catch {
+        // Not admin — fall back to active-only
+      }
+    }
+
     const methods = await db.shippingMethod.findMany({
-      where: { active: true },
+      where: wantAll && isAdmin ? {} : { active: true },
       orderBy: { order: 'asc' },
     })
     return NextResponse.json({ methods })
@@ -21,7 +37,7 @@ export async function POST(req: NextRequest) {
   try {
     await requireAdmin()
     const body = await req.json()
-    const { code, label, price, delay, active, order } = body
+    const { code, label, price, delay, carrierCode, active, order } = body
 
     if (!code || !label) {
       return NextResponse.json({ error: 'Code et libellé requis' }, { status: 400 })
@@ -33,6 +49,7 @@ export async function POST(req: NextRequest) {
         label: label.trim(),
         price: parseFloat(price) || 0,
         delay: delay?.trim() || '',
+        carrierCode: carrierCode || null,
         active: active !== false,
         order: parseInt(order) || 0,
       },

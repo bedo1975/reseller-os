@@ -1514,6 +1514,7 @@ interface ShippingMethodData {
   label: string
   price: number
   delay: string
+  carrierCode: string | null
   active: boolean
   order: number
 }
@@ -1532,15 +1533,17 @@ function ShippingTab() {
   const [loading, setLoading] = useState(true)
   const [expandedMethod, setExpandedMethod] = useState<string | null>(null)
   const [weightRules, setWeightRules] = useState<Record<string, WeightRule[]>>({})
-  const [newRule, setNewRule] = useState({ weightMin: '', weightMax: '', price: '' })
+  const [newRules, setNewRules] = useState<Record<string, { weightMin: string; weightMax: string; price: string }>>({})
   const [showCarrierForm, setShowCarrierForm] = useState(false)
   const [carrierForm, setCarrierForm] = useState({ value: '', code: '', trackingUrl: '' })
+  const [showMethodForm, setShowMethodForm] = useState(false)
+  const [methodForm, setMethodForm] = useState({ code: '', label: '', price: '', delay: '', carrierCode: '', order: '0' })
   const { attributes: allAttrs, refresh: refreshAttrs } = useSettings()
 
   const fetchMethods = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/boutique/admin/shipping')
+      const res = await fetch('/api/boutique/admin/shipping?all=true')
       const data = await res.json()
       setMethods(data.methods || [])
     } catch {
@@ -1611,7 +1614,8 @@ function ShippingTab() {
   }
 
   const addWeightRule = async (methodId: string) => {
-    if (!newRule.weightMin || !newRule.weightMax || !newRule.price) {
+    const r = newRules[methodId] || { weightMin: '', weightMax: '', price: '' }
+    if (!r.weightMin || !r.weightMax || !r.price) {
       toast.error('Tous les champs requis')
       return
     }
@@ -1620,14 +1624,57 @@ function ShippingTab() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         shippingMethodId: methodId,
-        weightMin: parseFloat(newRule.weightMin),
-        weightMax: parseFloat(newRule.weightMax),
-        price: parseFloat(newRule.price),
+        weightMin: parseFloat(r.weightMin),
+        weightMax: parseFloat(r.weightMax),
+        price: parseFloat(r.price),
       }),
     })
-    setNewRule({ weightMin: '', weightMax: '', price: '' })
+    setNewRules(prev => ({ ...prev, [methodId]: { weightMin: '', weightMax: '', price: '' } }))
     fetchWeightRules(methodId)
     toast.success('Tranche ajoutée')
+  }
+
+  const createMethod = async () => {
+    if (!methodForm.code || !methodForm.label) {
+      toast.error('Code et libellé requis')
+      return
+    }
+    const res = await fetch('/api/boutique/admin/shipping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: methodForm.code.trim().toLowerCase(),
+        label: methodForm.label.trim(),
+        price: parseFloat(methodForm.price) || 0,
+        delay: methodForm.delay.trim(),
+        carrierCode: methodForm.carrierCode || null,
+        order: parseInt(methodForm.order) || 0,
+        active: true,
+      }),
+    })
+    if (res.ok) {
+      toast.success('Mode de livraison créé')
+      setMethodForm({ code: '', label: '', price: '', delay: '', carrierCode: '', order: '0' })
+      setShowMethodForm(false)
+      fetchMethods()
+    } else {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error || 'Erreur')
+    }
+  }
+
+  const updateMethodCarrier = async (methodId: string, carrierCode: string) => {
+    const res = await fetch(`/api/boutique/admin/shipping/${methodId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ carrierCode: carrierCode || null }),
+    })
+    if (res.ok) {
+      toast.success('Transporteur mis à jour')
+      fetchMethods()
+    } else {
+      toast.error('Erreur')
+    }
   }
 
   const removeWeightRule = async (ruleId: string, methodId: string) => {
@@ -1690,13 +1737,69 @@ function ShippingTab() {
       </Card>
 
       {/* Modes de livraison */}
-      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200">
-        💡 Les tranches de poids permettent de calculer automatiquement les frais de port selon le poids total des articles du panier. Si aucune tranche n'est définie, le prix de base est utilisé.
+      <div className="flex items-center justify-between">
+        <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200 flex-1 mr-3">
+          💡 Les tranches de poids permettent de calculer automatiquement les frais de port selon le poids total des articles du panier. Si aucune tranche n'est définie, le prix de base est utilisé. Désactivez un mode pour le masquer lors du checkout client.
+        </div>
+        <Button size="sm" onClick={() => setShowMethodForm(!showMethodForm)}>
+          <Plus className="h-4 w-4 mr-1" /> Nouveau mode
+        </Button>
       </div>
+
+      {showMethodForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Nouveau mode de livraison</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Code</Label>
+                <Input value={methodForm.code} onChange={e => setMethodForm({ ...methodForm, code: e.target.value })} placeholder="chronopost" className="font-mono text-xs" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Libellé</Label>
+                <Input value={methodForm.label} onChange={e => setMethodForm({ ...methodForm, label: e.target.value })} placeholder="Chronopost Express" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Délai</Label>
+                <Input value={methodForm.delay} onChange={e => setMethodForm({ ...methodForm, delay: e.target.value })} placeholder="24-48h" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Prix base (€)</Label>
+                <Input type="number" step="0.01" value={methodForm.price} onChange={e => setMethodForm({ ...methodForm, price: e.target.value })} placeholder="4.90" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Ordre</Label>
+                <Input type="number" value={methodForm.order} onChange={e => setMethodForm({ ...methodForm, order: e.target.value })} placeholder="0" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Transporteur</Label>
+                <select
+                  value={methodForm.carrierCode}
+                  onChange={e => setMethodForm({ ...methodForm, carrierCode: e.target.value })}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">— Aucun —</option>
+                  {carriers.map(c => (
+                    <option key={c.id} value={c.code}>{c.value}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => setShowMethodForm(false)}>Annuler</Button>
+              <Button size="sm" onClick={createMethod}>Créer</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {methods.length === 0 ? (
         <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
-          Aucun mode de livraison. Cliquez sur "Ajouter un mode" ci-dessous.
+          Aucun mode de livraison. Cliquez sur "Nouveau mode" ci-dessus pour en créer un.
         </CardContent></Card>
       ) : (
         methods.map(m => (
@@ -1723,12 +1826,39 @@ function ShippingTab() {
                 </Button>
               </div>
 
+              {/* Carrier selector (inline) */}
+              <div className="mt-3 pt-3 border-t flex items-center gap-3">
+                <Label className="text-xs font-semibold shrink-0">Transporteur :</Label>
+                <select
+                  value={m.carrierCode || ''}
+                  onChange={e => updateMethodCarrier(m.id, e.target.value)}
+                  className="flex h-8 w-auto rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">— Aucun —</option>
+                  {carriers.map(c => (
+                    <option key={c.id} value={c.code}>{c.value}</option>
+                  ))}
+                </select>
+                {m.carrierCode && (
+                  <Badge variant="outline" className="text-xs gap-1">
+                    <Truck className="h-3 w-3" />
+                    {carriers.find(c => c.code === m.carrierCode)?.value || m.carrierCode}
+                  </Badge>
+                )}
+                <span className="text-[11px] text-muted-foreground">
+                  Le transporteur est lié au suivi des colis (URL de tracking configurable dans Paramètres → Attributs).
+                </span>
+              </div>
+
               {/* Weight rules */}
               {expandedMethod === m.id && (
                 <div className="mt-4 pt-3 border-t space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase">Tranches de poids (grammes)</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Tranches de poids (grammes)</p>
+                    <span className="text-[11px] text-muted-foreground">Calcul auto selon le poids total du panier</span>
+                  </div>
                   {(weightRules[m.id] || []).length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-2">Aucune tranche définie — le prix de base ({m.price.toFixed(2)} €) est utilisé.</p>
+                    <p className="text-xs text-muted-foreground py-2">Aucune tranche définie — le prix de base ({m.price.toFixed(2)} €) est utilisé pour tous les poids.</p>
                   ) : (
                     <div className="space-y-1">
                       {(weightRules[m.id] || []).map(r => (
@@ -1746,15 +1876,15 @@ function ShippingTab() {
                   <div className="flex gap-2 items-end">
                     <div className="space-y-1">
                       <Label className="text-[10px]">Min (g)</Label>
-                      <Input type="number" value={newRule.weightMin} onChange={e => setNewRule({ ...newRule, weightMin: e.target.value })} className="w-20 h-8 text-xs" placeholder="0" />
+                      <Input type="number" value={(newRules[m.id] || { weightMin: '' }).weightMin} onChange={e => setNewRules(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || { weightMin: '', weightMax: '', price: '' }), weightMin: e.target.value } }))} className="w-20 h-8 text-xs" placeholder="0" />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-[10px]">Max (g)</Label>
-                      <Input type="number" value={newRule.weightMax} onChange={e => setNewRule({ ...newRule, weightMax: e.target.value })} className="w-20 h-8 text-xs" placeholder="500" />
+                      <Input type="number" value={(newRules[m.id] || { weightMax: '' }).weightMax} onChange={e => setNewRules(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || { weightMin: '', weightMax: '', price: '' }), weightMax: e.target.value } }))} className="w-20 h-8 text-xs" placeholder="500" />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-[10px]">Prix (€)</Label>
-                      <Input type="number" step="0.01" value={newRule.price} onChange={e => setNewRule({ ...newRule, price: e.target.value })} className="w-20 h-8 text-xs" placeholder="3.50" />
+                      <Input type="number" step="0.01" value={(newRules[m.id] || { price: '' }).price} onChange={e => setNewRules(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || { weightMin: '', weightMax: '', price: '' }), price: e.target.value } }))} className="w-20 h-8 text-xs" placeholder="3.50" />
                     </div>
                     <Button size="sm" onClick={() => addWeightRule(m.id)}>
                       <Plus className="h-3.5 w-3.5" />
@@ -1774,10 +1904,24 @@ function ShippingTab() {
 // ONGLET 6 — CATÉGORIES (placeholder — déjà géré dans Paramètres → Boutique)
 // ═══════════════════════════════════════════════════════════════════════════
 
+interface CategoryData {
+  slug: string
+  label: string
+  backgroundImage: string | null
+  bgColor: string | null
+  bgOpacity: number
+  emoji: string
+  order: number
+}
+
 function CategoriesTab() {
-  const [cats, setCats] = useState<Array<{ slug: string; label: string; backgroundImage: string | null; emoji: string; order: number }>>([])
+  const [cats, setCats] = useState<CategoryData[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<CategoryData | null>(null)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newCat, setNewCat] = useState({ slug: '', label: '', emoji: '📦' })
 
   const fetchCats = () => {
     fetch('/api/boutique/admin/categories')
@@ -1788,72 +1932,332 @@ function CategoriesTab() {
 
   useEffect(() => { fetchCats() }, [])
 
+  const startEdit = (c: CategoryData) => {
+    setEditing(c.slug)
+    setEditForm({
+      ...c,
+      bgColor: c.bgColor ?? null,
+      bgOpacity: c.bgOpacity ?? 0.5,
+    })
+  }
+
+  const cancelEdit = () => {
+    setEditing(null)
+    setEditForm(null)
+  }
+
+  const saveEdit = async () => {
+    if (!editForm) return
+    try {
+      const res = await fetch(`/api/boutique/admin/categories/${editForm.slug}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: editForm.label,
+          emoji: editForm.emoji,
+          backgroundImage: editForm.backgroundImage,
+          bgColor: editForm.bgColor,
+          bgOpacity: editForm.bgOpacity,
+          order: editForm.order,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        toast.error(data.error || 'Erreur')
+        return
+      }
+      toast.success('Catégorie mise à jour')
+      cancelEdit()
+      fetchCats()
+    } catch {
+      toast.error('Erreur réseau')
+    }
+  }
+
   const uploadImage = async (slug: string, file: File) => {
     setUploading(slug)
     try {
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('slug', slug)
       const res = await fetch('/api/boutique/admin/categories/upload', {
         method: 'POST',
-        headers: { 'X-Category-Slug': slug },
         body: formData,
       })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error || 'Erreur upload'); return }
-      await fetch('/api/boutique/admin/categories', {
-        method: 'POST',
+
+      // Update via PATCH
+      await fetch(`/api/boutique/admin/categories/${slug}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug,
-          label: cats.find(c => c.slug === slug)?.label || slug,
-          emoji: cats.find(c => c.slug === slug)?.emoji || '📦',
-          backgroundImage: data.path,
-        }),
+        body: JSON.stringify({ backgroundImage: data.path }),
       })
       toast.success('Image mise à jour')
       fetchCats()
+      // Also update edit form if editing this cat
+      if (editForm && editForm.slug === slug) {
+        setEditForm({ ...editForm, backgroundImage: data.path })
+      }
     } catch { toast.error('Erreur réseau') }
     finally { setUploading(null) }
+  }
+
+  const removeImage = async (slug: string) => {
+    if (!confirm('Supprimer l\'image de fond ?')) return
+    await fetch(`/api/boutique/admin/categories/${slug}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backgroundImage: null }),
+    })
+    toast.success('Image supprimée')
+    fetchCats()
+    if (editForm && editForm.slug === slug) {
+      setEditForm({ ...editForm, backgroundImage: null })
+    }
+  }
+
+  const deleteCat = async (slug: string) => {
+    if (!confirm(`Supprimer la catégorie "${slug}" ?`)) return
+    const res = await fetch(`/api/boutique/admin/categories/${slug}`, { method: 'DELETE' })
+    if (res.ok) {
+      toast.success('Catégorie supprimée')
+      fetchCats()
+    } else {
+      toast.error('Erreur')
+    }
+  }
+
+  const createCat = async () => {
+    if (!newCat.slug || !newCat.label) {
+      toast.error('Slug et libellé requis')
+      return
+    }
+    const res = await fetch('/api/boutique/admin/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug: newCat.slug.toLowerCase().trim(),
+        label: newCat.label,
+        emoji: newCat.emoji || '📦',
+        order: cats.length,
+      }),
+    })
+    if (res.ok) {
+      toast.success('Catégorie ajoutée')
+      setNewCat({ slug: '', label: '', emoji: '📦' })
+      setShowAddForm(false)
+      fetchCats()
+    } else {
+      const data = await res.json()
+      toast.error(data.error || 'Erreur')
+    }
   }
 
   if (loading) return <Skeleton className="h-32" />
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground uppercase">
-            <th className="px-3 py-2 font-medium">Catégorie</th>
-            <th className="px-3 py-2 font-medium">Slug</th>
-            <th className="px-3 py-2 font-medium">Image</th>
-            <th className="px-3 py-2 font-medium text-right">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cats.map(c => (
-            <tr key={c.slug} className="border-b last:border-0 hover:bg-muted/20">
-              <td className="px-3 py-3 font-medium">{c.emoji} {c.label}</td>
-              <td className="px-3 py-3"><code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{c.slug}</code></td>
-              <td className="px-3 py-3">
-                <div className="w-20 h-14 rounded-md overflow-hidden border bg-muted">
-                  {c.backgroundImage ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.backgroundImage} alt={c.label} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="flex items-center justify-center w-full h-full text-2xl opacity-30">{c.emoji}</div>
-                  )}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Personnalisez chaque catégorie : image de fond, couleur de fond, opacité, emoji, ordre.
+        </p>
+        <Button size="sm" onClick={() => setShowAddForm(!showAddForm)}>
+          <Plus className="h-4 w-4 mr-1" /> Nouvelle catégorie
+        </Button>
+      </div>
+
+      {showAddForm && (
+        <Card>
+          <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Slug (URL)</Label>
+              <Input value={newCat.slug} onChange={e => setNewCat({ ...newCat, slug: e.target.value })} placeholder="vetements" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Libellé</Label>
+              <Input value={newCat.label} onChange={e => setNewCat({ ...newCat, label: e.target.value })} placeholder="Vêtements" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Emoji</Label>
+              <Input value={newCat.emoji} onChange={e => setNewCat({ ...newCat, emoji: e.target.value })} placeholder="👕" />
+            </div>
+            <Button onClick={createCat}>Créer</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="space-y-3">
+        {cats.map(c => (
+          <Card key={c.slug}>
+            <CardContent className="pt-4">
+              {editing === c.slug && editForm ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Libellé</Label>
+                      <Input value={editForm.label} onChange={e => setEditForm({ ...editForm, label: e.target.value })} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Emoji</Label>
+                      <Input value={editForm.emoji} onChange={e => setEditForm({ ...editForm, emoji: e.target.value })} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Ordre</Label>
+                      <Input type="number" value={editForm.order} onChange={e => setEditForm({ ...editForm, order: parseInt(e.target.value) || 0 })} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Slug (non modifiable)</Label>
+                      <Input value={editForm.slug} disabled className="font-mono text-xs" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t">
+                    {/* Image de fond */}
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Image de fond</Label>
+                      <div className="flex gap-2 items-start">
+                        <div className="w-24 h-16 rounded-md overflow-hidden border-2 border-dashed bg-muted/40 shrink-0 flex items-center justify-center">
+                          {editForm.backgroundImage ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={editForm.backgroundImage} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-2xl opacity-30">{editForm.emoji}</span>
+                          )}
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          <label className="cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(editForm.slug, f) }}
+                            />
+                            <span className="inline-flex items-center gap-1 px-3 py-1.5 border rounded-md text-xs font-medium hover:bg-muted cursor-pointer">
+                              <Upload className="h-3.5 w-3.5" /> {uploading === editForm.slug ? 'Upload...' : 'Uploader'}
+                            </span>
+                          </label>
+                          {editForm.backgroundImage && (
+                            <Button size="sm" variant="outline" onClick={() => removeImage(editForm.slug)}>
+                              <Trash2 className="h-3.5 w-3.5 mr-1" /> Retirer
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Couleur de fond + Opacité */}
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Couleur de fond (si pas d'image, ou derrière l'image)</Label>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="color"
+                          value={editForm.bgColor ? '#' + editForm.bgColor : '#000000'}
+                          onChange={e => setEditForm({ ...editForm, bgColor: e.target.value.replace('#', '') })}
+                          className="w-10 h-9 rounded border cursor-pointer shrink-0"
+                          title="Couleur de fond"
+                        />
+                        <Input
+                          value={editForm.bgColor ? '#' + editForm.bgColor : ''}
+                          onChange={e => setEditForm({ ...editForm, bgColor: e.target.value.replace('#', '') || null })}
+                          placeholder="Laisser vide = défaut"
+                          className="font-mono text-xs flex-1"
+                        />
+                        {editForm.bgColor && (
+                          <Button size="sm" variant="ghost" onClick={() => setEditForm({ ...editForm, bgColor: null })}>
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">
+                          Opacité de l'image de fond : <span className="font-mono">{Math.round((editForm.bgOpacity ?? 0.5) * 100)}%</span>
+                        </Label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.1"
+                          value={editForm.bgOpacity ?? 0.5}
+                          onChange={e => setEditForm({ ...editForm, bgOpacity: parseFloat(e.target.value) })}
+                          className="w-full"
+                        />
+                        <p className="text-[11px] text-muted-foreground">0% = transparent (couleur de fond visible), 100% = opaque (image visible)</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Aperçu */}
+                  <div className="space-y-1.5 pt-2 border-t">
+                    <Label className="text-xs font-semibold">Aperçu</Label>
+                    <div
+                      className="relative rounded-lg overflow-hidden aspect-[3/1] flex items-end p-3"
+                      style={{
+                        backgroundColor: editForm.bgColor ? '#' + editForm.bgColor : '#007bff',
+                      }}
+                    >
+                      {editForm.backgroundImage && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={editForm.backgroundImage}
+                          alt=""
+                          className="absolute inset-0 w-full h-full object-cover"
+                          style={{ opacity: editForm.bgOpacity ?? 0.5 }}
+                        />
+                      )}
+                      <div className="relative z-10 text-white">
+                        <span className="text-2xl mr-2">{editForm.emoji}</span>
+                        <span className="font-bold text-lg">{editForm.label}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={cancelEdit}>Annuler</Button>
+                    <Button onClick={saveEdit}><Save className="h-4 w-4 mr-1" /> Sauvegarder</Button>
+                  </div>
                 </div>
-              </td>
-              <td className="px-3 py-3 text-right">
-                <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
-                  <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(c.slug, f) }} />
-                  {uploading === c.slug ? 'Upload...' : 'Changer image'}
-                </label>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              ) : (
+                <div className="flex items-center gap-4">
+                  <div
+                    className="w-24 h-16 rounded-md overflow-hidden border shrink-0 flex items-center justify-center"
+                    style={{ backgroundColor: c.bgColor ? '#' + c.bgColor : undefined }}
+                  >
+                    {c.backgroundImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={c.backgroundImage} alt={c.label} className="w-full h-full object-cover" style={{ opacity: c.bgOpacity ?? 0.5 }} />
+                    ) : (
+                      <div className="flex items-center justify-center w-full h-full text-2xl opacity-50">{c.emoji}</div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold">{c.emoji} {c.label}</div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+                      <code className="bg-muted px-1.5 py-0.5 rounded font-mono">{c.slug}</code>
+                      {c.bgColor && (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="inline-block w-3 h-3 rounded border" style={{ backgroundColor: '#' + c.bgColor }} />
+                          #{c.bgColor}
+                        </span>
+                      )}
+                      <span>· opacity {Math.round((c.bgOpacity ?? 0.5) * 100)}%</span>
+                      <span>· ordre {c.order}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => startEdit(c)}>
+                      <Edit className="h-3.5 w-3.5 mr-1" /> Modifier
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => deleteCat(c.slug)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   )
 }

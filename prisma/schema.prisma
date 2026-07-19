@@ -492,6 +492,7 @@ model ShippingMethod {
   label       String              // "Standard (3-5j)"
   price       Float               // 3.50 (prix de base si pas de règle de poids)
   delay       String              // "3 à 5 jours ouvrés"
+  carrierCode String?             // lien vers Attribute(type='carrier').code — ex: "colissimo", "chronopost"
   active      Boolean  @default(true)
   order       Int      @default(0)
   weightRules ShippingWeightRule[]
@@ -499,11 +500,13 @@ model ShippingMethod {
   updatedAt   DateTime @updatedAt
 }
 
-// Catégorie de boutique (image de fond personnalisable)
+// Catégorie de boutique (image de fond personnalisable + couleur/opacité)
 model BoutiqueCategory {
   slug            String   @id  // 'vetements', 'chaussures', etc.
   label           String
   backgroundImage String?  // path /uploads/boutique-categories/...
+  bgColor         String?  // hex sans #, ex: "007bff" (couleur de fond si pas d'image)
+  bgOpacity       Float    @default(0.5)  // 0.0 à 1.0 — opacité de l'image de fond
   emoji           String   @default("📦")
   order           Int      @default(0)
   updatedAt       DateTime @updatedAt
