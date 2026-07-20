@@ -26,6 +26,7 @@ import { ProfitabilityModule } from '@/components/modules/profitability-module'
 import { TaxesModule } from '@/components/modules/taxes-module'
 import { BiModule } from '@/components/modules/bi-module'
 import { VintedModule } from '@/components/modules/vinted-module'
+import { ProductTrendModule } from '@/components/modules/product-trend-module'
 import { PhotoSessionModule } from '@/components/modules/photo-session-module'
 import { BoutiqueAdminModule } from '@/components/modules/boutique-admin-module'
 import { SettingsModule } from '@/components/modules/settings-module'
@@ -53,6 +54,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'taxes', label: 'Fiscalité', short: 'Fiscalité', icon: Receipt, description: 'Suivi & exports', adminOnly: true },
   { key: 'bi', label: 'Intelligence métier', short: 'BI', icon: BarChart3, description: 'Analyses & tendances' },
   { key: 'vinted', label: 'Vinted Deals', short: 'Vinted', icon: Search, description: 'Recherche & deals Vinted' },
+  { key: 'product-trend', label: 'Product Trend', short: 'Trend', icon: Sparkles, description: 'Produits tendance multi-marketplaces' },
   { key: 'photos', label: 'Shooting Photo', short: 'Photos', icon: Camera, description: 'Sessions photos produits' },
   { key: 'boutique-admin', label: 'Boutique Admin', short: 'Boutique', icon: ShoppingBag, description: 'Gestion boutique en ligne', adminOnly: true },
   { key: 'settings', label: 'Paramètres', short: 'Paramètres', icon: Settings, description: 'Catégories, états, tailles, couleurs' },
@@ -409,6 +411,7 @@ export default function Home() {
             {activeModule === 'taxes' && isAdmin && <TaxesModule />}
             {activeModule === 'bi' && <BiModule />}
             {activeModule === 'vinted' && <VintedModule />}
+            {activeModule === 'product-trend' && <ProductTrendModule />}
             {activeModule === 'photos' && <PhotoSessionModule />}
             {activeModule === 'boutique-admin' && isAdmin && <BoutiqueAdminModule />}
             {activeModule === 'settings' && <SettingsModule />}

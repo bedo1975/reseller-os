@@ -927,3 +927,100 @@ Verification:
 - TypeScript: no errors
 - Build: success
 - Zip regenerated: 826 KB, MD5: f3ca159dc5137b2ecbd5076baec30910
+
+---
+Task ID: fix-sitemap-cache-on-modify
+Agent: main
+Task: Sitemap updates on category create but not on category modify
+
+Root cause:
+- Both POST (create) and PATCH (modify) routes had revalidatePath('/sitemap.xml')
+- But Next.js' MetadataRoute.Sitemap (sitemap.ts) doesn't let you set custom HTTP headers
+- The XML response was being cached by the browser or Next.js' route cache
+- When creating a category, the cache was somehow busted (different URL structure?), but when modifying, the cached XML was served
+
+Fix applied:
+- Deleted `src/app/sitemap.ts` (MetadataRoute.Sitemap convention)
+- Created `src/app/sitemap.xml/route.ts` (standard route handler):
+  - `export const dynamic = 'force-dynamic'`
+  - `export const revalidate = 0`
+  - `export const fetchCache = 'force-no-store'`
+  - `export const runtime = 'nodejs'`
+  - Returns XML with explicit no-cache headers:
+    - `Cache-Control: no-cache, no-store, must-revalidate, max-age=0`
+    - `Pragma: no-cache`
+    - `Expires: 0`
+    - `X-Sitemap-Generated: <timestamp>` (for debugging — user can see when it was last generated)
+  - Same content: 8 static pages + categories from DB + published products
+  - XML escaped properly with escapeXml() helper
+
+Verification:
+- TypeScript: no errors
+- Build: success, /sitemap.xml appears as dynamic route (ƒ)
+- Zip regenerated: 827 KB, MD5: e8aa8ebafc22dea6a59dda1a24600d5d
+- Contains src/app/sitemap.xml/route.ts (4161 bytes)
+
+---
+Task ID: fix-categories-vanish + product-trend-module
+Agent: main
+Task: (1) Fix bug where editing a category makes others disappear, (2) Create Product Trend module
+
+## Fix 1: Categories disappear on edit ✅
+
+### Root cause
+`getBoutiqueCategories()` returned hardcoded defaults ONLY when the DB was completely empty. Once the admin edited (and persisted) one category, the DB had 1 row → the function returned only that 1 row → the 4 other defaults "disappeared".
+
+### Fix applied
+`src/lib/boutique-settings.ts`:
+- Refactored to extract `DEFAULT_CATEGORIES` constant
+- `getBoutiqueCategories()` now PERSISTS the 5 defaults on first call (when DB is empty), via `db.boutiqueCategory.createMany()`
+- This means all 5 categories become real DB rows from the start
+- Editing one no longer affects the others (they're independent DB rows)
+- Fallback to transient defaults only if `createMany` fails
+
+## Feature 2: Product Trend Module ✅
+
+### Schema (prisma/schema.prisma)
+Added 2 new models + relation on User:
+- `ProductTrendSearch`: saved search (userId, name, keyword, category, platform, country, period, priceMin, priceMax)
+- `ProductTrendSnapshot`: historical data point for a search (capturedAt, totalResults, avgPrice, minPrice, maxPrice, medianPrice, topScore, topItems JSON)
+- User.trendSearches relation added
+- DB pushed via `bunx prisma db push`
+
+### API routes (5 endpoints)
+1. `POST /api/product-trends/search` — scans Vinted/eBay/Etsy based on filters, returns results + summary stats
+2. `GET /api/product-trends/saved` — list user's saved searches (with latest snapshot)
+3. `POST /api/product-trends/saved` — save a new search (with optional initial snapshot)
+4. `GET/PATCH/DELETE /api/product-trends/saved/[id]` — CRUD on a saved search
+5. `POST /api/product-trends/saved/[id]/snapshots` — capture a new snapshot for a saved search
+6. `POST /api/product-trends/export` — export results as CSV (with BOM for Excel)
+
+The search API generates realistic mock results (in production it would call actual marketplace APIs). Each result has: title, image, price, url, platform, score (40-100), seller, location, postedDaysAgo.
+
+### Frontend module (`src/components/modules/product-trend-module.tsx`)
+2 tabs:
+- **Recherche**: filters (keyword, category, platform, country, period, priceMin/Max) + Run search button → results grid (cards with image, title, price, score, platform badge, link) + summary stats cards (total, avg, median, min, max, trend score)
+- **Recherches sauvegardées**: list of saved searches with last snapshot info + actions (load, capture snapshot, view history, delete) + expandable snapshot history table
+
+Features:
+- Save current search with name + initial snapshot
+- Export CSV (downloads file with BOM for Excel)
+- Capture snapshot on demand (re-runs search + saves snapshot)
+- Snapshot history with sortable table
+- 4 platforms (Vinted, eBay, Etsy, all)
+- 7 countries (FR, BE, ES, IT, DE, UK, US)
+- 4 periods (7d, 30d, 90d, 12m)
+- 5 categories (vetements, chaussures, accessoires, luxe, maison)
+- Price range filter
+
+### Integration
+- Added 'product-trend' to ModuleKey in `src/lib/store.ts`
+- Added import + nav entry + render condition in `src/app/page.tsx`
+- Icon: Sparkles (TrendingUp was already used for Profitability)
+- Position: between "Vinted Deals" and "Shooting Photo"
+
+## Build & zip
+- TypeScript: no errors
+- Build: success, all 5 API routes appear in route manifest
+- Zip: 833 KB, MD5: 2a70079a6a4ec9b34c4c016dc120a1b3
+- Contains: product-trend-module.tsx (27KB), 5 API routes, schema with new models, boutique-settings.ts fix

@@ -34,6 +34,7 @@ model User {
   reminders       Reminder[]
   savedSearches   SavedSearch[]
   photoSessions   PhotoSession[]
+  trendSearches   ProductTrendSearch[]
 }
 
 // ─────────────────────────────────────────────
@@ -636,4 +637,46 @@ model ShippingWeightRule {
   updatedAt       DateTime @updatedAt
 
   @@index([shippingMethodId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PRODUCT TREND — Recherches de produits tendance sur marketplaces
+// ═══════════════════════════════════════════════════════════════════════
+
+// Recherche sauvegardée par l'utilisateur pour suivi régulier
+model ProductTrendSearch {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String               // nom donné par l'utilisateur ("Sneakers Nike femme")
+  keyword     String               // mot-clé recherché
+  category    String?              // vetements | chaussures | accessoires | luxe | maison
+  platform    String   @default("all")  // vinted | ebay | etsy | leboncoin | all
+  country     String   @default("fr")   // code pays (fr, be, es, it, de, uk, us)
+  period      String   @default("30d")  // 7d | 30d | 90d | 12m
+  priceMin    Float?
+  priceMax    Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  snapshots   ProductTrendSnapshot[]
+
+  @@index([userId])
+}
+
+// Snapshot ponctuel des résultats d'une recherche (pour l'historique de tendance)
+model ProductTrendSnapshot {
+  id          String   @id @default(cuid())
+  searchId    String
+  search      ProductTrendSearch @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  capturedAt  DateTime @default(now())
+  totalResults Int                // nombre total d'annonces trouvées
+  avgPrice    Float               // prix moyen (€)
+  minPrice    Float?
+  maxPrice    Float?
+  medianPrice Float?
+  topScore    Int      @default(0) // score de tendance global (0-100)
+  topItems    String              // JSON array des top produits [{title, image, price, url, platform}]
+  createdAt   DateTime @default(now())
+
+  @@index([searchId])
 }

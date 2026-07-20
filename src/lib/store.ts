@@ -13,6 +13,7 @@ export type ModuleKey =
   | 'taxes'
   | 'bi'
   | 'vinted'
+  | 'product-trend'
   | 'photos'
   | 'boutique-admin'
   | 'settings'
