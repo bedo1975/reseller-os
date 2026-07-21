@@ -1069,3 +1069,35 @@ User's server issue:
 Recommended fix for user:
 1. On the server: `cd /www/wwwroot/junashop.fr && rm -rf .next && npm run build && pm2 restart junashop`
 2. Or re-run `./pull.sh` which should handle the build automatically
+
+---
+Task ID: fix-sw-stale-chunks
+Agent: main
+Task: Module Product Trend appears in build but not in user's browser
+
+Diagnosis confirmed:
+- User's server: chunk `app/page-1c9e1e31f3d18ab1.js` contains "Produits tendance multi-marketplaces" (verified via grep)
+- User's API: POST /api/product-trends/saved returns 307 (route exists)
+- Build ID: FPj-v36tGP3OznA4GbyeK (recent, 2026-07-21 07:40:05)
+- PM2: properly configured with `node .next/standalone/server.js`
+- Module IS deployed and built correctly
+
+Root cause:
+- The Service Worker `public/sw.js` (v2) uses CACHE-FIRST strategy for `/_next/static/*` chunks
+- This means the browser serves the OLD page-*.js chunk from cache instead of fetching the new one
+- Even when the user clears cookies/localStorage, the SW cache persists
+- The user's grep showed no `page-` JS files in Network tab — they're being served from SW cache under the same URLs
+
+Fix applied:
+- Bumped CACHE_NAME from 'reseller-os-v2' to 'reseller-os-v3' (forces SW re-registration + cache invalidation)
+- Disabled JS chunk caching entirely — chunks now go network-only (browser HTTP cache + immutable headers handle correctness)
+- Only images/fonts/icons remain cache-first (they don't change between deployments)
+- Pages remain network-first (already correct)
+
+Zip regenerated: 750 KB, MD5: bdf9d3a01c9374a813cf8abe7ee6384d
+
+User action required:
+1. Pull new code (sw.js v3) on local + push to GitHub
+2. Deploy on server: git pull + npm run build + pm2 restart junashop
+3. In browser: DevTools → Application → Service Workers → Unregister + Clear site data
+4. Hard refresh: Ctrl+Shift+R

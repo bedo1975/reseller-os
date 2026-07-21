@@ -133,7 +133,7 @@ echo ""
 # 5. DÉPENDANCES + PRISMA
 # ─────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}📦 5/7 — Installation dépendances + Prisma...${NC}"
-npm install --omit=dev 2>&1 | tail -3
+npm install 2>&1 | tail -3
 npx prisma generate 2>&1 | tail -3
 
 # db push only if schema changed (avoid touching data unnecessarily)
@@ -148,9 +148,14 @@ rm -rf .next
 if npm run build 2>&1 | tail -20; then
   echo -e "  ✓ Build OK"
 else
-  echo -e "${RED}  ❌ Build échoué ! Restauration du précédent .next...${NC}"
-  # Try to restore from git (won't work for .next, but at least show logs)
-  exit 1
+  echo -e "${RED}  ❌ Build échoué ! Tentative avec webpack (bypass Turbopack)...${NC}"
+  rm -rf .next
+  if npx next build --webpack 2>&1 | tail -20; then
+    echo -e "  ✓ Build OK avec webpack"
+  else
+    echo -e "${RED}  ❌ Build définitivement échoué. Restaure le précédent .next manuellement.${NC}"
+    exit 1
+  fi
 fi
 echo ""
 
