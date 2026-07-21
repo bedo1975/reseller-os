@@ -97,14 +97,39 @@ export async function DELETE(
     const user = await requireAuth()
     const { id } = await params
 
-    const existing = await db.stockItem.findUnique({ where: { id } })
+    const existing = await db.stockItem.findUnique({
+      where: { id },
+      include: { sale: true },
+    })
     if (!existing || existing.userId !== user.id) {
       return NextResponse.json({ error: 'Article introuvable' }, { status: 404 })
     }
 
+    // If the item is sold (linked to a Sale), block deletion to preserve accounting integrity.
+    // The user should "annuler la vente" first if they really want to delete the article.
+    if (existing.sale) {
+      return NextResponse.json(
+        {
+          error: `Impossible de supprimer : cet article est lié à une vente (SKU: ${existing.sku}, prix de vente: ${existing.sale.salePrice.toFixed(2)} €, date: ${new Date(existing.sale.saleDate).toLocaleDateString('fr-FR')}). Annulez d'abord la vente dans le module Ventes pour pouvoir supprimer cet article.`,
+          code: 'HAS_SALE',
+          saleId: existing.sale.id,
+        },
+        { status: 409 }
+      )
+    }
+
     const wasVisible = isBoutiqueVisible(existing)
 
-    await db.stockItem.delete({ where: { id } })
+    // Use a transaction to clean up related data before deleting the stock item
+    await db.$transaction(async (tx) => {
+      // Detach PhotoSessions (soft link — just null out the attachedStockId)
+      await tx.photoSession.updateMany({
+        where: { attachedStockId: id },
+        data: { attachedStockId: null, attachedAt: null },
+      })
+      // Now safe to delete the stock item (no more FK references)
+      await tx.stockItem.delete({ where: { id } })
+    })
 
     // Invalidate sitemap if a published item was removed
     if (wasVisible) {
@@ -121,6 +146,16 @@ export async function DELETE(
     console.error('DELETE /api/stock/[id] error:', error)
     if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+    // Foreign key constraint violation (P2003) — fallback message
+    if ((error as any)?.code === 'P2003') {
+      return NextResponse.json(
+        {
+          error: 'Impossible de supprimer : cet article est référencé par d\'autres enregistrements (ventes, etc.). Supprimez d\'abord ces références.',
+          code: 'FOREIGN_KEY_VIOLATION',
+        },
+        { status: 409 }
+      )
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }

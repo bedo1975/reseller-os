@@ -1125,3 +1125,41 @@ Verification:
 - Zip regenerated: 751 KB, MD5: 96d92547899951a9d324b42e1425da5f
 - Verified zip's package.json contains `"build": "next build --webpack"`
 - This means on next `./pull.sh`, the server will use webpack and avoid the Turbopack panic
+
+---
+Task ID: disable-service-worker-completely
+Agent: main
+Task: Module Product Trend loads on /login (webpack chunks) but after login the SW serves stale Turbopack chunks
+
+Root cause:
+- The Service Worker (v2 originally) cached chunks `/_next/static/chunks/*` with cache-first strategy
+- Even though we bumped to v3 (which doesn't cache chunks), the OLD v2 cache persisted
+- When the SW activated v3, it didn't proactively delete the v2 cache
+- So after login, the SW intercepted requests for chunks and served the OLD Turbopack chunks from the v2 cache
+- This is why /login showed webpack chunks (SW not yet active on that navigation) but the logged-in / showed turbopack-* chunks
+
+Fix applied (nuclear option — completely disable SW):
+1. `public/sw.js` (v4):
+   - On install: deletes ALL caches + unregisters self immediately
+   - On activate: same + navigates clients to refresh
+   - On fetch: pure pass-through (never intercepts, never caches)
+   - This makes the SW a "self-cleaning" SW that removes itself on first load
+
+2. `src/components/shared/sw-register.tsx`:
+   - No longer REGISTERS a new SW
+   - Instead, on mount, it UNREGISTERS any existing SW and clears all caches
+   - This ensures every visitor (even those with v1/v2/v3 SW cached) gets cleaned up
+
+Rationale:
+- The SW was causing more problems than it solved (stale chunks after every deploy)
+- Next.js already handles chunk caching correctly via:
+  - Content-hashed filenames (immutable)
+  - HTTP Cache-Control headers
+  - The browser HTTP cache is sufficient
+
+Verification:
+- TypeScript: no errors
+- Build: success
+- Zip: 752 KB, MD5: 4b92f11f8bbe5d8032a040602dcbb048
+- After deploy + clear browser cache, the SW will be completely gone and never re-registered
+- All chunks will be fetched fresh from the server (webpack, not Turbopack)

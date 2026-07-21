@@ -183,20 +183,37 @@ export function StockModule() {
         toast.success('Article supprimé')
         refresh()
       } else {
-        toast.error('Erreur lors de la suppression')
+        const data = await res.json().catch(() => ({}))
+        // Show the detailed error message from the API (e.g., "lié à une vente...")
+        toast.error(data.error || 'Erreur lors de la suppression', {
+          duration: 8000, // longer duration so user can read it
+        })
       }
     } else if (deleteTarget.type === 'bulk') {
       // Suppression multiple
       const ids = Array.from(selectedIds)
       let okCount = 0
       let errCount = 0
+      let firstErrorMessage = ''
       for (const id of ids) {
         const res = await fetch(`/api/stock/${id}`, { method: 'DELETE' })
-        if (res.ok) okCount++
-        else errCount++
+        if (res.ok) {
+          okCount++
+        } else {
+          errCount++
+          if (!firstErrorMessage) {
+            const data = await res.json().catch(() => ({}))
+            firstErrorMessage = data.error || ''
+          }
+        }
       }
       if (okCount > 0) toast.success(`${okCount} article${okCount > 1 ? 's' : ''} supprimé${okCount > 1 ? 's' : ''}`)
-      if (errCount > 0) toast.error(`${errCount} suppression(s) en échec`)
+      if (errCount > 0) {
+        const msg = firstErrorMessage
+          ? `${errCount} suppression(s) en échec. Raison : ${firstErrorMessage}`
+          : `${errCount} suppression(s) en échec`
+        toast.error(msg, { duration: 8000 })
+      }
       setSelectedIds(new Set())
       refresh()
     }
