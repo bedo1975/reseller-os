@@ -1101,3 +1101,27 @@ User action required:
 2. Deploy on server: git pull + npm run build + pm2 restart junashop
 3. In browser: DevTools → Application → Service Workers → Unregister + Clear site data
 4. Hard refresh: Ctrl+Shift+R
+
+---
+Task ID: fix-turbopack-build-failure
+Agent: main
+Task: User's server `npm run build` fails with Turbopack "Dependency tracking is disabled" panic
+
+Root cause:
+- Next.js 16.1.3 has a known Turbopack bug on Linux servers — `thread 'tokio-runtime-worker' panicked at /build/turbopack/crates/turbo-tasks-backend/src/backend/mod.rs:1526:13: Dependency tracking is disabled so invalidation is not allowed`
+- Turbopack is the default bundler in Next.js 16
+- Workaround: use webpack instead with `next build --webpack`
+
+Fixes applied:
+1. `package.json`:
+   - Changed `"build": "next build"` → `"build": "next build --webpack"` (uses webpack by default — avoids Turbopack crash)
+   - Added `"build:turbo": "next build"` script (if user wants to try Turbopack in the future)
+
+2. `scripts/pull.sh`:
+   - Changed `npm install --omit=dev` → `npm install` (devDependencies sometimes needed for build)
+   - Added fallback: if `npm run build` fails, automatically retries with `npx next build --webpack` (defense in depth — even if package.json change isn't deployed yet, the script will bypass Turbopack)
+
+Verification:
+- Zip regenerated: 751 KB, MD5: 96d92547899951a9d324b42e1425da5f
+- Verified zip's package.json contains `"build": "next build --webpack"`
+- This means on next `./pull.sh`, the server will use webpack and avoid the Turbopack panic

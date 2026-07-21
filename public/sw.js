@@ -1,55 +1,45 @@
 // Service Worker — Reseller OS PWA
-// v3: disabled JS chunk caching to prevent stale UI after deployments
-const CACHE_NAME = 'reseller-os-v3';
-const OFFLINE_URL = '/';
+// v4: SELF-UNREGISTER on install — completely removes the SW and all caches
+// This forces browsers to fetch fresh chunks from the server (no stale Turbopack chunks)
+
+const CACHE_NAME = 'reseller-os-v4';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.add(OFFLINE_URL))
-  );
+  // Unregister self immediately
   self.skipWaiting();
+  event.waitUntil(
+    (async () => {
+      // Delete ALL caches
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+      // Unregister self
+      await self.registration.unregister();
+    })()
+  );
 });
 
 self.addEventListener('activate', (event) => {
+  // Claim all clients so they pick up the unregistration
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+      await self.registration.unregister();
+      const clients = await self.clients.matchAll({ type: 'window' });
+      clients.forEach(c => c.navigate(c.url));
+    })()
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  // Pass-through — never intercept, never cache
+  // All requests go directly to the network
+  return;
+});
 
-  const url = new URL(event.request.url);
-
-  // Skip API calls and uploads — always fetch from network
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/')) {
-    return;
+self.addEventListener('message', (event) => {
+  // Respond to any SW messages with unregistration
+  if (event.data && event.data.type === 'UNREGISTER') {
+    self.registration.unregister();
   }
-
-  // NEVER cache Next.js JS chunks — they have content hashes in filename,
-  // so caching them only causes stale UI issues after deployments.
-  // The browser's HTTP cache + immutable headers from Next.js handle this correctly.
-  if (url.pathname.startsWith('/_next/static/chunks/')) {
-    // Network-only — no cache
-    return;
-  }
-
-  // Cache-first for static non-JS assets (images, fonts, icons)
-  if (url.pathname.match(/\.(png|jpg|jpeg|svg|ico|woff2?|ttf|eot)$/)) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => cached || fetch(event.request).then((res) => {
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, res.clone()));
-        return res;
-      }))
-    );
-    return;
-  }
-
-  // Network-first for pages
-  event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request).then((cached) => cached || caches.match(OFFLINE_URL)))
-  );
 });
