@@ -1044,3 +1044,28 @@ Fix applied in `src/components/modules/product-trend-module.tsx`:
 
 Build: ✅ success, no TypeScript errors
 Zip: 843 KB, MD5: f02383fef2dc2a0a72183fd32e6503d8
+
+---
+Task ID: fix-product-trend-not-deployed
+Agent: main
+Task: User reports Product Trend module appears in local but NOT on production server after deployment
+
+Diagnosis:
+- Verified source code is correct (page.tsx import, nav entry, render condition all present)
+- Verified lib/store.ts has 'product-trend' in ModuleKey
+- Initial build was STALE — product-trend chunks were missing from .next/standalone/
+- Ran `rm -rf .next && bunx next build` — fresh build now contains:
+  - .next/standalone/.next/server/chunks/*product-trends* (5 chunks)
+  - .next/standalone/.next/server/app/api/product-trends/ (route handlers)
+  - .next/standalone/src/components/modules/product-trend-module.tsx
+- Tested on running server: POST /api/product-trends/search returns 307 (redirect to login — route exists!)
+- Zip regenerated: 750 KB, MD5: 09872c425fd9649a6200a99e2fccc0ba
+
+User's server issue:
+- They likely did `git pull` + `npm install` but FORGOT to rebuild (`npm run build`) before restarting PM2
+- Or the `pull.sh` script's build step was skipped/failed silently
+- The server is running an OLD build that doesn't include product-trend
+
+Recommended fix for user:
+1. On the server: `cd /www/wwwroot/junashop.fr && rm -rf .next && npm run build && pm2 restart junashop`
+2. Or re-run `./pull.sh` which should handle the build automatically
