@@ -1024,3 +1024,23 @@ Features:
 - Build: success, all 5 API routes appear in route manifest
 - Zip: 833 KB, MD5: 2a70079a6a4ec9b34c4c016dc120a1b3
 - Contains: product-trend-module.tsx (27KB), 5 API routes, schema with new models, boutique-settings.ts fix
+
+---
+Task ID: fix-select-empty-value-error
+Agent: main
+Task: Fix "A <Select.Item /> must have a value prop that is not an empty string" error in Product Trend module
+
+Root cause:
+- The Radix UI Select component (used by shadcn/ui Select) does NOT allow empty string ("") as a value for SelectItem
+- This is because Radix uses "" internally to represent "no selection" / cleared state (to show the placeholder)
+- In the ProductTrendModule, the CATEGORIES array had `{ value: '', label: 'Toutes catégories' }` which caused the error
+
+Fix applied in `src/components/modules/product-trend-module.tsx`:
+1. Changed CATEGORIES default value from `''` to `'all'`
+2. Changed initial `form.category` state from `''` to `'all'`
+3. Updated `runSearch()` to convert `'all'` to `null` before sending to API (`category: form.category === 'all' ? null : form.category`)
+4. Updated `saveCurrentSearch()` same conversion
+5. Updated `loadSavedSearch()` to default to `'all'` if `s.category` is null (`s.category || 'all'`)
+
+Build: ✅ success, no TypeScript errors
+Zip: 843 KB, MD5: f02383fef2dc2a0a72183fd32e6503d8
