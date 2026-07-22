@@ -27,6 +27,7 @@ interface CategoryCard {
   bgColor: string | null
   bgOpacity: number
   order: number
+  count?: number
 }
 
 // Fallback if API fails
@@ -171,7 +172,13 @@ export default function BoutiqueHomePage() {
                 {/* Gradient overlay for better text readability */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                 <div className="absolute top-4 right-4 text-4xl opacity-80 group-hover:scale-110 transition-transform">
-                  {c.emoji}
+                  {c.emoji && c.emoji !== '📦' ? (
+                    c.emoji
+                  ) : (
+                    <span className="text-2xl font-bold tabular-nums bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
+                      {c.count ?? 0}
+                    </span>
+                  )}
                 </div>
                 <div className="relative z-10">
                   <p className="text-white font-bold text-lg leading-tight drop-shadow">{c.label}</p>

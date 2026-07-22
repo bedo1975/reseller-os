@@ -107,7 +107,7 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            {categoryEmoji && <span className="mr-2">{categoryEmoji}</span>}
+            {categoryEmoji && categoryEmoji !== '📦' && <span className="mr-2">{categoryEmoji}</span>}
             {categoryLabel}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
