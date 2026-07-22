@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
@@ -1951,6 +1951,9 @@ function CategoriesTab() {
   const [editForm, setEditForm] = useState<CategoryData | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [newCat, setNewCat] = useState({ slug: '', label: '', emoji: '📦', parentId: '' })
+  const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 10 // top-level categories per page
 
   const fetchCats = () => {
     fetch('/api/boutique/admin/categories')
@@ -2086,6 +2089,54 @@ function CategoriesTab() {
     }
   }
 
+  // Build a tree-sorted list: each parent immediately followed by its children
+  // MUST be called before any conditional return (Rules of Hooks)
+  const sortedCats = useMemo(() => {
+    const tops = cats.filter(c => !c.parentId).sort((a, b) => a.order - b.order)
+    const result: CategoryData[] = []
+    for (const t of tops) {
+      result.push(t)
+      const subs = cats.filter(c => c.parentId === t.slug).sort((a, b) => a.order - b.order)
+      result.push(...subs)
+    }
+    // Include orphans (parentId set but parent was deleted)
+    const knownSlugs = new Set(result.map(c => c.slug))
+    const orphans = cats.filter(c => !knownSlugs.has(c.slug))
+    result.push(...orphans)
+    return result
+  }, [cats])
+
+  // Pagination: count top-level categories (parents), paginate on them
+  const topCatsCount = useMemo(() => cats.filter(c => !c.parentId).length, [cats])
+  const totalPages = Math.max(1, Math.ceil(topCatsCount / pageSize))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const paginatedTopSlugs = useMemo(() => {
+    const tops = cats.filter(c => !c.parentId).sort((a, b) => a.order - b.order)
+    const start = (safeCurrentPage - 1) * pageSize
+    return tops.slice(start, start + pageSize).map(c => c.slug)
+  }, [cats, safeCurrentPage])
+
+  // Filter sortedCats to only show items for the current page
+  const visibleCats = useMemo(() => {
+    return sortedCats.filter(c => {
+      // Top-level: must be in the current page's parent slugs
+      if (!c.parentId) return paginatedTopSlugs.includes(c.slug)
+      // Subcategory: show only if its parent is on the current page AND not collapsed
+      if (!paginatedTopSlugs.includes(c.parentId)) return false
+      if (collapsedParents.has(c.parentId)) return false
+      return true
+    })
+  }, [sortedCats, paginatedTopSlugs, collapsedParents])
+
+  const toggleCollapse = (slug: string) => {
+    setCollapsedParents(prev => {
+      const next = new Set(prev)
+      if (next.has(slug)) next.delete(slug)
+      else next.add(slug)
+      return next
+    })
+  }
+
   if (loading) return <Skeleton className="h-32" />
 
   return (
@@ -2133,8 +2184,12 @@ function CategoriesTab() {
       )}
 
       <div className="space-y-3">
-        {cats.map(c => (
-          <Card key={c.slug}>
+        {visibleCats.map(c => {
+          const isChild = !!c.parentId
+          const isParent = !c.parentId && cats.some(cc => cc.parentId === c.slug)
+          const isCollapsed = isParent && collapsedParents.has(c.slug)
+          return (
+          <Card key={c.slug} className={isChild ? 'ml-8 border-l-4 border-l-blue-300' : ''}>
             <CardContent className="pt-4">
               {editing === c.slug && editForm ? (
                 <div className="space-y-3">
@@ -2277,6 +2332,17 @@ function CategoriesTab() {
                 </div>
               ) : (
                 <div className="flex items-center gap-4">
+                  {/* Collapse toggle for parents */}
+                  {isParent && (
+                    <button
+                      onClick={() => toggleCollapse(c.slug)}
+                      className="shrink-0 p-1 rounded hover:bg-muted text-muted-foreground"
+                      title={isCollapsed ? "Déplier les sous-catégories" : "Replier les sous-catégories"}
+                    >
+                      <ChevronRight className={`h-4 w-4 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+                    </button>
+                  )}
+                  {!isParent && <div className="w-6 shrink-0" />}
                   <div
                     className="w-24 h-16 rounded-md overflow-hidden border shrink-0 flex items-center justify-center"
                     style={{ backgroundColor: c.bgColor ? '#' + c.bgColor : undefined }}
@@ -2289,7 +2355,19 @@ function CategoriesTab() {
                     )}
                   </div>
                   <div className="flex-1">
-                    <div className="font-semibold">{c.emoji} {c.label}</div>
+                    <div className="font-semibold flex items-center gap-2">
+                      {c.emoji} {c.label}
+                      {c.parentId && (
+                        <Badge variant="outline" className="text-[10px] py-0 h-5">
+                          ↳ {cats.find(p => p.slug === c.parentId)?.label || c.parentId}
+                        </Badge>
+                      )}
+                      {isParent && (
+                        <Badge variant="secondary" className="text-[10px] py-0 h-5">
+                          {cats.filter(cc => cc.parentId === c.slug).length} sous-cat(s)
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                       <code className="bg-muted px-1.5 py-0.5 rounded font-mono">{c.slug}</code>
                       {c.bgColor && (
@@ -2314,8 +2392,57 @@ function CategoriesTab() {
               )}
             </CardContent>
           </Card>
-        ))}
+          )
+        })}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4 border-t">
+          <p className="text-xs text-muted-foreground">
+            Page {safeCurrentPage} sur {totalPages} · {topCatsCount} catégorie(s) principale(s)
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={safeCurrentPage <= 1}
+            >
+              ← Précédent
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage >= totalPages}
+            >
+              Suivant →
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Expand/collapse all */}
+      {topCatsCount > 3 && (
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              const allParents = cats.filter(c => !c.parentId).map(c => c.slug)
+              const allCollapsed = allParents.every(s => collapsedParents.has(s))
+              if (allCollapsed) {
+                setCollapsedParents(new Set())
+              } else {
+                setCollapsedParents(new Set(allParents))
+              }
+            }}
+          >
+            {cats.filter(c => !c.parentId).map(c => c.slug).every(s => collapsedParents.has(s)) ? 'Tout déplier' : 'Tout replier'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

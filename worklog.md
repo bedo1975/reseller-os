@@ -1198,3 +1198,122 @@ Verification:
 - TypeScript: only pre-existing errors (not related to this fix)
 - Build: success (next.config.ts has ignoreBuildErrors: true)
 - Zip: 838 KB, MD5: 9b97e4add4b30f09a7a606b9dbf00cb0
+
+---
+Task ID: unify-category-system + google-analytics
+Agent: main
+Task: (1) Fix products not appearing in "Explorer par catégorie", (2) Unify category system (BoutiqueCategory as single source of truth with parentId for subcategories), (3) Add Google Analytics Tag in settings
+
+## Root cause of bug #1
+Two disconnected category systems:
+- `BoutiqueCategory` (slug, label, emoji, bgColor...) — used by storefront cards + filter
+- `Attribute(type='category')` (code, value) — used by Stock module dropdown
+- `StockItem.category` stores the `Attribute.code`, but the storefront filters by `BoutiqueCategory.slug`
+- If they didn't match (e.g., admin added a category in Boutique Admin but not in Attributes), products wouldn't appear
+
+## Fix: Unified category system
+
+### Schema changes (prisma/schema.prisma)
+- Added `parentId String?` to `BoutiqueCategory` (self-relation "CategoryTree" for subcategories)
+- Added `gaTagId String?` to `BoutiqueSettings` (Google Analytics 4 ID)
+- Ran `bunx prisma db push` — both columns added
+
+### Backend (src/lib/boutique-settings.ts)
+- `DEFAULT_CATEGORIES` now includes `parentId: null` for all 5 defaults
+- `getBoutiqueCategories()` returns ALL categories (top-level + subcategories)
+- New `getBoutiqueTopCategories()` — returns only top-level (parentId is null)
+- New `getBoutiqueSubcategories(parentSlug)` — returns children of a parent
+- New `getBoutiqueCategoryLabelMap()` — returns { slug → label } map
+
+### API changes
+- `POST /api/boutique/admin/categories` — accepts `parentId`
+- `PATCH /api/boutique/admin/categories/[slug]` — accepts `parentId`
+- `GET /api/boutique/categories` — returns full tree with product counts (no more hardcoded labels)
+- `GET /api/boutique/nav` — returns tree from BoutiqueCategory (no more Attribute join)
+- `GET /api/boutique/products` — supports `?subcat=` query param for server-side subcategory filtering
+
+### Frontend: new hook `src/hooks/use-boutique-categories.ts`
+- `useBoutiqueCategories()` — fetches the full tree from `/api/boutique/admin/categories`
+- Returns `{ categories (top-level with children), allFlat, getSubcategories(slug), getLabel(slug) }`
+
+### Stock module (src/components/modules/stock-module.tsx)
+- StockForm now uses `useBoutiqueCategories()` instead of `useSettings().getByType('category')`
+- Category dropdown renders `boutiqueCats` (slug → value, emoji + label)
+- Subcategory dropdown renders `getBoutiqueSubcategories(form.category)` (slug → label)
+- Default category = `boutiqueCats[0]?.slug || 'vetements'`
+- `StockItem.category` now stores `BoutiqueCategory.slug` (same values as before: vetements, chaussures, etc.)
+
+### Storefront
+- Homepage (`boutique/page.tsx`): fetches categories from `/api/boutique/categories` (public endpoint) instead of admin endpoint
+- Category page (`boutique/categorie/[cat]/page.tsx`):
+  - Fetches label + emoji + subcategories from `/api/boutique/categories` (DB-driven, no more hardcoded CATEGORY_LABELS)
+  - Added visible subcategory filter in sidebar (was dead code before — state existed but no UI)
+  - Displays emoji next to category title
+
+### Admin UI (Boutique Admin → Catégories)
+- `CategoryData` interface: added `parentId: string | null`
+- New category form: added "Catégorie parente" dropdown (populated from top-level cats)
+  - If parent selected → creates a subcategory
+  - If empty → creates a top-level category
+- Edit form: added "Catégorie parente" dropdown (can change parent or set to null)
+- `createCat()`: sends `parentId` in POST body, shows "Sous-catégorie ajoutée" or "Catégorie ajoutée"
+- `saveEdit()`: sends `parentId` in PATCH body
+
+### Settings → Attributs cleanup
+- Removed "Catégories" and "Sous-catégories" tabs from TABS array (now managed in Boutique Admin)
+- Default active tab changed from 'category' to 'condition'
+- Comment added: "Catégories et Sous-catégories sont maintenant gérées dans Boutique Admin → Catégories"
+
+## Google Analytics
+
+### Schema
+- `BoutiqueSettings.gaTagId String?` — stores GA4 ID (e.g., "G-XXXXXXXXXX")
+
+### API
+- `PUT /api/boutique/admin/settings` — accepts and persists `gaTagId`
+
+### Hook
+- `useBoutiqueSettings` — added `gaTagId: string | null` to interface + DEFAULTS
+
+### Admin UI
+- New card in Apparence → Horaires/CGV → "Google Analytics"
+- Input for GA4 ID (placeholder: G-XXXXXXXXXX)
+- Help text with link to analytics.google.com
+- Uses `BarChart3` icon (imported from lucide-react)
+
+### Storefront injection
+- New component `src/components/boutique/google-analytics.tsx`
+  - Uses `next/script` with `strategy="afterInteractive"`
+  - Renders nothing if `gaTagId` is empty
+  - Injects gtag.js + config script
+- Added `<GoogleAnalytics />` to `src/app/boutique/layout.tsx` (after the root div)
+
+## Build & zip
+- TypeScript: only pre-existing errors (not related to this change)
+- Build: success
+- Zip: 852 KB, MD5: 3a91ea68ccd097e29f30ffcb2b3c6082
+- Contains: use-boutique-categories.ts, google-analytics.tsx, schema with parentId + gaTagId, all updated API routes
+
+---
+Task ID: category-tree-display
+Agent: main
+Task: Display subcategories nested under their parent category in Boutique Admin → Catégories
+
+Changes in `src/components/modules/boutique-admin-module.tsx`:
+1. Added `useMemo` to imports
+2. Added `sortedCats` memo that builds a tree-sorted list:
+   - Top-level categories first (sorted by order)
+   - Each parent immediately followed by its children (sorted by order)
+   - Orphans (parent deleted) appended at the end
+3. Changed `cats.map(c => ...)` to `sortedCats.map(c => { ... })` with a `return` statement
+4. Subcategory cards now have visual indentation:
+   - `ml-8 border-l-4 border-l-blue-300` (left margin + blue left border)
+5. Subcategory display shows a badge "↳ ParentLabel" next to the category name
+
+Result: when you create a subcategory (e.g., "T-shirts" under "Vêtements"), it appears:
+- Immediately below "Vêtements" (not at the bottom of the list)
+- Indented with a blue left border
+- With a "↳ Vêtements" badge showing the parent
+
+Build: ✅ success, no TypeScript errors
+Zip: 862 KB, MD5: a99632f0a6b1e854f93c72c634a8f9e3
