@@ -165,7 +165,7 @@ export default function BoutiqueHomePage() {
                     src={c.backgroundImage}
                     alt=""
                     className="absolute inset-0 w-full h-full object-cover"
-                    style={{ opacity: c.bgOpacity }}
+                    style={{ opacity: c.bgOpacity ?? 0.5 }}
                   />
                 )}
                 {/* Gradient overlay for better text readability */}

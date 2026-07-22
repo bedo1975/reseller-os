@@ -173,6 +173,22 @@ else
 fi
 echo ""
 
+# ─────────────────────────────────────────────────────────────────────
+# 7b. PURGE NGINX CACHE (auto-purge after deploy)
+# ─────────────────────────────────────────────────────────────────────
+echo -e "${YELLOW}🧹 7b/7 — Purge du cache nginx...${NC}"
+# Méthode 1 : purge via endpoint /purge (si configuré dans nginx)
+curl -s -o /dev/null -w "" -X PURGE "http://localhost/purge/" 2>/dev/null || true
+# Méthode 2 : purge via curl sur /purge/* (variante)
+curl -s -o /dev/null -w "" "http://localhost/purge/*" 2>/dev/null || true
+# Méthode 3 : suppression directe du dossier cache (le plus fiable)
+if [ -d "/var/cache/nginx" ]; then
+  rm -rf /var/cache/nginx/* 2>/dev/null && echo -e "  ✓ Cache nginx vidé (/var/cache/nginx)" || echo -e "  ℹ️  Impossible de vider /var/cache/nginx (permissions?)"
+fi
+# Recharge nginx pour qu'il recrée les fichiers de cache
+nginx -s reload 2>/dev/null && echo -e "  ✓ nginx rechargé" || true
+echo ""
+
 # Restore stash if any
 if [ "$STASHED" = true ]; then
   echo -e "${YELLOW}♻️  Restauration du stash...${NC}"

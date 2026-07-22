@@ -1317,3 +1317,44 @@ Result: when you create a subcategory (e.g., "T-shirts" under "Vêtements"), it 
 
 Build: ✅ success, no TypeScript errors
 Zip: 862 KB, MD5: a99632f0a6b1e854f93c72c634a8f9e3
+
+---
+Task ID: category-collapse-and-pagination
+Agent: main
+Task: Add collapse (expand/replier) for subcategories + pagination in CategoriesTab
+
+Changes in `src/components/modules/boutique-admin-module.tsx` CategoriesTab:
+
+1. New state:
+   - `collapsedParents: Set<string>` — set of parent slugs that are collapsed
+   - `currentPage: number` — current page (1-indexed)
+   - `pageSize = 10` — top-level categories per page
+
+2. New memos:
+   - `topCatsCount` — count of top-level categories
+   - `totalPages` — Math.ceil(topCatsCount / pageSize)
+   - `safeCurrentPage` — clamped to [1, totalPages]
+   - `paginatedTopSlugs` — array of parent slugs for the current page
+   - `visibleCats` — filtered version of sortedCats that only shows:
+     - Top-level cats in the current page
+     - Subcategories whose parent is on the current page AND not collapsed
+
+3. New function:
+   - `toggleCollapse(slug)` — adds/removes slug from collapsedParents set
+
+4. Render changes:
+   - Changed `sortedCats.map` to `visibleCats.map`
+   - Added `isParent` (has children) and `isCollapsed` variables
+   - For parent cards: added a chevron button (▶/▼) to toggle collapse
+   - For child cards: added a spacer div to align with parents
+   - Parent cards now show a badge "X sous-cat(s)" with the count of children
+   - Added pagination footer (only if totalPages > 1):
+     - "Page X sur Y · Z catégorie(s) principale(s)"
+     - Previous / Next buttons (disabled at bounds)
+   - Added "Tout déplier / Tout replier" button (only if more than 3 top-level categories)
+
+5. TypeScript fix:
+   - `cats.filter(c => !c.parentId).every(...)` → `cats.filter(c => !c.parentId).map(c => c.slug).every(...)`
+
+Build: ✅ success, no errors
+Zip: 864 KB, MD5: 4181206e9089fcc69a999a756fc094bf

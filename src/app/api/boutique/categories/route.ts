@@ -28,6 +28,9 @@ export async function GET() {
       slug: c.slug,
       label: c.label,
       emoji: c.emoji,
+      backgroundImage: c.backgroundImage,
+      bgColor: c.bgColor,
+      bgOpacity: c.bgOpacity,
       count: counts[c.slug] || 0,
       subcategories: allCats
         .filter(s => s.parentId === c.slug)
