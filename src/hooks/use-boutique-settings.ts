@@ -56,6 +56,7 @@ export interface BoutiqueSettings {
   trustPageShippingContent: string | null
   trustPageReturnsTitle: string
   trustPageReturnsContent: string | null
+  gaTagId: string | null
 }
 
 const DEFAULTS: BoutiqueSettings = {
@@ -104,6 +105,7 @@ const DEFAULTS: BoutiqueSettings = {
   trustPageShippingContent: null,
   trustPageReturnsTitle: 'Retours 14 jours',
   trustPageReturnsContent: null,
+  gaTagId: null,
 }
 
 let cache: BoutiqueSettings | null = null

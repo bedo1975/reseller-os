@@ -1,35 +1,20 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { getBoutiqueCategories } from '@/lib/boutique-settings'
 
-/**
- * GET /api/boutique/nav
- * Public — returns categories + subcategories for the storefront navigation.
- */
+// GET — public (returns nav tree for the storefront header)
 export async function GET() {
   try {
-    const categories = await getBoutiqueCategories()
+    const allCats = await getBoutiqueCategories()
+    const topCats = allCats.filter(c => !c.parentId)
 
-    // Fetch subcategories from attributes
-    const subcats = await db.attribute.findMany({
-      where: { type: 'subcategory' },
-      orderBy: { sortOrder: 'asc' },
-    })
-
-    // Group subcategories by parentCode
-    const subcatMap: Record<string, { code: string; value: string }[]> = {}
-    subcats.forEach(s => {
-      if (s.parentCode) {
-        if (!subcatMap[s.parentCode]) subcatMap[s.parentCode] = []
-        subcatMap[s.parentCode].push({ code: s.code, value: s.value })
-      }
-    })
-
-    const nav = categories.map(c => ({
+    // Build nav: top-level categories with their subcategories
+    const nav = topCats.map(c => ({
       slug: c.slug,
       label: c.label,
       emoji: c.emoji,
-      subcategories: subcatMap[c.slug] || [],
+      subcategories: allCats
+        .filter(s => s.parentId === c.slug)
+        .map(s => ({ slug: s.slug, label: s.label })),
     }))
 
     return NextResponse.json({ nav })

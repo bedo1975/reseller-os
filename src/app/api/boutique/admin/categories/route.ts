@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
       backgroundImage: backgroundImage || null,
       bgColor: normalizedBgColor,
       order: parseInt(order) || 0,
+      parentId: body.parentId || null,
     }
     if (normalizedOpacity !== undefined) {
       data.bgOpacity = normalizedOpacity

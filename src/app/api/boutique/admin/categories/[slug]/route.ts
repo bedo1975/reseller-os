@@ -18,6 +18,7 @@ export async function PATCH(
     if (typeof body.emoji === 'string') data.emoji = body.emoji.trim() || '📦'
     if (body.backgroundImage !== undefined) data.backgroundImage = body.backgroundImage || null
     if (typeof body.order === 'number' || typeof body.order === 'string') data.order = parseInt(body.order) || 0
+    if (body.parentId !== undefined) data.parentId = body.parentId || null
 
     // bgColor (hex 6 chars without #)
     if (body.bgColor !== undefined) {

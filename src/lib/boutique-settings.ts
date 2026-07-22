@@ -23,44 +23,70 @@ export async function getActiveShippingMethods() {
 }
 
 /**
- * Default categories — used to seed the DB on first access, and as a fallback
- * if the DB is empty. Persisting them ensures that editing one category
- * doesn't make the others disappear.
+ * Default categories — used to seed the DB on first access.
+ * Top-level categories only (parentId = null).
  */
 const DEFAULT_CATEGORIES = [
-  { slug: 'vetements', label: 'Vêtements', emoji: '👕', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 0 },
-  { slug: 'chaussures', label: 'Chaussures', emoji: '👟', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 1 },
-  { slug: 'accessoires', label: 'Accessoires', emoji: '👜', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 2 },
-  { slug: 'luxe', label: 'Luxe', emoji: '💎', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 3 },
-  { slug: 'maison', label: 'Maison', emoji: '🏠', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 4 },
+  { slug: 'vetements', label: 'Vêtements', emoji: '👕', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 0, parentId: null },
+  { slug: 'chaussures', label: 'Chaussures', emoji: '👟', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 1, parentId: null },
+  { slug: 'accessoires', label: 'Accessoires', emoji: '👜', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 2, parentId: null },
+  { slug: 'luxe', label: 'Luxe', emoji: '💎', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 3, parentId: null },
+  { slug: 'maison', label: 'Maison', emoji: '🏠', backgroundImage: null, bgColor: null, bgOpacity: 0.5, order: 4, parentId: null },
 ]
 
 /**
- * Returns boutique categories, ordered.
- * Auto-seeds the DB with defaults on first access so editing one category
- * doesn't make the others disappear.
+ * Returns ALL boutique categories (top-level + subcategories), ordered.
+ * Auto-seeds the DB with defaults on first access.
  */
 export async function getBoutiqueCategories() {
   let cats = await db.boutiqueCategory.findMany({
-    orderBy: { order: 'asc' },
+    orderBy: [{ parentId: 'asc' }, { order: 'asc' }],
   })
 
   if (cats.length === 0) {
-    // Persist the defaults — this ensures that when the admin edits one category,
-    // the others remain visible (they're now real DB rows, not transient fallbacks).
     try {
       await db.boutiqueCategory.createMany({
-        data: DEFAULT_CATEGORIES.map(({ slug, label, emoji, backgroundImage, bgColor, bgOpacity, order }) => ({
-          slug, label, emoji, backgroundImage, bgColor, bgOpacity, order,
+        data: DEFAULT_CATEGORIES.map(({ slug, label, emoji, backgroundImage, bgColor, bgOpacity, order, parentId }) => ({
+          slug, label, emoji, backgroundImage, bgColor, bgOpacity, order, parentId,
         })),
       })
-      cats = await db.boutiqueCategory.findMany({ orderBy: { order: 'asc' } })
+      cats = await db.boutiqueCategory.findMany({
+        orderBy: [{ parentId: 'asc' }, { order: 'asc' }],
+      })
     } catch (e) {
       console.error('[getBoutiqueCategories] failed to seed defaults:', e)
-      // Fallback to transient defaults if seeding fails
       return DEFAULT_CATEGORIES
     }
   }
 
   return cats
+}
+
+/**
+ * Returns only top-level categories (parentId is null), ordered.
+ */
+export async function getBoutiqueTopCategories() {
+  const cats = await getBoutiqueCategories()
+  return cats.filter(c => !c.parentId)
+}
+
+/**
+ * Returns subcategories for a given parent slug, ordered.
+ */
+export async function getBoutiqueSubcategories(parentSlug: string) {
+  const cats = await getBoutiqueCategories()
+  return cats.filter(c => c.parentId === parentSlug)
+}
+
+/**
+ * Returns a label map { slug → label } for all categories.
+ * Useful for display in tables, order items, etc.
+ */
+export async function getBoutiqueCategoryLabelMap(): Promise<Record<string, string>> {
+  const cats = await getBoutiqueCategories()
+  const map: Record<string, string> = {}
+  for (const c of cats) {
+    map[c.slug] = c.label
+  }
+  return map
 }

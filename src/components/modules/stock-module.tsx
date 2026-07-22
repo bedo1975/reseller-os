@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useFetch } from '@/hooks/use-fetch'
 import { useSettings } from '@/hooks/use-settings'
+import { useBoutiqueCategories } from '@/hooks/use-boutique-categories'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -746,7 +747,8 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [generating, setGenerating] = useState(false)
-  const { getSubcategories, getByType: getByTypeLocal } = useSettings()
+  const { getSubcategories: getBoutiqueSubcategories, categories: boutiqueCats } = useBoutiqueCategories()
+  const { getByType: getByTypeLocal } = useSettings()
   const [analyzing, setAnalyzing] = useState(false)
   const [photos, setPhotos] = useState<string[]>([])
   const [dragActive, setDragActive] = useState(false)
@@ -761,7 +763,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     createdAt: string
   }>>([])
   const [loadingSessions, setLoadingSessions] = useState(false)
-  const defaultCat = categories.find(c => c.isDefault)?.code || categories[0]?.code || 'vetements'
+  const defaultCat = boutiqueCats[0]?.slug || 'vetements'
   const defaultCond = conditions.find(c => c.isDefault)?.code || conditions[0]?.code || 'bon'
   const [form, setForm] = useState({
     sku: '', brand: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond,
@@ -808,7 +810,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     }
   }, [item, open])
 
-  const subcategories = getSubcategories(form.category)
+  const subcategories = getBoutiqueSubcategories(form.category)
 
   // Upload de photos
   const handleFiles = async (fileList: FileList | null) => {
@@ -1128,7 +1130,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 <Select value={form.category} onValueChange={v => setForm({ ...form, category: v, subcategory: '' })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {categories.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+                    {boutiqueCats.map(c => <SelectItem key={c.slug} value={c.slug}>{c.emoji} {c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -1142,7 +1144,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                     <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">—</SelectItem>
-                      {subcategories.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
+                      {subcategories.map(s => <SelectItem key={s.slug} value={s.slug}>{s.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

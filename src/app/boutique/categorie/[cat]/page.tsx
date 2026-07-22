@@ -10,20 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label'
 import { ChevronRight, Package, Filter, X } from 'lucide-react'
 
-const CATEGORY_LABELS: Record<string, string> = {
-  vetements: 'Vêtements',
-  chaussures: 'Chaussures',
-  accessoires: 'Accessoires',
-  luxe: 'Luxe',
-  maison: 'Maison',
-}
-
 const CONDITION_LABELS: Record<string, string> = {
   'neuf': 'Neuf avec étiquette',
   'tres-bon': 'Très bon état',
   'bon': 'Bon état',
   'correct': 'État correct',
 }
+
+interface Subcat { slug: string; label: string }
 
 interface Product {
   sku: string
@@ -44,6 +38,22 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
   const [sizeFilter, setSizeFilter] = useState<string>('all')
   const [conditionFilter, setConditionFilter] = useState<string>('all')
   const [subcatFilter, setSubcatFilter] = useState<string>('all')
+  const [categoryInfo, setCategoryInfo] = useState<{ label: string; emoji: string } | null>(null)
+  const [subcats, setSubcats] = useState<Subcat[]>([])
+
+  // Fetch category tree to get labels + subcategories from DB
+  useEffect(() => {
+    fetch('/api/boutique/categories')
+      .then(r => r.json())
+      .then(data => {
+        const found = (data.categories || []).find((c: any) => c.slug === cat)
+        if (found) {
+          setCategoryInfo({ label: found.label, emoji: found.emoji })
+          setSubcats(found.subcategories || [])
+        }
+      })
+      .catch(() => {})
+  }, [cat])
 
   const { data, loading } = useFetch<{ products: Product[]; count: number }>(
     `/api/boutique/products?category=${cat}&sort=${sort}`
@@ -81,20 +91,24 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
     setSubcatFilter('all')
   }
 
+  const categoryLabel = categoryInfo?.label || cat
+  const categoryEmoji = categoryInfo?.emoji || ''
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1 text-sm text-gray-500 mb-6 flex-wrap">
         <Link href="/boutique" className="hover:text-[#007bff]">Accueil</Link>
         <ChevronRight className="h-3 w-3" />
-        <span className="text-gray-900">{CATEGORY_LABELS[cat] || cat}</span>
+        <span className="text-gray-900">{categoryLabel}</span>
       </nav>
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            {CATEGORY_LABELS[cat] || cat}
+            {categoryEmoji && <span className="mr-2">{categoryEmoji}</span>}
+            {categoryLabel}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {loading ? 'Chargement...' : `${products.length} article(s) disponible(s)`}
@@ -126,6 +140,30 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
                 <button onClick={resetFilters} className="text-xs text-[#007bff] hover:underline">Effacer</button>
               )}
             </div>
+
+            {/* Subcategory filter */}
+            {subcats.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-gray-700 uppercase">Sous-catégorie</Label>
+                <div className="space-y-1">
+                  <button
+                    onClick={() => setSubcatFilter('all')}
+                    className={`block w-full text-left px-2 py-1 rounded text-sm ${subcatFilter === 'all' ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    Toutes
+                  </button>
+                  {subcats.map(s => (
+                    <button
+                      key={s.slug}
+                      onClick={() => setSubcatFilter(s.slug)}
+                      className={`block w-full text-left px-2 py-1 rounded text-sm ${subcatFilter === s.slug ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Size filter */}
             {availableSizes.length > 0 && (

@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const category = searchParams.get('category')
+    const subcat = searchParams.get('subcat') || searchParams.get('subcategory')
     const brand = searchParams.get('brand')
     const search = searchParams.get('search')
     const sort = searchParams.get('sort') || 'newest'
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
       suggestedPrice: { gt: 0 },
     }
     if (category) where.category = category
+    if (subcat) where.subcategory = subcat
     if (brand) where.brand = brand
     if (search) {
       where.OR = [

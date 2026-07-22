@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
-  ChevronRight, Clock, Euro, FileText, Image as ImageIcon, Store, Shield,
+  ChevronRight, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -797,6 +797,7 @@ interface BoutiqueSettingsData {
   trustPageShippingContent: string | null
   trustPageReturnsTitle: string
   trustPageReturnsContent: string | null
+  gaTagId: string | null
 }
 
 function AppearanceTab() {
@@ -1494,6 +1495,33 @@ function AppearanceTab() {
       </Card>
       )}
 
+      {/* Google Analytics */}
+      {subTab === 'misc' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Google Analytics</CardTitle>
+          <CardDescription className="text-xs">
+            ID de mesure Google Analytics 4 (format : G-XXXXXXXXXX). Laisser vide pour désactiver.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">ID de mesure (GA4)</Label>
+            <Input
+              value={form.gaTagId || ''}
+              onChange={e => set('gaTagId', e.target.value)}
+              placeholder="G-XXXXXXXXXX"
+              className="font-mono text-sm"
+            />
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Le script GA4 sera injecté automatiquement sur toutes les pages de la boutique si un ID est renseigné.
+            Créez votre propriété sur <a href="https://analytics.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">analytics.google.com</a> pour obtenir votre ID.
+          </p>
+        </CardContent>
+      </Card>
+      )}
+
       <div className="sticky bottom-4 z-20 flex justify-end bg-gradient-to-t from-background via-background/95 to-transparent pt-4 pb-2 -mx-2 px-2">
         <Button onClick={save} disabled={saving} size="lg" className="shadow-lg">
           {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
@@ -1907,6 +1935,7 @@ function ShippingTab() {
 interface CategoryData {
   slug: string
   label: string
+  parentId: string | null
   backgroundImage: string | null
   bgColor: string | null
   bgOpacity: number
@@ -1921,7 +1950,7 @@ function CategoriesTab() {
   const [editing, setEditing] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<CategoryData | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
-  const [newCat, setNewCat] = useState({ slug: '', label: '', emoji: '📦' })
+  const [newCat, setNewCat] = useState({ slug: '', label: '', emoji: '📦', parentId: '' })
 
   const fetchCats = () => {
     fetch('/api/boutique/admin/categories')
@@ -1936,6 +1965,7 @@ function CategoriesTab() {
     setEditing(c.slug)
     setEditForm({
       ...c,
+      parentId: c.parentId ?? null,
       bgColor: c.bgColor ?? null,
       bgOpacity: c.bgOpacity ?? 0.5,
     })
@@ -1959,6 +1989,7 @@ function CategoriesTab() {
           bgColor: editForm.bgColor,
           bgOpacity: editForm.bgOpacity,
           order: editForm.order,
+          parentId: editForm.parentId,
         }),
       })
       if (!res.ok) {
@@ -2040,12 +2071,13 @@ function CategoriesTab() {
         slug: newCat.slug.toLowerCase().trim(),
         label: newCat.label,
         emoji: newCat.emoji || '📦',
+        parentId: newCat.parentId || null,
         order: cats.length,
       }),
     })
     if (res.ok) {
-      toast.success('Catégorie ajoutée')
-      setNewCat({ slug: '', label: '', emoji: '📦' })
+      toast.success(newCat.parentId ? 'Sous-catégorie ajoutée' : 'Catégorie ajoutée')
+      setNewCat({ slug: '', label: '', emoji: '📦', parentId: '' })
       setShowAddForm(false)
       fetchCats()
     } else {
@@ -2069,7 +2101,7 @@ function CategoriesTab() {
 
       {showAddForm && (
         <Card>
-          <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
             <div className="space-y-1.5">
               <Label className="text-xs">Slug (URL)</Label>
               <Input value={newCat.slug} onChange={e => setNewCat({ ...newCat, slug: e.target.value })} placeholder="vetements" />
@@ -2081,6 +2113,19 @@ function CategoriesTab() {
             <div className="space-y-1.5">
               <Label className="text-xs">Emoji</Label>
               <Input value={newCat.emoji} onChange={e => setNewCat({ ...newCat, emoji: e.target.value })} placeholder="👕" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Catégorie parente</Label>
+              <select
+                value={newCat.parentId}
+                onChange={e => setNewCat({ ...newCat, parentId: e.target.value })}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">— Aucune (catégorie principale) —</option>
+                {cats.filter(c => !c.parentId).map(c => (
+                  <option key={c.slug} value={c.slug}>{c.emoji} {c.label}</option>
+                ))}
+              </select>
             </div>
             <Button onClick={createCat}>Créer</Button>
           </CardContent>
@@ -2109,6 +2154,19 @@ function CategoriesTab() {
                     <div className="space-y-1.5">
                       <Label className="text-xs">Slug (non modifiable)</Label>
                       <Input value={editForm.slug} disabled className="font-mono text-xs" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Catégorie parente</Label>
+                      <select
+                        value={editForm.parentId || ''}
+                        onChange={e => setEditForm({ ...editForm, parentId: e.target.value || null })}
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      >
+                        <option value="">— Aucune (catégorie principale) —</option>
+                        {cats.filter(c => !c.parentId && c.slug !== editForm.slug).map(c => (
+                          <option key={c.slug} value={c.slug}>{c.emoji} {c.label}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 

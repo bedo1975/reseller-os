@@ -1163,3 +1163,38 @@ Verification:
 - Zip: 752 KB, MD5: 4b92f11f8bbe5d8032a040602dcbb048
 - After deploy + clear browser cache, the SW will be completely gone and never re-registered
 - All chunks will be fetched fresh from the server (webpack, not Turbopack)
+
+---
+Task ID: fix-p2003-stock-delete
+Agent: main
+Task: Fix P2003 "Foreign key constraint violated" error when deleting a stock item that has a Sale
+
+Root cause:
+- `StockItem` has a 1-to-1 relation with `Sale` (`Sale.stockItemId String @unique`)
+- When the user tries to delete a StockItem that has a linked Sale, SQLite blocks the deletion to preserve the FK
+- The DELETE /api/stock/[id] route didn't check for this case, so it crashed with P2003
+
+Fix applied in `src/app/api/stock/[id]/route.ts` DELETE:
+1. **Pre-check**: fetch the StockItem WITH `include: { sale: true }` to know if a sale is linked
+2. **Block deletion with clear message**: if a sale exists, return HTTP 409 with a detailed French message:
+   - "Impossible de supprimer : cet article est lié à une vente (SKU: X, prix de vente: Y €, date: Z). Annulez d'abord la vente dans le module Ventes pour pouvoir supprimer cet article."
+   - Includes `code: 'HAS_SALE'` and `saleId` for potential frontend handling
+3. **Transaction for safe cleanup**: if no sale, use `db.$transaction` to:
+   - Detach PhotoSessions (set `attachedStockId = null`) — they're soft links, no FK
+   - Delete the StockItem
+4. **Fallback P2003 handler**: if somehow the FK is still violated (e.g., another relation), return HTTP 409 with `code: 'FOREIGN_KEY_VIOLATION'` and a generic message
+
+Frontend improvement in `src/components/modules/stock-module.tsx`:
+- Single delete: parse the error JSON and display `data.error` (the detailed French message) in a toast with 8s duration
+- Bulk delete: capture the first error message and show it with the failure count
+- This way the user knows WHY the deletion failed and what to do (go to Ventes, cancel the sale)
+
+Workflow for the user:
+1. Try to delete an article in Stock → if it's sold, see toast "lié à une vente..."
+2. Go to Ventes module → find the sale → delete it (this resets the article status to PUBLIE)
+3. Go back to Stock → can now delete the article
+
+Verification:
+- TypeScript: only pre-existing errors (not related to this fix)
+- Build: success (next.config.ts has ignoreBuildErrors: true)
+- Zip: 838 KB, MD5: 9b97e4add4b30f09a7a606b9dbf00cb0

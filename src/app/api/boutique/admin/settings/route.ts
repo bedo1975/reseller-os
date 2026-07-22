@@ -38,6 +38,7 @@ export async function PUT(req: NextRequest) {
       trustPagePaymentTitle, trustPagePaymentContent,
       trustPageShippingTitle, trustPageShippingContent,
       trustPageReturnsTitle, trustPageReturnsContent,
+      gaTagId,
     } = body
 
     const data: any = {}
@@ -92,6 +93,7 @@ export async function PUT(req: NextRequest) {
     if (typeof trustPageShippingContent === 'string') data.trustPageShippingContent = trustPageShippingContent || null
     if (typeof trustPageReturnsTitle === 'string') data.trustPageReturnsTitle = trustPageReturnsTitle
     if (typeof trustPageReturnsContent === 'string') data.trustPageReturnsContent = trustPageReturnsContent || null
+    if (typeof gaTagId === 'string') data.gaTagId = gaTagId || null
 
     const settings = await db.boutiqueSettings.upsert({
       where: { id: 'default' },

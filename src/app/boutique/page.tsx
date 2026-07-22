@@ -46,9 +46,9 @@ export default function BoutiqueHomePage() {
   const featured = products.slice(0, 10)
   const newProducts = products.slice(0, 10)
 
-  // Fetch categories from DB
+  // Fetch categories from DB (top-level only for homepage cards)
   useEffect(() => {
-    fetch('/api/boutique/admin/categories')
+    fetch('/api/boutique/categories')
       .then(r => r.json())
       .then(data => {
         if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {

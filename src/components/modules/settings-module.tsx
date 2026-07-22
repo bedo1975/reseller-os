@@ -52,18 +52,8 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  {
-    type: 'category', label: 'Catégories', singular: 'Catégorie', icon: Layers,
-    accent: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30',
-    description: 'Catégories principales d\'articles (vêtements, chaussures, accessoires...)',
-    codePlaceholder: 'vetements', valuePlaceholder: 'Vêtements',
-  },
-  {
-    type: 'subcategory', label: 'Sous-catégories', singular: 'Sous-catégorie', icon: Layers,
-    accent: 'text-teal-600 bg-teal-50 dark:bg-teal-950/30',
-    description: 'Sous-catégories liées à une catégorie parente (ex: T-shirts, Jeans sous Vêtements)',
-    codePlaceholder: 'tshirts', valuePlaceholder: 'T-shirts',
-  },
+  // NOTE: Catégories et Sous-catégories sont maintenant gérées dans Boutique Admin → Catégories
+  // (modèle BoutiqueCategory unifié avec parentId pour les sous-catégories)
   {
     type: 'condition', label: 'États', singular: 'État', icon: Tag,
     accent: 'text-amber-600 bg-amber-50 dark:bg-amber-950/30',
@@ -176,7 +166,7 @@ function AttributesSection() {
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === 'admin'
   const { attributes, loading, refresh } = useSettings()
-  const [activeTab, setActiveTab] = useState<AttributeType>('category')
+  const [activeTab, setActiveTab] = useState<AttributeType>('condition')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Attribute | null>(null)
 

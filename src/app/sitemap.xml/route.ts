@@ -58,11 +58,12 @@ export async function GET() {
   </url>`)
   }
 
-  // ─── Category pages ─────────────────────────────────────────────────────
+  // ─── Category pages (top-level only) ────────────────────────────────────
   try {
-    const categories = await getBoutiqueCategories()
-    for (const cat of categories) {
-      const updatedAt = (cat as any).updatedAt || now
+    const allCats = await getBoutiqueCategories()
+    const topCats = allCats.filter((c: any) => !c.parentId)
+    for (const cat of topCats) {
+      const updatedAt = cat.updatedAt || now
       urls.push(`  <url>
     <loc>${escapeXml(baseUrl + '/boutique/categorie/' + cat.slug)}</loc>
     <lastmod>${updatedAt instanceof Date ? updatedAt.toISOString() : now.toISOString()}</lastmod>

@@ -483,6 +483,8 @@ model BoutiqueSettings {
   trustPageShippingContent String? // HTML
   trustPageReturnsTitle    String  @default("Retours 14 jours")
   trustPageReturnsContent  String? // HTML
+  // Google Analytics — ID de mesure (ex: G-XXXXXXXXXX)
+  gaTagId                  String?
   updatedAt       DateTime @updatedAt
 }
 
@@ -501,16 +503,21 @@ model ShippingMethod {
   updatedAt   DateTime @updatedAt
 }
 
-// Catégorie de boutique (image de fond personnalisable + couleur/opacité)
+// Catégorie de boutique (image de fond personnalisable + couleur/opacité + sous-catégories)
 model BoutiqueCategory {
   slug            String   @id  // 'vetements', 'chaussures', etc.
   label           String
+  parentId        String?  // null = catégorie top-level, sinon slug du parent
+  parent          BoutiqueCategory? @relation("CategoryTree", fields: [parentId], references: [slug], onDelete: SetNull)
+  children        BoutiqueCategory[] @relation("CategoryTree")
   backgroundImage String?  // path /uploads/boutique-categories/...
   bgColor         String?  // hex sans #, ex: "007bff" (couleur de fond si pas d'image)
   bgOpacity       Float    @default(0.5)  // 0.0 à 1.0 — opacité de l'image de fond
   emoji           String   @default("📦")
   order           Int      @default(0)
   updatedAt       DateTime @updatedAt
+
+  @@index([parentId])
 }
 
 // Client de la boutique (compte client, séparé des utilisateurs staff Reseller OS)
