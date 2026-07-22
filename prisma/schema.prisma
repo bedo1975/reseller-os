@@ -146,6 +146,7 @@ model StockItem {
   sku           String   @unique
   barcode       String?
   photos        String   // JSON array of URLs (serialized)
+  title         String?  // titre / nom du produit (ex: "T-shirt Nike Sportswear")
   brand         String
   category      String   // vetements | chaussures | accessoires | luxe | etc.
   subcategory   String?  // sous-catégorie (ex: "tshirts", "jeans", "vestes")

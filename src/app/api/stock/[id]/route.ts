@@ -27,7 +27,7 @@ export async function PATCH(
 
     const updateData: Record<string, unknown> = {}
     const allowed = [
-      'sku', 'brand', 'category', 'subcategory', 'size', 'color', 'condition',
+      'sku', 'title', 'brand', 'category', 'subcategory', 'size', 'color', 'condition',
       'purchaseCost', 'purchaseDate', 'supplierId', 'lotReference', 'lotOrigin', 'lotCurrent',
       'purchaseInvoiceNumber', 'purchasePaymentMethod',
       'warehouse', 'rack', 'shelf', 'bin', 'weight', 'quantity',

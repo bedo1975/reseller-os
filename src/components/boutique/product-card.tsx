@@ -6,6 +6,7 @@ import { Package } from 'lucide-react'
 interface ProductCardProps {
   product: {
     sku: string
+    title?: string | null
     brand: string
     category: string
     size?: string | null
@@ -42,7 +43,7 @@ export function ProductCard({ product }: ProductCardProps) {
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={product.mainPhoto}
-            alt={`${product.brand} ${product.category}`}
+            alt={product.title || `${product.brand} ${product.category}`}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             loading="lazy"
           />
@@ -62,7 +63,7 @@ export function ProductCard({ product }: ProductCardProps) {
           {product.brand}
         </p>
         <p className="text-sm font-medium text-gray-900 line-clamp-1">
-          {CATEGORY_LABELS[product.category] || product.category}
+          {product.title || (CATEGORY_LABELS[product.category] || product.category)}
           {product.size && ` · Taille ${product.size}`}
         </p>
         {product.color && (

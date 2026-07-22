@@ -27,6 +27,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 interface Product {
   sku: string
+  title?: string | null
   brand: string
   category: string
   size?: string | null
@@ -133,7 +134,11 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           {CATEGORY_LABELS[product.category] || product.category}
         </Link>
         <ChevronRight className="h-3 w-3" />
-        <span className="text-gray-900 truncate">{product.brand} {product.size && `· ${product.size}`}</span>
+        <span className="text-gray-900 truncate">
+          {product.title && `${product.title} · `}
+          {product.brand}
+          {product.size && ` · ${product.size}`}
+        </span>
       </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
@@ -174,7 +179,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={photos[activePhoto]}
-                alt={`${product.brand} ${product.category}`}
+                alt={product.title || `${product.brand} ${product.category}`}
                 className="w-full h-full object-cover transition-transform duration-200"
                 style={zoomed ? {
                   transform: 'scale(2)',
@@ -192,7 +197,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
             {product.brand}
           </p>
           <h1 className="text-3xl font-bold text-gray-900 mb-3">
-            {CATEGORY_LABELS[product.category] || product.category}
+            {product.title || (CATEGORY_LABELS[product.category] || product.category)}
             {product.size && ` · Taille ${product.size}`}
           </h1>
 

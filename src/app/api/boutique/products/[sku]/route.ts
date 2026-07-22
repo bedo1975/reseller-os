@@ -17,6 +17,7 @@ export async function GET(
       select: {
         id: true,
         sku: true,
+        title: true,
         brand: true,
         category: true,
         subcategory: true,
@@ -43,6 +44,7 @@ export async function GET(
     const product = {
       id: item.id,
       sku: item.sku,
+      title: item.title,
       brand: item.brand,
       category: item.category,
       subcategory: item.subcategory,

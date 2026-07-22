@@ -47,6 +47,7 @@ interface StockItem {
   sku: string
   barcode: string | null
   photos: string
+  title: string | null
   brand: string
   category: string
   size: string | null
@@ -766,7 +767,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
   const defaultCat = boutiqueCats[0]?.slug || 'vetements'
   const defaultCond = conditions.find(c => c.isDefault)?.code || conditions[0]?.code || 'bon'
   const [form, setForm] = useState({
-    sku: '', brand: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond,
+    sku: '', title: '', brand: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond,
     purchaseCost: '', purchaseDate: new Date().toISOString().split('T')[0],
     supplierId: '', lotReference: '', lotOrigin: '', lotCurrent: '',
     warehouse: '', rack: '', shelf: '', bin: '', weight: '', quantity: '1',
@@ -777,7 +778,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
   useMemo(() => {
     if (item) {
       setForm({
-        sku: item.sku, brand: item.brand, category: item.category,
+        sku: item.sku, title: item.title || '', brand: item.brand, category: item.category,
         subcategory: (item as { subcategory?: string }).subcategory || '',
         size: item.size || '', color: item.color || '', condition: item.condition,
         purchaseCost: String(item.purchaseCost),
@@ -799,7 +800,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
       try { setPhotos(JSON.parse(item.photos) || []) } catch { setPhotos([]) }
     } else if (open) {
       setForm({
-        sku: '', brand: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond,
+        sku: '', title: '', brand: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond,
         purchaseCost: '', purchaseDate: new Date().toISOString().split('T')[0],
         supplierId: '', lotReference: '', lotOrigin: '', lotCurrent: '',
         warehouse: '', rack: '', shelf: '', bin: '', weight: '', quantity: '1',
@@ -1117,6 +1118,10 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
           <div>
             <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Identification</h4>
             <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5 col-span-2">
+                <Label className="text-xs">Titre / Nom du produit</Label>
+                <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="ex: T-shirt Nike Sportswear blanc" />
+              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">SKU *</Label>
                 <Input value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="RL-POLO-00125" className="font-mono text-sm" />

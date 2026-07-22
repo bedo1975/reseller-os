@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     const user = await requireAuth()
     const body = await req.json()
     const {
-      sku, brand, category, subcategory, size, color, condition,
+      sku, title, brand, category, subcategory, size, color, condition,
       purchaseCost, purchaseDate, supplierId, lotReference, lotOrigin, lotCurrent,
       purchaseInvoiceNumber, purchasePaymentMethod,
       warehouse, rack, shelf, bin, weight, quantity,
@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
     const item = await db.stockItem.create({
       data: {
         sku,
+        title: title || null,
         brand,
         category: category || 'vetements',
         subcategory: subcategory || null,
