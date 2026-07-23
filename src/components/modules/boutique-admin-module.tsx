@@ -1343,6 +1343,7 @@ function AppearanceTab() {
               value={form.footerBoutiqueLinksJson || '[]'}
               onChange={(json) => set('footerBoutiqueLinksJson', json)}
               placeholder="/boutique"
+              showOrder
             />
           </div>
           {/* Colonne Informations */}
@@ -1356,6 +1357,7 @@ function AppearanceTab() {
               value={form.footerInfosLinksJson || '[]'}
               onChange={(json) => set('footerInfosLinksJson', json)}
               placeholder="/boutique/cgv"
+              showOrder
             />
             <p className="text-[11px] text-muted-foreground">Si vide, liens par défaut (CGV, Mon panier, Contact, Espace gestion).</p>
           </div>

@@ -85,10 +85,16 @@ export default function BoutiqueLayout({ children }: { children: React.ReactNode
 
   // Parse footer links
   const footerBoutiqueLinks = (() => {
-    try { return JSON.parse(settings?.footerBoutiqueLinksJson || '[]') } catch { return [] }
+    try {
+      const items = JSON.parse(settings?.footerBoutiqueLinksJson || '[]')
+      return items.filter((i: any) => i.visible !== false).sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+    } catch { return [] }
   })()
   const footerInfosLinks = (() => {
-    try { return JSON.parse(settings?.footerInfosLinksJson || '[]') } catch { return [] }
+    try {
+      const items = JSON.parse(settings?.footerInfosLinksJson || '[]')
+      return items.filter((i: any) => i.visible !== false).sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+    } catch { return [] }
   })()
 
   // Parse nav menu (if configured, use it instead of categories)

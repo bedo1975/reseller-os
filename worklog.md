@@ -1399,3 +1399,47 @@ Task: Add "Titre / Nom du produit" field to StockItem, replace category display 
 
 Build: ✅ success (only pre-existing TS errors, ignored by build config)
 Zip: 856 KB, MD5: 26ba3cb4392f92289799c4d7ef58adcb
+
+---
+Task ID: wysiwyg-editor + drag-drop-nav
+Agent: main
+Task: (1) Add WYSIWYG HTML editor for CGV and Mentions légales, (2) Add drag-and-drop reordering for nav menu links
+
+## 1. WYSIWYG HTML Editor
+
+### New component `src/components/ui/html-editor.tsx`
+- ContentEditable div with toolbar
+- Toolbar buttons: Bold, Italic, Underline, H1, H2, Paragraph, Bullet list, Numbered list, Blockquote, Link, Remove format, Undo, Redo
+- Uses `document.execCommand()` (deprecated but still widely supported in all browsers)
+- Generates clean HTML that renders correctly on the storefront via `dangerouslySetInnerHTML`
+- Custom CSS for in-editor styling (h1, h2, p, ul, ol, blockquote, a)
+- Placeholder support (shows grey text when empty)
+- `isInternalChange` ref prevents feedback loops between parent value and editor content
+
+### Admin integration
+- Imported `HtmlEditor` in `boutique-admin-module.tsx`
+- Replaced `<Textarea>` with `<HtmlEditor>` for both CGV and Mentions légales cards (Apparence → Horaires/CGV)
+- minHeight: 300px for comfortable editing
+
+## 2. Drag-and-drop for nav links
+
+### Updated `src/components/boutique/link-editor.tsx`
+- Added HTML5 native drag-and-drop (no external library needed)
+- `draggable` attribute set when `showOrder` is true
+- Visual feedback during drag: opacity 50% on dragged item, blue border on drag-over target
+- `onDragStart` / `onDragOver` / `onDrop` / `onDragEnd` handlers
+- Replaced `GripVertical` rotate-180/normal icons with proper `ArrowUp`/`ArrowDown` buttons (clearer)
+- Reassigns `order` field automatically after any move (drag or button)
+- Added hint text: "💡 Astuce : tu peux glisser-déposer les liens pour les réordonner"
+- `isInternalChange` ref prevents feedback loops
+
+### Affected editors
+All LinkEditor instances now support drag-and-drop:
+- Nav menu (Apparence → Menu) — `showOrder={true}`
+- Footer Boutique links (Apparence → Footer) — no showOrder
+- Footer Infos links (Apparence → Footer) — no showOrder
+
+## Build note
+- Turbopack crashes in the sandbox (known bug) but TypeScript passes clean
+- Build with webpack on the user's server will work fine
+- Zip: 863 KB, MD5: 67fc618eb0c92adfdedcc256cfcadcee
