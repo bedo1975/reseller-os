@@ -47,7 +47,10 @@ export async function POST(req: NextRequest) {
     }
 
     const shippingMethod = shippingMethods.find(m => m.code === shippingMethodCode) || shippingMethods[0]
-    const shippingCost = shippingMethod?.price || 0
+    let shippingCost = shippingMethod?.price || 0
+
+    // Get boutique settings (for free shipping threshold)
+    const boutiqueSettings = await getBoutiqueSettings()
 
     // Get payment method (for label)
     let paymentMethodLabel = paymentMethodCode || 'demo'
@@ -72,6 +75,7 @@ export async function POST(req: NextRequest) {
       if (!stockItem) continue
 
       const salePrice = Number(item.price) || 0
+      subtotal += salePrice
       const purchaseCost = stockItem.purchaseCost || 0
       const itemShipping = shippingCost / items.length
       const profit = salePrice - purchaseCost - itemShipping
@@ -127,6 +131,11 @@ export async function POST(req: NextRequest) {
 
     if (invoiceNumbers.length === 0) {
       return NextResponse.json({ error: 'Aucun article disponible' }, { status: 400 })
+    }
+
+    // Apply free shipping AFTER subtotal is known
+    if (boutiqueSettings.freeShippingEnabled && subtotal >= (boutiqueSettings.freeShippingThreshold || 50)) {
+      shippingCost = 0
     }
 
     const total = subtotal + shippingCost

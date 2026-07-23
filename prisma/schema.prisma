@@ -424,8 +424,9 @@ model BoutiqueSettings {
   logoText        String   @default("DBoxPro")
   logoSubtitle    String   @default("Boutique")
   logoImage       String?  // optional uploaded logo (header + footer)
-  // Seuil livraison offerte (€)
+  // Seuil livraison offerte
   freeShippingThreshold Float @default(50)
+  freeShippingEnabled   Boolean @default(false) // Master switch: active/désactive la livraison offerte
   // Configuration Stripe
   stripePublicKey  String?
   stripeSecretKey  String?

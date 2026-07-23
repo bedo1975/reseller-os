@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, Package } from 'lucide-react'
+import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 
 interface CartItem {
   sku: string
@@ -27,6 +28,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function CartPage() {
   const router = useRouter()
+  const settings = useBoutiqueSettings()
   const [cart, setCart] = useState<CartItem[]>([])
   const [loaded, setLoaded] = useState(false)
 
@@ -67,7 +69,10 @@ export default function CartPage() {
   }
 
   const subtotal = cart.reduce((s, i) => s + (i.price || 0) * i.qty, 0)
-  const shipping = subtotal >= 50 || subtotal === 0 ? 0 : 3.50
+  const freeShipEnabled = settings.freeShippingEnabled === true
+  const freeShipThreshold = settings.freeShippingThreshold || 50
+  const isFreeShipping = freeShipEnabled && subtotal >= freeShipThreshold && subtotal > 0
+  const shipping = isFreeShipping ? 0 : 3.50
   const total = subtotal + shipping
 
   if (!loaded) return null
@@ -193,9 +198,9 @@ export default function CartPage() {
                   )}
                 </span>
               </div>
-              {shipping > 0 && (
+              {shipping > 0 && freeShipEnabled && (
                 <p className="text-xs text-gray-400 pt-1">
-                  Plus que <strong>{(50 - subtotal).toFixed(2)} €</strong> pour la livraison offerte
+                  Plus que <strong>{(freeShipThreshold - subtotal).toFixed(2)} €</strong> pour la livraison offerte
                 </p>
               )}
             </div>

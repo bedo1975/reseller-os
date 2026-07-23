@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Lock, ShoppingBag, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
+import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 
 interface CartItem {
   sku: string
@@ -48,6 +49,7 @@ interface PaymentOption {
 
 export default function CheckoutPage() {
   const router = useRouter()
+  const settings = useBoutiqueSettings()
   const [cart, setCart] = useState<CartItem[]>([])
   const [loaded, setLoaded] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -108,7 +110,11 @@ export default function CheckoutPage() {
   }, [router])
 
   const subtotal = cart.reduce((s, i) => s + (i.price || 0) * i.qty, 0)
-  const shipping = shippingOptions.find(s => s.code === shippingMethod)?.price || 0
+  const rawShipping = shippingOptions.find(s => s.code === shippingMethod)?.price || 0
+  // Apply free shipping if enabled and subtotal >= threshold
+  const freeShipEnabled = settings.freeShippingEnabled === true
+  const freeShipThreshold = settings.freeShippingThreshold || 50
+  const shipping = (freeShipEnabled && subtotal >= freeShipThreshold) ? 0 : rawShipping
   const total = subtotal + shipping
 
   // Auto-calculate shipping based on weight when shipping method or cart changes

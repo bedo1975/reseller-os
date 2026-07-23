@@ -15,6 +15,7 @@ import { HoursEditor } from '@/components/boutique/hours-editor'
 import { HtmlEditor } from '@/components/ui/html-editor'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -762,6 +763,7 @@ interface BoutiqueSettingsData {
   headerBgColor: string
   topbarBgColor: string
   footerBgColor: string
+  freeShippingEnabled: boolean
   freeShippingThreshold: number
   hoursJson: string
   hoursVisible: boolean
@@ -1015,21 +1017,6 @@ function AppearanceTab() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Livraison</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1.5">
-          <Label className="text-xs">Seuil de livraison offerte (€)</Label>
-          <Input
-            type="number"
-            value={form.freeShippingThreshold ?? 50}
-            onChange={e => set('freeShippingThreshold', parseFloat(e.target.value) || 0)}
-            placeholder="50"
-          />
-          <p className="text-[11px] text-muted-foreground">Au-dessus de ce montant, la livraison est offerte.</p>
-        </CardContent>
-      </Card>
       </>
       )}
 
@@ -1591,6 +1578,10 @@ function ShippingTab() {
   const [newRules, setNewRules] = useState<Record<string, { weightMin: string; weightMax: string; price: string }>>({})
   const [showCarrierForm, setShowCarrierForm] = useState(false)
   const [carrierForm, setCarrierForm] = useState({ value: '', code: '', trackingUrl: '' })
+  // Free shipping config
+  const [freeShippingEnabled, setFreeShippingEnabled] = useState(false)
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState(50)
+  const [savingFreeShip, setSavingFreeShip] = useState(false)
   const [showMethodForm, setShowMethodForm] = useState(false)
   const [methodForm, setMethodForm] = useState({ code: '', label: '', price: '', delay: '', carrierCode: '', order: '0' })
   const { attributes: allAttrs, refresh: refreshAttrs } = useSettings()
@@ -1608,7 +1599,34 @@ function ShippingTab() {
     }
   }, [])
 
-  useEffect(() => { fetchMethods() }, [fetchMethods])
+  // Fetch free shipping config
+  const fetchFreeShipping = useCallback(async () => {
+    try {
+      const res = await fetch('/api/boutique/admin/settings')
+      const data = await res.json()
+      setFreeShippingEnabled(data.freeShippingEnabled ?? false)
+      setFreeShippingThreshold(data.freeShippingThreshold ?? 50)
+    } catch {}
+  }, [])
+
+  // Save free shipping config
+  const saveFreeShipping = async () => {
+    setSavingFreeShip(true)
+    try {
+      await fetch('/api/boutique/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ freeShippingEnabled, freeShippingThreshold }),
+      })
+      toast.success('Livraison offerte configurée')
+    } catch {
+      toast.error('Erreur')
+    } finally {
+      setSavingFreeShip(false)
+    }
+  }
+
+  useEffect(() => { fetchMethods(); fetchFreeShipping() }, [fetchMethods, fetchFreeShipping])
 
   const toggleActive = async (m: ShippingMethodData) => {
     await fetch(`/api/boutique/admin/shipping/${m.id}`, {
@@ -1742,6 +1760,49 @@ function ShippingTab() {
 
   return (
     <div className="space-y-4">
+      {/* Livraison offerte */}
+      <Card className={freeShippingEnabled ? 'border-green-400 bg-green-50/50 dark:bg-green-950/20' : ''}>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Truck className="h-4 w-4" /> Livraison offerte
+            {freeShippingEnabled
+              ? <Badge className="bg-green-600 hover:bg-green-600">Activée</Badge>
+              : <Badge variant="secondary">Désactivée</Badge>
+            }
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Active la livraison gratuite dès un certain montant d'achat. Si désactivé, les frais de port normaux s'appliquent toujours.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={freeShippingEnabled}
+              onCheckedChange={(v) => setFreeShippingEnabled(v)}
+            />
+            <Label className="text-sm cursor-pointer" onClick={() => setFreeShippingEnabled(!freeShippingEnabled)}>
+              {freeShippingEnabled ? 'Livraison offerte activée' : 'Livraison offerte désactivée'}
+            </Label>
+          </div>
+          {freeShippingEnabled && (
+            <div className="space-y-1.5 max-w-xs">
+              <Label className="text-xs">Seuil de livraison offerte (€)</Label>
+              <Input
+                type="number"
+                value={freeShippingThreshold}
+                onChange={e => setFreeShippingThreshold(parseFloat(e.target.value) || 0)}
+                placeholder="50"
+              />
+              <p className="text-[11px] text-muted-foreground">Au-dessus de ce montant, la livraison est offerte automatiquement au client.</p>
+            </div>
+          )}
+          <Button size="sm" onClick={saveFreeShipping} disabled={savingFreeShip}>
+            {savingFreeShip ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+            Sauvegarder
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Transporteurs depuis attributs */}
       <Card>
         <CardHeader>

@@ -24,7 +24,7 @@ export async function PUT(req: NextRequest) {
       topBarText, footerAbout, footerEmail, footerPhone,
       logoText, logoSubtitle, logoImage, primaryColor, primaryDarkColor,
       headerBgColor, topbarBgColor, footerBgColor,
-      freeShippingThreshold, hoursJson, hoursVisible, cgvText, legalText,
+      freeShippingThreshold, freeShippingEnabled, hoursJson, hoursVisible, cgvText, legalText,
       trustBadge1Icon, trustBadge1Title, trustBadge1Desc,
       trustBadge2Icon, trustBadge2Title, trustBadge2Desc,
       trustBadge3Icon, trustBadge3Title, trustBadge3Desc,
@@ -62,6 +62,7 @@ export async function PUT(req: NextRequest) {
     if (typeof topbarBgColor === 'string') data.topbarBgColor = topbarBgColor
     if (typeof footerBgColor === 'string') data.footerBgColor = footerBgColor
     if (typeof freeShippingThreshold === 'number') data.freeShippingThreshold = freeShippingThreshold
+    if (typeof freeShippingEnabled === 'boolean') data.freeShippingEnabled = freeShippingEnabled
     if (typeof hoursJson === 'string') data.hoursJson = hoursJson
     if (typeof hoursVisible === 'boolean') data.hoursVisible = hoursVisible
     if (typeof cgvText === 'string') data.cgvText = cgvText || null

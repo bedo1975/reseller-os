@@ -20,6 +20,7 @@ export interface BoutiqueSettings {
   headerBgColor: string
   topbarBgColor: string
   footerBgColor: string
+  freeShippingEnabled: boolean
   freeShippingThreshold: number
   hoursJson: string
   hoursVisible: boolean
@@ -82,6 +83,7 @@ const DEFAULTS: BoutiqueSettings = {
   headerBgColor: 'ffffff',
   topbarBgColor: '0a3d62',
   footerBgColor: '0a3d62',
+  freeShippingEnabled: false,
   freeShippingThreshold: 50,
   hoursJson: '[]',
   hoursVisible: true,
