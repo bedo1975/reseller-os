@@ -39,6 +39,8 @@ export async function PUT(req: NextRequest) {
       trustPageShippingTitle, trustPageShippingContent,
       trustPageReturnsTitle, trustPageReturnsContent,
       gaTagId,
+      stripePublicKey, stripeSecretKey, stripeWebhookSecret,
+      paypalClientId, paypalSecret, paypalWebhookId,
     } = body
 
     const data: any = {}
@@ -95,6 +97,12 @@ export async function PUT(req: NextRequest) {
     if (typeof trustPageReturnsTitle === 'string') data.trustPageReturnsTitle = trustPageReturnsTitle
     if (typeof trustPageReturnsContent === 'string') data.trustPageReturnsContent = trustPageReturnsContent || null
     if (typeof gaTagId === 'string') data.gaTagId = gaTagId || null
+    // Stripe
+    if (typeof stripePublicKey === 'string') data.stripePublicKey = stripePublicKey || null
+    if (typeof stripeSecretKey === 'string') data.stripeSecretKey = stripeSecretKey || null
+    // PayPal
+    if (typeof paypalClientId === 'string') data.paypalClientId = paypalClientId || null
+    if (typeof paypalSecret === 'string') data.paypalSecret = paypalSecret || null
 
     const settings = await db.boutiqueSettings.upsert({
       where: { id: 'default' },

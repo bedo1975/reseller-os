@@ -800,6 +800,10 @@ interface BoutiqueSettingsData {
   trustPageReturnsTitle: string
   trustPageReturnsContent: string | null
   gaTagId: string | null
+  stripePublicKey: string | null
+  stripeSecretKey: string | null
+  paypalClientId: string | null
+  paypalSecret: string | null
 }
 
 function AppearanceTab() {
@@ -2485,6 +2489,14 @@ function PaymentsTab() {
     code: '', label: '', description: '', icon: '💳', provider: 'demo',
   })
 
+  // API keys state (stored in BoutiqueSettings, not PaymentMethod)
+  const [apiKeys, setApiKeys] = useState({
+    stripePublicKey: '', stripeSecretKey: '',
+    paypalClientId: '', paypalSecret: '',
+  })
+  const [savingKeys, setSavingKeys] = useState(false)
+  const [showSecrets, setShowSecrets] = useState(false)
+
   const fetchMethods = () => {
     fetch('/api/boutique/admin/payments')
       .then(r => r.json())
@@ -2492,7 +2504,21 @@ function PaymentsTab() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchMethods() }, [])
+  const fetchApiKeys = () => {
+    fetch('/api/boutique/admin/settings')
+      .then(r => r.json())
+      .then(data => {
+        setApiKeys({
+          stripePublicKey: data.stripePublicKey || '',
+          stripeSecretKey: data.stripeSecretKey || '',
+          paypalClientId: data.paypalClientId || '',
+          paypalSecret: data.paypalSecret || '',
+        })
+      })
+      .catch(() => {})
+  }
+
+  useEffect(() => { fetchMethods(); fetchApiKeys() }, [])
 
   const create = async () => {
     if (!form.code || !form.label) {
@@ -2511,6 +2537,23 @@ function PaymentsTab() {
       fetchMethods()
     } else {
       toast.error('Erreur')
+    }
+  }
+
+  const saveApiKeys = async () => {
+    setSavingKeys(true)
+    try {
+      const res = await fetch('/api/boutique/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(apiKeys),
+      })
+      if (!res.ok) { toast.error('Erreur'); return }
+      toast.success('Clés API sauvegardées')
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSavingKeys(false)
     }
   }
 
@@ -2537,14 +2580,19 @@ function PaymentsTab() {
     { value: 'manual', label: 'Manuel (virement, chèque...)' },
   ]
 
+  // Check if any payment method uses stripe or paypal
+  const hasStripe = methods.some(m => m.provider === 'stripe')
+  const hasPaypal = methods.some(m => m.provider === 'paypal')
+
   if (loading) return <Skeleton className="h-32" />
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200">
-        💡 <strong>Mode démo :</strong> simule un paiement (aucune transaction réelle). <strong>Stripe/PayPal :</strong> nécessite clés API. <strong>Manuel :</strong> virement, chèque, etc.
+        💡 <strong>Mode démo :</strong> simule un paiement (aucune transaction réelle). <strong>Stripe/PayPal :</strong> nécessite clés API (configurées ci-dessous). <strong>Manuel :</strong> virement, chèque, etc.
       </div>
 
+      {/* Payment methods list */}
       {methods.length === 0 ? (
         <p className="text-sm text-muted-foreground py-4 text-center">
           Aucun mode de paiement configuré. Les clients verront 3 modes par défaut (CB démo, PayPal démo, Virement).
@@ -2577,6 +2625,7 @@ function PaymentsTab() {
         </div>
       )}
 
+      {/* Add payment method form */}
       {showForm ? (
         <div className="border rounded-md p-3 space-y-3 bg-muted/30">
           <p className="text-sm font-semibold">Nouveau mode de paiement</p>
@@ -2619,6 +2668,109 @@ function PaymentsTab() {
           <Plus className="h-4 w-4 mr-1" /> Ajouter un mode
         </Button>
       )}
+
+      {/* Stripe configuration */}
+      <Card className={hasStripe ? 'border-purple-300' : ''}>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <span className="text-xl">💳</span> Configuration Stripe
+            {hasStripe
+              ? <Badge className="bg-green-600 hover:bg-green-600">Utilisé</Badge>
+              : <Badge variant="secondary">Non utilisé</Badge>
+            }
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Clés API depuis <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">dashboard.stripe.com/apikeys</a>.
+            Utilise les clés <strong>test</strong> (pk_test_ / sk_test_) pour tester, et les clés <strong>live</strong> (pk_live_ / sk_live_) pour la production.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Clé publique (Publishable key)</Label>
+            <Input
+              type={showSecrets ? 'text' : 'password'}
+              value={apiKeys.stripePublicKey}
+              onChange={e => setApiKeys({ ...apiKeys, stripePublicKey: e.target.value })}
+              placeholder="pk_test_... ou pk_live_..."
+              className="font-mono text-xs"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Clé secrète (Secret key)</Label>
+            <Input
+              type={showSecrets ? 'text' : 'password'}
+              value={apiKeys.stripeSecretKey}
+              onChange={e => setApiKeys({ ...apiKeys, stripeSecretKey: e.target.value })}
+              placeholder="sk_test_... ou sk_live_..."
+              className="font-mono text-xs"
+            />
+          </div>
+          <div className="rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 p-2.5 text-[11px] text-purple-800 dark:text-purple-200 space-y-1">
+            <p>📋 <strong>Webhook Stripe :</strong> configure un endpoint sur <code>https://junashop.fr/api/webhooks/stripe</code> dans le dashboard Stripe pour recevoir les événements de paiement.</p>
+            <p>🔧 Pour installer le SDK Stripe : <code>npm install stripe @stripe/stripe-js</code></p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* PayPal configuration */}
+      <Card className={hasPaypal ? 'border-blue-300' : ''}>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <span className="text-xl">🅿️</span> Configuration PayPal
+            {hasPaypal
+              ? <Badge className="bg-green-600 hover:bg-green-600">Utilisé</Badge>
+              : <Badge variant="secondary">Non utilisé</Badge>
+            }
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Credentials depuis <a href="https://developer.paypal.com/dashboard/applications/sandbox" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">developer.paypal.com</a>.
+            Utilise les credentials <strong>Sandbox</strong> pour tester, et <strong>Live</strong> pour la production.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Client ID</Label>
+            <Input
+              type={showSecrets ? 'text' : 'password'}
+              value={apiKeys.paypalClientId}
+              onChange={e => setApiKeys({ ...apiKeys, paypalClientId: e.target.value })}
+              placeholder="AY... (sandbox) ou AR... (live)"
+              className="font-mono text-xs"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Secret</Label>
+            <Input
+              type={showSecrets ? 'text' : 'password'}
+              value={apiKeys.paypalSecret}
+              onChange={e => setApiKeys({ ...apiKeys, paypalSecret: e.target.value })}
+              placeholder="EJ... (sandbox) ou EG... (live)"
+              className="font-mono text-xs"
+            />
+          </div>
+          <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-2.5 text-[11px] text-blue-800 dark:text-blue-200 space-y-1">
+            <p>📋 <strong>Webhook PayPal :</strong> configure un endpoint sur <code>https://junashop.fr/api/webhooks/paypal</code> dans le dashboard PayPal.</p>
+            <p>🔧 Pour installer le SDK PayPal : <code>npm install @paypal/checkout-server-sdk</code></p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Save + toggle secrets */}
+      <div className="flex items-center justify-between gap-3 sticky bottom-4 z-20 bg-gradient-to-t from-background via-background/95 to-transparent pt-4 pb-2 -mx-2 px-2">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showSecrets}
+            onChange={e => setShowSecrets(e.target.checked)}
+            className="rounded"
+          />
+          Afficher les clés secrètes
+        </label>
+        <Button onClick={saveApiKeys} disabled={savingKeys} size="lg" className="shadow-lg">
+          {savingKeys ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+          Sauvegarder les clés API
+        </Button>
+      </div>
     </div>
   )
 }

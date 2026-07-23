@@ -58,6 +58,10 @@ export interface BoutiqueSettings {
   trustPageReturnsTitle: string
   trustPageReturnsContent: string | null
   gaTagId: string | null
+  stripePublicKey: string | null
+  stripeSecretKey: string | null
+  paypalClientId: string | null
+  paypalSecret: string | null
 }
 
 const DEFAULTS: BoutiqueSettings = {
@@ -108,6 +112,10 @@ const DEFAULTS: BoutiqueSettings = {
   trustPageReturnsTitle: 'Retours 14 jours',
   trustPageReturnsContent: null,
   gaTagId: null,
+  stripePublicKey: null,
+  stripeSecretKey: null,
+  paypalClientId: null,
+  paypalSecret: null,
 }
 
 let cache: BoutiqueSettings | null = null
