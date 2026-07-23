@@ -24,7 +24,7 @@ export async function PUT(req: NextRequest) {
       topBarText, footerAbout, footerEmail, footerPhone,
       logoText, logoSubtitle, logoImage, primaryColor, primaryDarkColor,
       headerBgColor, topbarBgColor, footerBgColor,
-      freeShippingThreshold, hoursJson, hoursVisible, cgvText,
+      freeShippingThreshold, hoursJson, hoursVisible, cgvText, legalText,
       trustBadge1Icon, trustBadge1Title, trustBadge1Desc,
       trustBadge2Icon, trustBadge2Title, trustBadge2Desc,
       trustBadge3Icon, trustBadge3Title, trustBadge3Desc,
@@ -63,6 +63,7 @@ export async function PUT(req: NextRequest) {
     if (typeof hoursJson === 'string') data.hoursJson = hoursJson
     if (typeof hoursVisible === 'boolean') data.hoursVisible = hoursVisible
     if (typeof cgvText === 'string') data.cgvText = cgvText || null
+    if (typeof legalText === 'string') data.legalText = legalText || null
     // Trust badges
     const badges = [
       ['trustBadge1Icon', trustBadge1Icon], ['trustBadge1Title', trustBadge1Title], ['trustBadge1Desc', trustBadge1Desc],

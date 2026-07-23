@@ -320,6 +320,7 @@ export default function BoutiqueLayout({ children }: { children: React.ReactNode
                   ) : (
                     <>
                       <li><Link href="/boutique/cgv" className="text-blue-100 hover:text-white transition-colors">CGV</Link></li>
+                      <li><Link href="/boutique/mentions-legales" className="text-blue-100 hover:text-white transition-colors">Mentions légales</Link></li>
                       <li><Link href="/boutique/panier" className="text-blue-100 hover:text-white transition-colors">Mon panier</Link></li>
                       <li><Link href="/boutique/contact" className="text-blue-100 hover:text-white transition-colors">Contact</Link></li>
                       <li><Link href="/" className="text-blue-100 hover:text-white transition-colors">Espace gestion</Link></li>

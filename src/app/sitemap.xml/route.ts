@@ -42,6 +42,7 @@ export async function GET() {
     { url: '/boutique', priority: 1.0, changeFreq: 'daily' },
     { url: '/boutique/contact', priority: 0.6, changeFreq: 'monthly' },
     { url: '/boutique/cgv', priority: 0.3, changeFreq: 'yearly' },
+    { url: '/boutique/mentions-legales', priority: 0.3, changeFreq: 'yearly' },
     { url: '/boutique/connexion', priority: 0.4, changeFreq: 'monthly' },
     { url: '/boutique/panier', priority: 0.4, changeFreq: 'monthly' },
     { url: '/boutique/paiement-securise', priority: 0.5, changeFreq: 'monthly' },

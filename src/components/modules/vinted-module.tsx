@@ -260,6 +260,7 @@ export function VintedModule() {
   const [saveInterval, setSaveInterval] = useState(6)
   const [alertsLoading, setAlertsLoading] = useState(false)
   const [manualScanLoading, setManualScanLoading] = useState<string | null>(null)
+  const [alertFilter, setAlertFilter] = useState<string | null>(null) // savedSearchId to filter by, null = all
 
   // Fetch conditions dynamically on mount
   useEffect(() => {
@@ -341,10 +342,18 @@ export function VintedModule() {
     setAlertsLoading(true)
     try {
       const res = await fetch('/api/vinted/alerts?unread=1')
+      if (!res.ok) {
+        console.error('[Vinted] fetchAlerts: HTTP', res.status)
+        return
+      }
       const data = await res.json()
-      if (data.alerts) setAlerts(data.alerts)
-    } catch {
-      // silent
+      if (data.alerts) {
+        setAlerts(data.alerts)
+      } else if (data.error) {
+        console.error('[Vinted] fetchAlerts error:', data.error)
+      }
+    } catch (e) {
+      console.error('[Vinted] fetchAlerts exception:', e)
     } finally {
       setAlertsLoading(false)
     }
@@ -1157,12 +1166,14 @@ export function VintedModule() {
                   <div
                     key={s.id}
                     className={cn(
-                      'flex items-start gap-3 p-3 rounded-md border',
+                      'flex items-start gap-3 p-3 rounded-md border transition-colors cursor-pointer',
                       s.enabled ? 'bg-card' : 'bg-muted/30 opacity-60',
+                      alertFilter === s.id && 'border-blue-500 ring-1 ring-blue-500',
                     )}
+                    onClick={() => setAlertFilter(alertFilter === s.id ? null : s.id)}
                   >
                     <button
-                      onClick={() => toggleSavedSearch(s.id, s.enabled)}
+                      onClick={(e) => { e.stopPropagation(); toggleSavedSearch(s.id, s.enabled) }}
                       className={cn(
                         'mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors shrink-0',
                         s.enabled
@@ -1206,7 +1217,7 @@ export function VintedModule() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => markAlertsRead(s.id)}
+                        onClick={(e) => { e.stopPropagation(); markAlertsRead(s.id) }}
                         title="Marquer les alertes comme lues"
                       >
                         <Check className="h-3.5 w-3.5" />
@@ -1215,7 +1226,7 @@ export function VintedModule() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => deleteSavedSearch(s.id, s.name)}
+                      onClick={(e) => { e.stopPropagation(); deleteSavedSearch(s.id, s.name) }}
                       className="text-muted-foreground hover:text-destructive"
                       title="Supprimer"
                     >
@@ -1234,38 +1245,50 @@ export function VintedModule() {
                 <BellRing className="h-4 w-4" />
                 Nouvelles annonces détectées
                 {alertsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                {alertFilter && (
+                  <Badge variant="outline" className="text-xs ml-2">
+                    Filtré: {savedSearches.find(s => s.id === alertFilter)?.name || alertFilter}
+                    <button onClick={() => setAlertFilter(null)} className="ml-1 hover:text-destructive">×</button>
+                  </Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {alerts.length === 0 && !alertsLoading ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Bell className="h-10 w-10 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">
-                    Aucune nouvelle annonce. Le scan automatique détectera les nouveaux articles.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                    {alerts.slice(0, 5).map((alert) => (
-                      <ItemCard key={alert.id} item={alert.item} />
-                    ))}
-                  </div>
-                  {alerts.length > 5 && (
-                    <p className="text-xs text-muted-foreground mt-3 text-center">
-                      + {alerts.length - 5} autre(s) alerte(s) — marque-les comme lues pour les voir disparaître
-                    </p>
-                  )}
-                  {alerts.length > 0 && (
-                    <div className="flex justify-center mt-4">
-                      <Button variant="outline" size="sm" onClick={() => markAlertsRead()}>
-                        <Check className="h-4 w-4" />
-                        Tout marquer comme lu
-                      </Button>
+              {(() => {
+                const filtered = alertFilter ? alerts.filter(a => a.savedSearchId === alertFilter) : alerts
+                if (filtered.length === 0 && !alertsLoading) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <Bell className="h-10 w-10 text-muted-foreground mb-2" />
+                      <p className="text-sm text-muted-foreground">
+                        Aucune nouvelle annonce. Le scan automatique détectera les nouveaux articles.
+                      </p>
                     </div>
-                  )}
-                </>
-              )}
+                  )
+                }
+                return (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                      {filtered.slice(0, 10).map((alert) => (
+                        <ItemCard key={alert.id} item={alert.item} />
+                      ))}
+                    </div>
+                    {filtered.length > 10 && (
+                      <p className="text-xs text-muted-foreground mt-3 text-center">
+                        + {filtered.length - 10} autre(s) alerte(s) — marque-les comme lues pour les voir disparaître
+                      </p>
+                    )}
+                    {filtered.length > 0 && (
+                      <div className="flex justify-center mt-4">
+                        <Button variant="outline" size="sm" onClick={() => markAlertsRead()}>
+                          <Check className="h-4 w-4" />
+                          Tout marquer comme lu
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </CardContent>
           </Card>
         </div>

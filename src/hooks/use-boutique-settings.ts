@@ -24,6 +24,7 @@ export interface BoutiqueSettings {
   hoursJson: string
   hoursVisible: boolean
   cgvText: string | null
+  legalText: string | null
   trustBadge1Icon: string
   trustBadge1Title: string
   trustBadge1Desc: string
@@ -81,6 +82,7 @@ const DEFAULTS: BoutiqueSettings = {
   hoursJson: '[]',
   hoursVisible: true,
   cgvText: null,
+  legalText: null,
   trustBadge1Icon: 'truck', trustBadge1Title: 'Livraison rapide', trustBadge1Desc: 'Expédition sous 48h',
   trustBadge2Icon: 'shield', trustBadge2Title: 'Paiement sécurisé', trustBadge2Desc: 'Vos données protégées',
   trustBadge3Icon: 'refresh', trustBadge3Title: 'Retours 14 jours', trustBadge3Desc: 'Satisfait ou remboursé',

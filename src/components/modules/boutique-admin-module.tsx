@@ -765,6 +765,7 @@ interface BoutiqueSettingsData {
   hoursJson: string
   hoursVisible: boolean
   cgvText: string | null
+  legalText: string | null
   trustBadge1Icon: string
   trustBadge1Title: string
   trustBadge1Desc: string
@@ -1488,6 +1489,27 @@ function AppearanceTab() {
               onChange={e => set('cgvText', e.target.value)}
               rows={10}
               placeholder="Rédigez vos CGV ici. Si vide, les CGV par défaut seront utilisées."
+              className="text-sm"
+            />
+          </div>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Mentions légales */}
+      {subTab === 'misc' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4" /> Mentions légales</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Texte des mentions légales (HTML autorisé)</Label>
+            <Textarea
+              value={form.legalText || ''}
+              onChange={e => set('legalText', e.target.value)}
+              rows={10}
+              placeholder="Rédigez vos mentions légales ici. Si vide, des mentions légales par défaut seront utilisées."
               className="text-sm"
             />
           </div>

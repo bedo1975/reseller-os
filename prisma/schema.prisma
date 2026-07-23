@@ -444,6 +444,8 @@ model BoutiqueSettings {
   hoursVisible    Boolean  @default(true)  // Master switch: show/hide the entire hours block in the footer
   // CGV éditables
   cgvText         String?
+  // Mentions légales éditables
+  legalText       String?
   // Trust badges (section sous le hero)
   trustBadge1Icon   String  @default("truck")
   trustBadge1Title  String  @default("Livraison rapide")

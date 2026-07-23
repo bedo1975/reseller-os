@@ -1358,3 +1358,44 @@ Changes in `src/components/modules/boutique-admin-module.tsx` CategoriesTab:
 
 Build: ✅ success, no errors
 Zip: 864 KB, MD5: 4181206e9089fcc69a999a756fc094bf
+
+---
+Task ID: add-product-title-field
+Agent: main
+Task: Add "Titre / Nom du produit" field to StockItem, replace category display with title in product detail page, add title to breadcrumb
+
+## Schema
+- Added `title String?` to `StockItem` model (nullable — backward compatible with existing products)
+- Ran `bunx prisma db push`
+
+## API changes
+- `POST /api/stock` — accepts and persists `title`
+- `PATCH /api/stock/[id]` — added 'title' to allowed fields
+- `GET /api/boutique/products` — selects and returns `title`
+- `GET /api/boutique/products/[sku]` — selects and returns `title`
+
+## Stock module (src/components/modules/stock-module.tsx)
+- `StockItem` interface: added `title: string | null`
+- `form` state: added `title: ''` (both initial and reset)
+- `useMemo` (edit mode): added `title: item.title || ''`
+- Form render: added "Titre / Nom du produit" input field at the top of the Identification section (col-span-2, full width)
+- Form payload: `title` automatically included via `{ ...form, photos: ... }`
+
+## Product detail page (src/app/boutique/produit/[sku]/page.tsx)
+- `Product` interface: added `title?: string | null`
+- Breadcrumb: now shows `Title · Brand · Size` (was `Brand · Size` only) — title prepended if set
+- H1: shows `product.title` (fallback to category label if no title) + `· Taille X` if size set
+- Image alt: uses `product.title` if set (fallback to `brand category`)
+
+## Product card (src/components/boutique/product-card.tsx)
+- `ProductCardProps.product`: added `title?: string | null`
+- Card text: shows `product.title` (fallback to category label) + `· Taille X`
+- Image alt: uses `product.title` if set
+
+## Backward compatibility
+- `title` is nullable, so existing products (without title) fall back to the category label display — same as before
+- New products can have a custom title like "T-shirt Nike Sportswear blanc"
+- If title is empty, display behaves exactly as before
+
+Build: ✅ success (only pre-existing TS errors, ignored by build config)
+Zip: 856 KB, MD5: 26ba3cb4392f92289799c4d7ef58adcb
