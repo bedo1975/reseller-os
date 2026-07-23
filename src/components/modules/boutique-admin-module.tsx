@@ -12,6 +12,7 @@ import { useSettings } from '@/hooks/use-settings'
 import { clearBoutiqueSettingsCache } from '@/hooks/use-boutique-settings'
 import { LinkEditor } from '@/components/boutique/link-editor'
 import { HoursEditor } from '@/components/boutique/hours-editor'
+import { HtmlEditor } from '@/components/ui/html-editor'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -1483,13 +1484,12 @@ function AppearanceTab() {
         </CardHeader>
         <CardContent>
           <div className="space-y-1.5">
-            <Label className="text-xs">Texte des CGV (HTML autorisé)</Label>
-            <Textarea
+            <Label className="text-xs">Texte des CGV (éditeur WYSIWYG — HTML généré automatiquement)</Label>
+            <HtmlEditor
               value={form.cgvText || ''}
-              onChange={e => set('cgvText', e.target.value)}
-              rows={10}
+              onChange={(html) => set('cgvText', html)}
               placeholder="Rédigez vos CGV ici. Si vide, les CGV par défaut seront utilisées."
-              className="text-sm"
+              minHeight={300}
             />
           </div>
         </CardContent>
@@ -1504,13 +1504,12 @@ function AppearanceTab() {
         </CardHeader>
         <CardContent>
           <div className="space-y-1.5">
-            <Label className="text-xs">Texte des mentions légales (HTML autorisé)</Label>
-            <Textarea
+            <Label className="text-xs">Texte des mentions légales (éditeur WYSIWYG)</Label>
+            <HtmlEditor
               value={form.legalText || ''}
-              onChange={e => set('legalText', e.target.value)}
-              rows={10}
+              onChange={(html) => set('legalText', html)}
               placeholder="Rédigez vos mentions légales ici. Si vide, des mentions légales par défaut seront utilisées."
-              className="text-sm"
+              minHeight={300}
             />
           </div>
         </CardContent>
