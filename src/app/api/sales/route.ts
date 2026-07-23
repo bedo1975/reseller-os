@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const user = await requireAuth()
     const body = await req.json()
     const {
-      stockItemId, saleDate, platform, customerName, customerContact,
+      stockItemId, saleDate, platform, paymentMethod, customerName, customerContact,
       salePrice, shippingCost, platformFees, platformFixedFees,
       carrier, trackingNumber, parcelStatus, notes,
     } = body
@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
         stockItemId,
         saleDate: saleDate ? new Date(saleDate) : new Date(),
         platform,
+        paymentMethod: paymentMethod || null,
         customerName,
         customerContact,
         salePrice: price,

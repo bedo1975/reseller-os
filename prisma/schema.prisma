@@ -204,7 +204,8 @@ model Sale {
   stockItem     StockItem @relation(fields: [stockItemId], references: [id])
 
   saleDate      DateTime @default(now())
-  platform      String   // vinted | leboncoin | ebay | vestiaire
+  platform      String   // vinted | leboncoin | ebay | vestiaire | boutique
+  paymentMethod String?  // mode de paiement réel (CB, PayPal, Virement...) — rempli pour les ventes boutique
   customerName  String?
   customerContact String?
   salePrice     Float

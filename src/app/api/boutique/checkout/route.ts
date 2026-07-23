@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
           platformFees: 0,
           platformFixedFees: 0,
           platform: 'boutique',
+          paymentMethod: paymentMethodLabel,
           customerName: `${customer.firstName} ${customer.lastName}`,
           customerContact: JSON.stringify({
             email: customer.email,

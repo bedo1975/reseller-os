@@ -50,13 +50,17 @@ export async function GET(req: NextRequest) {
       const entries = sales.map((sale, idx) => {
         const platformLabels: Record<string, string> = {
           vinted: 'Vinted', leboncoin: 'Leboncoin', ebay: 'eBay', vestiaire: 'Vestiaire Collective',
+          boutique: 'Boutique',
         }
-        const paymentMethods: Record<string, string> = {
+        const platformPaymentMethods: Record<string, string> = {
           vinted: 'Virement (porte-monnaie Vinted)',
           leboncoin: 'Virement / Paiement LBC',
           ebay: 'Virement PayPal / eBay',
           vestiaire: 'Virement Vestiaire Collective',
         }
+        // Pour les ventes boutique, utiliser le paymentMethod réel (CB, PayPal, etc.)
+        // Pour les ventes marketplace, utiliser le mode de paiement par défaut de la plateforme
+        const modePaiement = sale.paymentMethod || platformPaymentMethods[sale.platform] || 'Virement'
         return {
           numero: idx + 1,
           date: sale.saleDate,
@@ -65,7 +69,7 @@ export async function GET(req: NextRequest) {
           designation: `${sale.stockItem.brand} ${sale.stockItem.category} ${sale.stockItem.size || ''} ${sale.stockItem.color || ''}`.trim().replace(/\s+/g, ' '),
           client: sale.customerName || `Client ${platformLabels[sale.platform] || sale.platform}`,
           origine: platformLabels[sale.platform] || sale.platform,
-          modePaiement: paymentMethods[sale.platform] || 'Virement',
+          modePaiement,
           montantHT: parseFloat((sale.salePrice / 1.2).toFixed(2)),
           montantTTC: parseFloat(sale.salePrice.toFixed(2)),
           tva: 0,
