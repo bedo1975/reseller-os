@@ -360,6 +360,7 @@ export default function CheckoutPage() {
                 </div>
                 <RelayMap
                   postalCode={form.postalCode}
+                  city={form.city}
                   onSelect={(relay) => setSelectedRelay(relay)}
                   selectedRelayId={selectedRelay?.id}
                 />

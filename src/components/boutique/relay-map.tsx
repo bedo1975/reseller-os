@@ -44,6 +44,7 @@ export interface RelayPoint {
 
 interface RelayMapProps {
   postalCode: string
+  city?: string
   onSelect: (relay: RelayPoint) => void
   selectedRelayId?: string | null
 }
@@ -60,7 +61,7 @@ function Recenter({ relays }: { relays: RelayPoint[] }) {
   return null
 }
 
-export function RelayMap({ postalCode, onSelect, selectedRelayId }: RelayMapProps) {
+export function RelayMap({ postalCode, city, onSelect, selectedRelayId }: RelayMapProps) {
   const [relays, setRelays] = useState<RelayPoint[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -72,7 +73,7 @@ export function RelayMap({ postalCode, onSelect, selectedRelayId }: RelayMapProp
     fetch('/api/shipping/relay-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postalCode }),
+      body: JSON.stringify({ postalCode, city }),
     })
       .then(r => r.json())
       .then(data => {
@@ -84,7 +85,7 @@ export function RelayMap({ postalCode, onSelect, selectedRelayId }: RelayMapProp
       })
       .catch(() => setError('Erreur réseau'))
       .finally(() => setLoading(false))
-  }, [postalCode])
+  }, [postalCode, city])
 
   const selectedRelay = relays.find(r => r.id === selectedRelayId)
 
