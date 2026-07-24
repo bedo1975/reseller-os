@@ -195,7 +195,14 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
   }
 }
 
-export async function notifyOrderStatusChange(clientEmail: string, clientFirstName: string, orderId: string, status: string) {
+export async function notifyOrderStatusChange(
+  clientEmail: string,
+  clientFirstName: string,
+  orderId: string,
+  status: string,
+  trackingNumber?: string | null,
+  carrier?: string | null,
+) {
   try {
     console.log('[email] notifyOrderStatusChange triggered:', orderId, 'status:', status, 'to', clientEmail)
     const statusLabels: Record<string, string> = {
@@ -210,17 +217,59 @@ export async function notifyOrderStatusChange(clientEmail: string, clientFirstNa
 
     const config = await getEmailConfig()
     const template = config?.templateOrderStatus || null
+
+    // Build tracking info if shipped with tracking number
+    let trackingText = ''
+    let trackingHtml = ''
+    if (status === 'shipped' && trackingNumber) {
+      const carrierLabel = carrier || 'transporteur'
+      trackingText = `\n\nNuméro de suivi : ${trackingNumber}\nTransporteur : ${carrierLabel}`
+
+      // Try to build a tracking URL from carrier Attribute
+      let trackingUrl = ''
+      try {
+        const carrierAttr = await db.attribute.findFirst({
+          where: { type: 'carrier', code: carrier || '' },
+          select: { trackingUrl: true, value: true },
+        })
+        if (carrierAttr?.trackingUrl && carrierAttr.trackingUrl.includes('{tracking}')) {
+          trackingUrl = carrierAttr.trackingUrl.replace('{tracking}', trackingNumber)
+        }
+      } catch {}
+
+      trackingHtml = `
+        <div style="background:#e7f1ff;border:1px solid #b3d7ff;border-radius:8px;padding:16px;margin-top:16px;">
+          <p style="margin:0 0 8px 0;font-weight:600;color:#0056b3;">📦 Suivi de votre colis</p>
+          <p style="margin:0 0 4px 0;font-size:14px;color:#333;">Transporteur : <strong>${carrierLabel}</strong></p>
+          <p style="margin:0 0 8px 0;font-size:14px;color:#333;">Numéro de suivi : <strong style="font-family:monospace;">${trackingNumber}</strong></p>
+          ${trackingUrl
+            ? `<a href="${trackingUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:600;">Suivre mon colis →</a>`
+            : ''
+          }
+        </div>`
+    }
+
+    const defaultText = `Bonjour ${clientFirstName},\n\nLe statut de votre commande ${orderId} a été mis à jour : ${statusLabel}\n\nConnectez-vous à votre compte pour plus de détails.${trackingText}`
     const text = applyTemplate(
       template,
-      `Bonjour ${clientFirstName},\n\nLe statut de votre commande ${orderId} a été mis à jour : ${statusLabel}\n\nConnectez-vous à votre compte pour plus de détails.`,
+      defaultText,
       { firstName: clientFirstName, orderId, status: statusLabel },
     )
+
+    let html = asHtml(text)
+    // If template is HTML, append tracking HTML after the template content
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      html = html + trackingHtml
+    } else {
+      // Plain text template — convert tracking text too
+      html = html + trackingHtml
+    }
 
     await sendEmail({
       to: clientEmail,
       subject: `Mise à jour commande ${orderId} — ${statusLabel}`,
       text,
-      html: asHtml(text),
+      html,
     })
   } catch (e: any) {
     console.error('[email] notifyOrderStatusChange error:', e?.message)

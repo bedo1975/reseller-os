@@ -1978,7 +1978,8 @@ function ShippingTab() {
                   {m.active ? 'Désactiver' : 'Activer'}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => toggleExpand(m.id)}>
-                  <Truck className="h-3.5 w-3.5 mr-1" /> Tranches de poids
+                  <ChevronRight className={`h-3.5 w-3.5 mr-1 transition-transform ${expandedMethod === m.id ? 'rotate-90' : ''}`} />
+                  Tranches de poids
                 </Button>
                 <Button size="sm" variant="ghost" className="text-red-600" onClick={() => removeMethod(m.id)}>
                   <Trash2 className="h-3.5 w-3.5" />

@@ -50,7 +50,15 @@ export async function GET(
       : `${(customer as any)?.firstName || ''} ${(customer as any)?.lastName || ''}`
     const clientEmail = order.client?.email || (customer as any)?.email || ''
     const clientPhone = order.client?.phone || (customer as any)?.phone || ''
-    const clientAddress = order.client?.address || (customer as any)?.address || ''
+
+    // Build complete address from either BoutiqueClient fields or customerSnapshot
+    const esc = (s: string) => escapeHtml(s)
+    const addrLine = esc(order.client?.address || (customer as any)?.address || '')
+    const addrPostal = order.client?.postalCode || (customer as any)?.postalCode || ''
+    const addrCity = order.client?.city || (customer as any)?.city || ''
+    const addrCountry = order.client?.country || (customer as any)?.country || ''
+    const addrLine2 = `${addrPostal} ${addrCity}`.trim()
+    const clientAddress = [addrLine, esc(addrLine2), esc(addrCountry)].filter(Boolean).join('<br>')
 
     const STATUS_LABELS: Record<string, string> = {
       pending: 'En attente', paid: 'Payée', shipped: 'Expédiée',
@@ -123,7 +131,7 @@ export async function GET(
     <div class="section">
       <div class="section-title">Adresse de livraison</div>
       <div class="section-content">
-        ${escapeHtml(clientAddress) || '—'}
+        ${clientAddress || '—'}
       </div>
     </div>
     <div class="section">

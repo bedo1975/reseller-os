@@ -105,10 +105,10 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
     [filtersConfig],
   )
 
-  // Initialize collapsed state when filtersConfig changes
+  // Initialize collapsed state — ALL filters collapsed by default
   useEffect(() => {
-    setCollapsedFilters(new Set(filtersConfig.filter(f => f.collapsed).map(f => f.type)))
-    // Reset selections when category changes
+    const allTypes = new Set<string>(['subcategory', ...filtersConfig.filter(f => f.active).map(f => f.type)])
+    setCollapsedFilters(allTypes)
     setFilterValues({})
     setSubcatFilter('all')
   }, [filtersConfig])
@@ -249,27 +249,36 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
               )}
             </div>
 
-            {/* Subcategory filter (kept separate — not part of filtersJson) */}
+            {/* Subcategory filter — collapsible, collapsed by default */}
             {subcats.length > 0 && (
               <div className="space-y-2">
-                <Label className="text-xs font-semibold text-gray-700 uppercase">Sous-catégorie</Label>
-                <div className="space-y-1">
-                  <button
-                    onClick={() => setSubcatFilter('all')}
-                    className={`block w-full text-left px-2 py-1 rounded text-sm ${subcatFilter === 'all' ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    Toutes
-                  </button>
-                  {subcats.map(s => (
+                <button
+                  type="button"
+                  onClick={() => toggleCollapse('subcategory')}
+                  className="flex items-center justify-between w-full text-left"
+                >
+                  <Label className="text-xs font-semibold text-gray-700 uppercase cursor-pointer">Sous-catégorie</Label>
+                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${collapsedFilters.has('subcategory') ? '-rotate-90' : ''}`} />
+                </button>
+                {!collapsedFilters.has('subcategory') && (
+                  <div className="space-y-1">
                     <button
-                      key={s.slug}
-                      onClick={() => setSubcatFilter(s.slug)}
-                      className={`block w-full text-left px-2 py-1 rounded text-sm ${subcatFilter === s.slug ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                      onClick={() => setSubcatFilter('all')}
+                      className={`block w-full text-left px-2 py-1 rounded text-sm ${subcatFilter === 'all' ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
-                      {s.label}
+                      Toutes
                     </button>
-                  ))}
-                </div>
+                    {subcats.map(s => (
+                      <button
+                        key={s.slug}
+                        onClick={() => setSubcatFilter(s.slug)}
+                        className={`block w-full text-left px-2 py-1 rounded text-sm ${subcatFilter === s.slug ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

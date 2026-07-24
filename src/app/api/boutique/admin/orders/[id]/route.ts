@@ -58,7 +58,7 @@ export async function PATCH(
         } catch {}
       }
       if (clientEmail && clientFirstName) {
-        await notifyOrderStatusChange(clientEmail, clientFirstName, order.orderId, status)
+        await notifyOrderStatusChange(clientEmail, clientFirstName, order.orderId, status, trackingNumber, carrier)
       }
     }
 
