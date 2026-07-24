@@ -5,9 +5,10 @@ import { use } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useFetch } from '@/hooks/use-fetch'
+import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw } from 'lucide-react'
+import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 const CONDITION_LABELS: Record<string, string> = {
@@ -46,6 +47,7 @@ interface Product {
 export default function ProductPage({ params }: { params: Promise<{ sku: string }> }) {
   const { sku } = use(params)
   const router = useRouter()
+  const settings = useBoutiqueSettings()
   const { data, loading } = useFetch<{ product: Product }>(`/api/boutique/products/${sku}`)
   const [activePhoto, setActivePhoto] = useState(0)
   const [zoomed, setZoomed] = useState(false)
@@ -252,21 +254,30 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           )}
 
           {/* Actions */}
-          <div className="flex gap-3 mb-6">
-            <Button
-              onClick={addToCart}
-              disabled={adding}
-              className="flex-1 h-12 bg-white border-2 border-[#007bff] text-[#007bff] hover:bg-blue-50"
-            >
-              {adding ? <><Check className="h-5 w-5 mr-2" /> Ajouté !</> : <><ShoppingCart className="h-5 w-5 mr-2" /> Ajouter au panier</>}
-            </Button>
-            <Button
-              onClick={buyNow}
-              className="flex-1 h-12 bg-[#007bff] hover:bg-[#0056b3]"
-            >
-              Acheter maintenant
-            </Button>
-          </div>
+          {settings.boutiqueClosed === true ? (
+            <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-4 py-3 text-sm flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+              <span className="whitespace-pre-wrap">
+                {settings.boutiqueClosedMessage || 'La boutique est temporairement fermée. Revenez bientôt !'}
+              </span>
+            </div>
+          ) : (
+            <div className="flex gap-3 mb-6">
+              <Button
+                onClick={addToCart}
+                disabled={adding}
+                className="flex-1 h-12 bg-white border-2 border-[#007bff] text-[#007bff] hover:bg-blue-50"
+              >
+                {adding ? <><Check className="h-5 w-5 mr-2" /> Ajouté !</> : <><ShoppingCart className="h-5 w-5 mr-2" /> Ajouter au panier</>}
+              </Button>
+              <Button
+                onClick={buyNow}
+                className="flex-1 h-12 bg-[#007bff] hover:bg-[#0056b3]"
+              >
+                Acheter maintenant
+              </Button>
+            </div>
+          )}
 
           {/* Reassurance */}
           <div className="space-y-3 pt-6 border-t border-gray-200">

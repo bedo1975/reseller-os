@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Package, Mail } from 'lucide-react'
+import { CheckCircle2, Package, Mail, Download } from 'lucide-react'
 
 interface OrderInfo {
   orderId: string
@@ -81,11 +81,19 @@ export default function ConfirmationPage() {
         {order.invoiceNumbers.length > 0 && (
           <div className="pt-4 border-t border-gray-200">
             <p className="text-xs text-gray-500 uppercase mb-2">Facture(s)</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="space-y-2">
               {order.invoiceNumbers.map(n => (
-                <span key={n} className="font-mono text-xs bg-blue-50 text-[#007bff] px-2 py-1 rounded">
-                  {n}
-                </span>
+                <a
+                  key={n}
+                  href={`/api/invoices/by-number/${encodeURIComponent(n)}/pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-[#007bff] hover:underline"
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="font-mono">{n}</span>
+                  <span className="text-gray-500">— Télécharger la facture (PDF)</span>
+                </a>
               ))}
             </div>
           </div>

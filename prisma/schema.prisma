@@ -427,6 +427,11 @@ model BoutiqueSettings {
   // Seuil livraison offerte
   freeShippingThreshold Float @default(50)
   freeShippingEnabled   Boolean @default(false) // Master switch: active/désactive la livraison offerte
+  // Boutique fermée (masque les boutons commander/acheter)
+  boutiqueClosed        Boolean @default(false)
+  boutiqueClosedMessage String  @default("La boutique est temporairement fermée. Revenez bientôt !")
+  // Design des emails (moderne par défaut)
+  emailDesign           String  @default("modern") // modern | classic | minimal
   // Configuration Stripe
   stripePublicKey  String?
   stripeSecretKey  String?
@@ -520,6 +525,7 @@ model BoutiqueCategory {
   bgOpacity       Float    @default(0.5)  // 0.0 à 1.0 — opacité de l'image de fond
   emoji           String   @default("📦")
   order           Int      @default(0)
+  filtersJson     String   @default("[]")  // JSON: [{ type: "size"|"color"|"condition"|"brand", label: "Taille", collapsed: false }]
   updatedAt       DateTime @updatedAt
 
   @@index([parentId])

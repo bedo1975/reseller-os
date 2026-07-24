@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { HtmlEditor } from '@/components/ui/html-editor'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -2026,15 +2027,96 @@ interface EmailSettingsData {
   templateOrderStatus: string | null
 }
 
+// Modern HTML preset generator for email templates.
+// Returns an HTML string with inline styles (email-client compatible).
+function getModernPreset(templateType: string): string {
+  const shopName = 'Votre Boutique'
+  const accent = '#007bff'
+  const accentDark = '#0056b3'
+  const footer = `© ${new Date().getFullYear()} ${shopName}. Tous droits réservés.`
+
+  const header = `
+  <div style="background:linear-gradient(135deg, ${accent} 0%, ${accentDark} 100%);padding:32px 24px;text-align:center;border-radius:12px 12px 0 0;">
+    <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:0.5px;">${shopName}</h1>
+  </div>`
+
+  const footerBlock = `
+  <div style="background:#f8f9fa;padding:20px 24px;text-align:center;border-radius:0 0 12px 12px;color:#6c757d;font-size:12px;">
+    <p style="margin:0;">${footer}</p>
+  </div>`
+
+  const wrap = (title: string, bodyHtml: string, buttonText?: string, buttonLink?: string) => {
+    const button = buttonText && buttonLink
+      ? `<a href="${buttonLink}" style="display:inline-block;background:${accent};color:#ffffff;text-decoration:none;padding:12px 32px;border-radius:24px;font-weight:600;margin-top:16px;">${buttonText}</a>`
+      : ''
+    return `<div style="max-width:560px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+${header}
+  <div style="padding:32px 24px;text-align:center;color:#212529;">
+    <h2 style="margin:0 0 12px 0;font-size:20px;font-weight:700;color:#212529;">${title}</h2>
+    <div style="font-size:15px;line-height:1.6;color:#495057;">${bodyHtml}</div>
+    ${button}
+  </div>
+${footerBlock}
+</div>`
+  }
+
+  switch (templateType) {
+    case 'templateRegister':
+      return wrap(
+        'Bienvenue {firstName} ! 👋',
+        '<p>Nous sommes ravis de vous compter parmi nos clients.</p><p>Votre compte a été créé avec succès. Connectez-vous à tout moment pour suivre vos commandes et gérer vos informations.</p>',
+        'Accéder à mon compte',
+        '/boutique/connexion',
+      )
+    case 'templateValidate':
+      return wrap(
+        'Validez votre compte',
+        '<p>Bonjour {firstName},</p><p>Pour activer votre compte et profiter de toutes nos offres, veuillez valider votre adresse email en cliquant sur le bouton ci-dessous.</p>',
+        'Valider mon compte',
+        '/boutique/connexion',
+      )
+    case 'templatePasswordLost':
+      return wrap(
+        'Réinitialisation de votre mot de passe',
+        '<p>Bonjour {firstName},</p><p>Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour en choisir un nouveau. Ce lien est valable 1 heure.</p>',
+        'Réinitialiser mon mot de passe',
+        '/boutique/connexion',
+      )
+    case 'templateOrder':
+      return wrap(
+        'Merci pour votre commande ! 🎉',
+        '<p>Bonjour {firstName},</p><p>Nous confirmons la bonne réception de votre commande <strong>{orderId}</strong> d\'un montant de <strong>{total}</strong>.</p><p>Nous préparons votre colis avec soin et vous tiendrons informé(e) de son expédition.</p>',
+        'Suivre ma commande',
+        '/boutique/compte/commandes',
+      )
+    case 'templateOrderStatus':
+      return wrap(
+        'Mise à jour de votre commande {orderId}',
+        '<p>Bonjour {firstName},</p><p>Le statut de votre commande <strong>{orderId}</strong> a été mis à jour :</p><p style="display:inline-block;background:#e7f1ff;color:' + accent + ';padding:6px 16px;border-radius:16px;font-weight:600;">{status}</p><p>Connectez-vous à votre espace client pour plus de détails.</p>',
+        'Voir ma commande',
+        '/boutique/compte/commandes',
+      )
+    default:
+      return wrap('Bonjour {firstName}', '<p>Votre message ici.</p>')
+  }
+}
+
 function EmailSection() {
   const [form, setForm] = useState<EmailSettingsData | null>(null)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [emailDesign, setEmailDesign] = useState<string>('modern')
+  const [savingDesign, setSavingDesign] = useState(false)
 
   useEffect(() => {
     fetch('/api/email-settings')
       .then(r => r.json())
       .then(data => setForm(data))
+      .catch(() => {})
+    // Fetch emailDesign from BoutiqueSettings
+    fetch('/api/boutique/admin/settings')
+      .then(r => r.json())
+      .then(data => { if (typeof data.emailDesign === 'string') setEmailDesign(data.emailDesign) })
       .catch(() => {})
   }, [])
 
@@ -2057,6 +2139,24 @@ function EmailSection() {
       toast.error('Erreur réseau')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const saveDesign = async (value: string) => {
+    setEmailDesign(value)
+    setSavingDesign(true)
+    try {
+      const res = await fetch('/api/boutique/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailDesign: value }),
+      })
+      if (!res.ok) { toast.error('Erreur'); return }
+      toast.success('Design des emails mis à jour')
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSavingDesign(false)
     }
   }
 
@@ -2138,30 +2238,80 @@ function EmailSection() {
         </CardContent>
       </Card>
 
+      {/* Design des emails */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4" /> Design des emails</CardTitle>
+          <CardDescription>Choisissez le style visuel appliqué aux emails envoyés automatiquement par la boutique.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              { value: 'modern', label: 'Moderne', desc: 'Dégradé, bords arrondis, boutons colorés' },
+              { value: 'classic', label: 'Classique', desc: 'Mise en page sobre et traditionnelle' },
+              { value: 'minimal', label: 'Minimaliste', desc: 'Épuré, noir et blanc, sans fioritures' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => saveDesign(opt.value)}
+                className={cn(
+                  'text-left p-3 rounded-md border transition-colors',
+                  emailDesign === opt.value
+                    ? 'border-foreground/40 bg-card shadow-sm'
+                    : 'border-border/60 hover:border-foreground/20 bg-card/50',
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">{opt.label}</span>
+                  {emailDesign === opt.value && <CheckCircle2 className="h-4 w-4 text-primary" />}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {savingDesign ? 'Sauvegarde…' : 'Le design est sauvegardé automatiquement dès que vous le sélectionnez.'}
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Templates */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Modèles d'emails</CardTitle>
-          <CardDescription>Personnalisez les emails envoyés automatiquement. Variables : {`{firstName}, {lastName}, {email}, {orderId}, {total}, {status}`}</CardDescription>
+          <CardDescription>Personnalisez les emails envoyés automatiquement (HTML autorisé). Variables : {`{firstName}, {lastName}, {email}, {orderId}, {total}, {status}`}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Inscription client</Label>
-            <Textarea value={form.templateRegister || ''} onChange={e => set('templateRegister', e.target.value)} rows={3} placeholder="Bienvenue {firstName} ! Votre compte a été créé avec succès." />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Mot de passe perdu</Label>
-            <Textarea value={form.templatePasswordLost || ''} onChange={e => set('templatePasswordLost', e.target.value)} rows={3} placeholder="Bonjour {firstName}, voici votre lien de réinitialisation..." />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Nouvelle commande</Label>
-            <Textarea value={form.templateOrder || ''} onChange={e => set('templateOrder', e.target.value)} rows={3} placeholder="Merci {firstName} ! Votre commande {orderId} d'un montant de {total}€ a bien été enregistrée." />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Changement de statut commande</Label>
-            <Textarea value={form.templateOrderStatus || ''} onChange={e => set('templateOrderStatus', e.target.value)} rows={3} placeholder="Bonjour {firstName}, le statut de votre commande {orderId} est maintenant : {status}." />
-          </div>
-          <p className="text-[11px] text-muted-foreground">Si un modèle est vide, un texte par défaut sera utilisé.</p>
+        <CardContent className="space-y-5">
+          {[
+            { key: 'templateRegister' as const, label: 'Inscription client', placeholder: 'Bienvenue {firstName} ! Votre compte a été créé avec succès.' },
+            { key: 'templateValidate' as const, label: 'Validation du compte', placeholder: 'Bonjour {firstName}, veuillez valider votre adresse email…' },
+            { key: 'templatePasswordLost' as const, label: 'Mot de passe perdu', placeholder: 'Bonjour {firstName}, voici votre lien de réinitialisation…' },
+            { key: 'templateOrder' as const, label: 'Nouvelle commande', placeholder: 'Merci {firstName} ! Votre commande {orderId} d\'un montant de {total}€ a bien été enregistrée.' },
+            { key: 'templateOrderStatus' as const, label: 'Changement de statut commande', placeholder: 'Bonjour {firstName}, le statut de votre commande {orderId} est maintenant : {status}.' },
+          ].map(t => (
+            <div key={t.key} className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-xs">{t.label}</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => set(t.key, getModernPreset(t.key))}
+                  title="Charger un modèle moderne pré-rempli"
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1" /> Charger un modèle
+                </Button>
+              </div>
+              <HtmlEditor
+                value={form[t.key] || ''}
+                onChange={(html) => set(t.key, html)}
+                placeholder={t.placeholder}
+                minHeight={200}
+              />
+            </div>
+          ))}
+          <p className="text-[11px] text-muted-foreground">Si un modèle est vide, un texte par défaut sera utilisé. Cliquez sur « Charger un modèle » pour démarrer avec un design moderne pré-rempli.</p>
         </CardContent>
       </Card>
 

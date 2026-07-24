@@ -1,0 +1,602 @@
+  1450→        </CardContent>
+  1451→      </Card>
+  1452→      </>
+  1453→      )}
+  1454→
+  1455→      {/* Horaires */}
+  1456→      {subTab === 'misc' && (
+  1457→      <Card>
+  1458→        <CardHeader>
+  1459→          <CardTitle className="text-base flex items-center gap-2"><Clock className="h-4 w-4" /> Horaires (footer)</CardTitle>
+  1460→          <CardDescription className="text-xs">
+  1461→            Activez ou désactivez l'affichage des horaires dans le footer de la boutique, et personnalisez chaque jour.
+  1462→          </CardDescription>
+  1463→        </CardHeader>
+  1464→        <CardContent>
+  1465→          <HoursEditor
+  1466→            value={form.hoursJson}
+  1467→            onChange={(json) => set('hoursJson', json)}
+  1468→            visible={form.hoursVisible !== false}
+  1469→            onVisibleChange={(v) => set('hoursVisible', v)}
+  1470→          />
+  1471→        </CardContent>
+  1472→      </Card>
+  1473→      )}
+  1474→
+  1475→      {/* CGV */}
+  1476→      {subTab === 'misc' && (
+  1477→      <Card>
+  1478→        <CardHeader>
+  1479→          <CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4" /> CGV personnalisées</CardTitle>
+  1480→        </CardHeader>
+  1481→        <CardContent>
+  1482→          <div className="space-y-1.5">
+  1483→            <Label className="text-xs">Texte des CGV (éditeur WYSIWYG — HTML généré automatiquement)</Label>
+  1484→            <HtmlEditor
+  1485→              value={form.cgvText || ''}
+  1486→              onChange={(html) => set('cgvText', html)}
+  1487→              placeholder="Rédigez vos CGV ici. Si vide, les CGV par défaut seront utilisées."
+  1488→              minHeight={300}
+  1489→            />
+  1490→          </div>
+  1491→        </CardContent>
+  1492→      </Card>
+  1493→      )}
+  1494→
+  1495→      {/* Mentions légales */}
+  1496→      {subTab === 'misc' && (
+  1497→      <Card>
+  1498→        <CardHeader>
+  1499→          <CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4" /> Mentions légales</CardTitle>
+  1500→        </CardHeader>
+  1501→        <CardContent>
+  1502→          <div className="space-y-1.5">
+  1503→            <Label className="text-xs">Texte des mentions légales (éditeur WYSIWYG)</Label>
+  1504→            <HtmlEditor
+  1505→              value={form.legalText || ''}
+  1506→              onChange={(html) => set('legalText', html)}
+  1507→              placeholder="Rédigez vos mentions légales ici. Si vide, des mentions légales par défaut seront utilisées."
+  1508→              minHeight={300}
+  1509→            />
+  1510→          </div>
+  1511→        </CardContent>
+  1512→      </Card>
+  1513→      )}
+  1514→
+  1515→      {/* Google Analytics */}
+  1516→      {subTab === 'misc' && (
+  1517→      <Card>
+  1518→        <CardHeader>
+  1519→          <CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Google Analytics</CardTitle>
+  1520→          <CardDescription className="text-xs">
+  1521→            ID de mesure Google Analytics 4 (format : G-XXXXXXXXXX). Laisser vide pour désactiver.
+  1522→          </CardDescription>
+  1523→        </CardHeader>
+  1524→        <CardContent className="space-y-3">
+  1525→          <div className="space-y-1.5">
+  1526→            <Label className="text-xs">ID de mesure (GA4)</Label>
+  1527→            <Input
+  1528→              value={form.gaTagId || ''}
+  1529→              onChange={e => set('gaTagId', e.target.value)}
+  1530→              placeholder="G-XXXXXXXXXX"
+  1531→              className="font-mono text-sm"
+  1532→            />
+  1533→          </div>
+  1534→          <p className="text-[11px] text-muted-foreground">
+  1535→            Le script GA4 sera injecté automatiquement sur toutes les pages de la boutique si un ID est renseigné.
+  1536→            Créez votre propriété sur <a href="https://analytics.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">analytics.google.com</a> pour obtenir votre ID.
+  1537→          </p>
+  1538→        </CardContent>
+  1539→      </Card>
+  1540→      )}
+  1541→
+  1542→      <div className="sticky bottom-4 z-20 flex justify-end bg-gradient-to-t from-background via-background/95 to-transparent pt-4 pb-2 -mx-2 px-2">
+  1543→        <Button onClick={save} disabled={saving} size="lg" className="shadow-lg">
+  1544→          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+  1545→          Sauvegarder l'apparence
+  1546→        </Button>
+  1547→      </div>
+  1548→    </div>
+  1549→  )
+  1550→}
+  1551→
+  1552→// ═══════════════════════════════════════════════════════════════════════════
+  1553→// ONGLET 5 — LIVRAISON (modes + tranches de poids)
+  1554→// ═══════════════════════════════════════════════════════════════════════════
+  1555→
+  1556→interface ShippingMethodData {
+  1557→  id: string
+  1558→  code: string
+  1559→  label: string
+  1560→  price: number
+  1561→  delay: string
+  1562→  carrierCode: string | null
+  1563→  active: boolean
+  1564→  order: number
+  1565→}
+  1566→
+  1567→interface WeightRule {
+  1568→  id: string
+  1569→  weightMin: number
+  1570→  weightMax: number
+  1571→  price: number
+  1572→}
+  1573→
+  1574→function ShippingTab() {
+  1575→  const { getByType } = useSettings()
+  1576→  const carriers = getByType('carrier')
+  1577→  const [methods, setMethods] = useState<ShippingMethodData[]>([])
+  1578→  const [loading, setLoading] = useState(true)
+  1579→  const [expandedMethod, setExpandedMethod] = useState<string | null>(null)
+  1580→  const [weightRules, setWeightRules] = useState<Record<string, WeightRule[]>>({})
+  1581→  const [newRules, setNewRules] = useState<Record<string, { weightMin: string; weightMax: string; price: string }>>({})
+  1582→  const [showCarrierForm, setShowCarrierForm] = useState(false)
+  1583→  const [carrierForm, setCarrierForm] = useState({ value: '', code: '', trackingUrl: '' })
+  1584→  // Free shipping config
+  1585→  const [freeShippingEnabled, setFreeShippingEnabled] = useState(false)
+  1586→  const [freeShippingThreshold, setFreeShippingThreshold] = useState(50)
+  1587→  const [savingFreeShip, setSavingFreeShip] = useState(false)
+  1588→  const [showMethodForm, setShowMethodForm] = useState(false)
+  1589→  const [methodForm, setMethodForm] = useState({ code: '', label: '', price: '', delay: '', carrierCode: '', order: '0' })
+  1590→  const { attributes: allAttrs, refresh: refreshAttrs } = useSettings()
+  1591→
+  1592→  const fetchMethods = useCallback(async () => {
+  1593→    setLoading(true)
+  1594→    try {
+  1595→      const res = await fetch('/api/boutique/admin/shipping?all=true')
+  1596→      const data = await res.json()
+  1597→      setMethods(data.methods || [])
+  1598→    } catch {
+  1599→      toast.error('Erreur')
+  1600→    } finally {
+  1601→      setLoading(false)
+  1602→    }
+  1603→  }, [])
+  1604→
+  1605→  // Fetch free shipping config
+  1606→  const fetchFreeShipping = useCallback(async () => {
+  1607→    try {
+  1608→      const res = await fetch('/api/boutique/admin/settings')
+  1609→      const data = await res.json()
+  1610→      setFreeShippingEnabled(data.freeShippingEnabled ?? false)
+  1611→      setFreeShippingThreshold(data.freeShippingThreshold ?? 50)
+  1612→    } catch {}
+  1613→  }, [])
+  1614→
+  1615→  // Save free shipping config
+  1616→  const saveFreeShipping = async () => {
+  1617→    setSavingFreeShip(true)
+  1618→    try {
+  1619→      await fetch('/api/boutique/admin/settings', {
+  1620→        method: 'PUT',
+  1621→        headers: { 'Content-Type': 'application/json' },
+  1622→        body: JSON.stringify({ freeShippingEnabled, freeShippingThreshold }),
+  1623→      })
+  1624→      toast.success('Livraison offerte configurée')
+  1625→    } catch {
+  1626→      toast.error('Erreur')
+  1627→    } finally {
+  1628→      setSavingFreeShip(false)
+  1629→    }
+  1630→  }
+  1631→
+  1632→  useEffect(() => { fetchMethods(); fetchFreeShipping() }, [fetchMethods, fetchFreeShipping])
+  1633→
+  1634→  const toggleActive = async (m: ShippingMethodData) => {
+  1635→    await fetch(`/api/boutique/admin/shipping/${m.id}`, {
+  1636→      method: 'PATCH',
+  1637→      headers: { 'Content-Type': 'application/json' },
+  1638→      body: JSON.stringify({ active: !m.active }),
+  1639→    })
+  1640→    fetchMethods()
+  1641→  }
+  1642→
+  1643→  const removeMethod = async (id: string) => {
+  1644→    if (!confirm('Supprimer ce mode de livraison ?')) return
+  1645→    await fetch(`/api/boutique/admin/shipping/${id}`, { method: 'DELETE' })
+  1646→    toast.success('Supprimé')
+  1647→    fetchMethods()
+  1648→  }
+  1649→
+  1650→  const fetchWeightRules = async (methodId: string) => {
+  1651→    try {
+  1652→      const res = await fetch(`/api/boutique/admin/shipping-weight-rules?shippingMethodId=${methodId}`)
+  1653→      const data = await res.json()
+  1654→      setWeightRules(prev => ({ ...prev, [methodId]: data.rules || [] }))
+  1655→    } catch {}
+  1656→  }
+  1657→
+  1658→  const toggleExpand = (methodId: string) => {
+  1659→    if (expandedMethod === methodId) {
+  1660→      setExpandedMethod(null)
+  1661→    } else {
+  1662→      setExpandedMethod(methodId)
+  1663→      fetchWeightRules(methodId)
+  1664→    }
+  1665→  }
+  1666→
+  1667→  const addCarrier = async () => {
+  1668→    if (!carrierForm.value || !carrierForm.code) {
+  1669→      toast.error('Nom et code requis')
+  1670→      return
+  1671→    }
+  1672→    const res = await fetch('/api/settings', {
+  1673→      method: 'POST',
+  1674→      headers: { 'Content-Type': 'application/json' },
+  1675→      body: JSON.stringify({
+  1676→        type: 'carrier',
+  1677→        value: carrierForm.value,
+  1678→        code: carrierForm.code,
+  1679→        trackingUrl: carrierForm.trackingUrl || null,
+  1680→      }),
+  1681→    })
+  1682→    if (res.ok) {
+  1683→      toast.success('Transporteur ajouté')
+  1684→      setCarrierForm({ value: '', code: '', trackingUrl: '' })
+  1685→      setShowCarrierForm(false)
+  1686→      refreshAttrs()
+  1687→    } else {
+  1688→      toast.error('Erreur')
+  1689→    }
+  1690→  }
+  1691→
+  1692→  const addWeightRule = async (methodId: string) => {
+  1693→    const r = newRules[methodId] || { weightMin: '', weightMax: '', price: '' }
+  1694→    if (!r.weightMin || !r.weightMax || !r.price) {
+  1695→      toast.error('Tous les champs requis')
+  1696→      return
+  1697→    }
+  1698→    await fetch('/api/boutique/admin/shipping-weight-rules', {
+  1699→      method: 'POST',
+  1700→      headers: { 'Content-Type': 'application/json' },
+  1701→      body: JSON.stringify({
+  1702→        shippingMethodId: methodId,
+  1703→        weightMin: parseFloat(r.weightMin),
+  1704→        weightMax: parseFloat(r.weightMax),
+  1705→        price: parseFloat(r.price),
+  1706→      }),
+  1707→    })
+  1708→    setNewRules(prev => ({ ...prev, [methodId]: { weightMin: '', weightMax: '', price: '' } }))
+  1709→    fetchWeightRules(methodId)
+  1710→    toast.success('Tranche ajoutée')
+  1711→  }
+  1712→
+  1713→  const createMethod = async () => {
+  1714→    if (!methodForm.code || !methodForm.label) {
+  1715→      toast.error('Code et libellé requis')
+  1716→      return
+  1717→    }
+  1718→    const res = await fetch('/api/boutique/admin/shipping', {
+  1719→      method: 'POST',
+  1720→      headers: { 'Content-Type': 'application/json' },
+  1721→      body: JSON.stringify({
+  1722→        code: methodForm.code.trim().toLowerCase(),
+  1723→        label: methodForm.label.trim(),
+  1724→        price: parseFloat(methodForm.price) || 0,
+  1725→        delay: methodForm.delay.trim(),
+  1726→        carrierCode: methodForm.carrierCode || null,
+  1727→        order: parseInt(methodForm.order) || 0,
+  1728→        active: true,
+  1729→      }),
+  1730→    })
+  1731→    if (res.ok) {
+  1732→      toast.success('Mode de livraison créé')
+  1733→      setMethodForm({ code: '', label: '', price: '', delay: '', carrierCode: '', order: '0' })
+  1734→      setShowMethodForm(false)
+  1735→      fetchMethods()
+  1736→    } else {
+  1737→      const data = await res.json().catch(() => ({}))
+  1738→      toast.error(data.error || 'Erreur')
+  1739→    }
+  1740→  }
+  1741→
+  1742→  const updateMethodCarrier = async (methodId: string, carrierCode: string) => {
+  1743→    const res = await fetch(`/api/boutique/admin/shipping/${methodId}`, {
+  1744→      method: 'PATCH',
+  1745→      headers: { 'Content-Type': 'application/json' },
+  1746→      body: JSON.stringify({ carrierCode: carrierCode || null }),
+  1747→    })
+  1748→    if (res.ok) {
+  1749→      toast.success('Transporteur mis à jour')
+  1750→      fetchMethods()
+  1751→    } else {
+  1752→      toast.error('Erreur')
+  1753→    }
+  1754→  }
+  1755→
+  1756→  const removeWeightRule = async (ruleId: string, methodId: string) => {
+  1757→    await fetch(`/api/boutique/admin/shipping-weight-rules/${ruleId}`, { method: 'DELETE' })
+  1758→    fetchWeightRules(methodId)
+  1759→    toast.success('Tranche supprimée')
+  1760→  }
+  1761→
+  1762→  if (loading) return <Skeleton className="h-32" />
+  1763→
+  1764→  return (
+  1765→    <div className="space-y-4">
+  1766→      {/* Livraison offerte */}
+  1767→      <Card className={freeShippingEnabled ? 'border-green-400 bg-green-50/50 dark:bg-green-950/20' : ''}>
+  1768→        <CardHeader>
+  1769→          <CardTitle className="text-sm flex items-center gap-2">
+  1770→            <Truck className="h-4 w-4" /> Livraison offerte
+  1771→            {freeShippingEnabled
+  1772→              ? <Badge className="bg-green-600 hover:bg-green-600">Activée</Badge>
+  1773→              : <Badge variant="secondary">Désactivée</Badge>
+  1774→            }
+  1775→          </CardTitle>
+  1776→          <CardDescription className="text-xs">
+  1777→            Active la livraison gratuite dès un certain montant d'achat. Si désactivé, les frais de port normaux s'appliquent toujours.
+  1778→          </CardDescription>
+  1779→        </CardHeader>
+  1780→        <CardContent className="space-y-3">
+  1781→          <div className="flex items-center gap-3">
+  1782→            <Switch
+  1783→              checked={freeShippingEnabled}
+  1784→              onCheckedChange={(v) => setFreeShippingEnabled(v)}
+  1785→            />
+  1786→            <Label className="text-sm cursor-pointer" onClick={() => setFreeShippingEnabled(!freeShippingEnabled)}>
+  1787→              {freeShippingEnabled ? 'Livraison offerte activée' : 'Livraison offerte désactivée'}
+  1788→            </Label>
+  1789→          </div>
+  1790→          {freeShippingEnabled && (
+  1791→            <div className="space-y-1.5 max-w-xs">
+  1792→              <Label className="text-xs">Seuil de livraison offerte (€)</Label>
+  1793→              <Input
+  1794→                type="number"
+  1795→                value={freeShippingThreshold}
+  1796→                onChange={e => setFreeShippingThreshold(parseFloat(e.target.value) || 0)}
+  1797→                placeholder="50"
+  1798→              />
+  1799→              <p className="text-[11px] text-muted-foreground">Au-dessus de ce montant, la livraison est offerte automatiquement au client.</p>
+  1800→            </div>
+  1801→          )}
+  1802→          <Button size="sm" onClick={saveFreeShipping} disabled={savingFreeShip}>
+  1803→            {savingFreeShip ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+  1804→            Sauvegarder
+  1805→          </Button>
+  1806→        </CardContent>
+  1807→      </Card>
+  1808→
+  1809→      {/* Transporteurs depuis attributs */}
+  1810→      <Card>
+  1811→        <CardHeader>
+  1812→          <CardTitle className="text-sm flex items-center gap-2"><Truck className="h-4 w-4" /> Transporteurs disponibles</CardTitle>
+  1813→          <CardDescription className="text-xs">Gérés depuis Paramètres → Attributs → Transporteurs. Utilisés pour le suivi des colis.</CardDescription>
+  1814→        </CardHeader>
+  1815→        <CardContent className="space-y-3">
+  1816→          {carriers.length === 0 ? (
+  1817→            <p className="text-xs text-muted-foreground py-2">Aucun transporteur configuré.</p>
+  1818→          ) : (
+  1819→            <div className="flex flex-wrap gap-2">
+  1820→              {carriers.map(c => (
+  1821→                <Badge key={c.id} variant="secondary" className="gap-1 text-xs py-1.5">
+  1822→                  <Truck className="h-3 w-3" />
+  1823→                  {c.value}
+  1824→                  {c.trackingUrl && <span className="text-[9px] text-green-600 ml-1">✓ suivi</span>}
+  1825→                </Badge>
+  1826→              ))}
+  1827→            </div>
+  1828→          )}
+  1829→          {showCarrierForm ? (
+  1830→            <div className="border rounded-md p-3 space-y-2 bg-muted/30">
+  1831→              <div className="grid grid-cols-2 gap-2">
+  1832→                <div className="space-y-1">
+  1833→                  <Label className="text-xs">Nom</Label>
+  1834→                  <Input value={carrierForm.value} onChange={e => setCarrierForm({ ...carrierForm, value: e.target.value })} placeholder="Chronopost" className="h-8 text-sm" />
+  1835→                </div>
+  1836→                <div className="space-y-1">
+  1837→                  <Label className="text-xs">Code</Label>
+  1838→                  <Input value={carrierForm.code} onChange={e => setCarrierForm({ ...carrierForm, code: e.target.value })} placeholder="chronopost" className="h-8 text-sm font-mono" />
+  1839→                </div>
+  1840→              </div>
+  1841→              <div className="space-y-1">
+  1842→                <Label className="text-xs">URL de suivi (optionnel)</Label>
+  1843→                <Input value={carrierForm.trackingUrl} onChange={e => setCarrierForm({ ...carrierForm, trackingUrl: e.target.value })} placeholder="https://...{tracking}" className="h-8 text-xs font-mono" />
+  1844→              </div>
+  1845→              <div className="flex gap-2 justify-end">
+  1846→                <Button size="sm" variant="outline" onClick={() => setShowCarrierForm(false)}>Annuler</Button>
+  1847→                <Button size="sm" onClick={addCarrier}>Ajouter</Button>
+  1848→              </div>
+  1849→            </div>
+  1850→          ) : (
+  1851→            <Button size="sm" variant="outline" onClick={() => setShowCarrierForm(true)}>
+  1852→              <Plus className="h-4 w-4 mr-1" /> Ajouter un transporteur
+  1853→            </Button>
+  1854→          )}
+  1855→        </CardContent>
+  1856→      </Card>
+  1857→
+  1858→      {/* Modes de livraison */}
+  1859→      <div className="flex items-center justify-between">
+  1860→        <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200 flex-1 mr-3">
+  1861→          💡 Les tranches de poids permettent de calculer automatiquement les frais de port selon le poids total des articles du panier. Si aucune tranche n'est définie, le prix de base est utilisé. Désactivez un mode pour le masquer lors du checkout client.
+  1862→        </div>
+  1863→        <Button size="sm" onClick={() => setShowMethodForm(!showMethodForm)}>
+  1864→          <Plus className="h-4 w-4 mr-1" /> Nouveau mode
+  1865→        </Button>
+  1866→      </div>
+  1867→
+  1868→      {showMethodForm && (
+  1869→        <Card>
+  1870→          <CardHeader>
+  1871→            <CardTitle className="text-sm">Nouveau mode de livraison</CardTitle>
+  1872→          </CardHeader>
+  1873→          <CardContent className="space-y-3">
+  1874→            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+  1875→              <div className="space-y-1.5">
+  1876→                <Label className="text-xs">Code</Label>
+  1877→                <Input value={methodForm.code} onChange={e => setMethodForm({ ...methodForm, code: e.target.value })} placeholder="chronopost" className="font-mono text-xs" />
+  1878→              </div>
+  1879→              <div className="space-y-1.5">
+  1880→                <Label className="text-xs">Libellé</Label>
+  1881→                <Input value={methodForm.label} onChange={e => setMethodForm({ ...methodForm, label: e.target.value })} placeholder="Chronopost Express" />
+  1882→              </div>
+  1883→              <div className="space-y-1.5">
+  1884→                <Label className="text-xs">Délai</Label>
+  1885→                <Input value={methodForm.delay} onChange={e => setMethodForm({ ...methodForm, delay: e.target.value })} placeholder="24-48h" />
+  1886→              </div>
+  1887→            </div>
+  1888→            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+  1889→              <div className="space-y-1.5">
+  1890→                <Label className="text-xs">Prix base (€)</Label>
+  1891→                <Input type="number" step="0.01" value={methodForm.price} onChange={e => setMethodForm({ ...methodForm, price: e.target.value })} placeholder="4.90" />
+  1892→              </div>
+  1893→              <div className="space-y-1.5">
+  1894→                <Label className="text-xs">Ordre</Label>
+  1895→                <Input type="number" value={methodForm.order} onChange={e => setMethodForm({ ...methodForm, order: e.target.value })} placeholder="0" />
+  1896→              </div>
+  1897→              <div className="space-y-1.5">
+  1898→                <Label className="text-xs">Transporteur</Label>
+  1899→                <select
+  1900→                  value={methodForm.carrierCode}
+  1901→                  onChange={e => setMethodForm({ ...methodForm, carrierCode: e.target.value })}
+  1902→                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+  1903→                >
+  1904→                  <option value="">— Aucun —</option>
+  1905→                  {carriers.map(c => (
+  1906→                    <option key={c.id} value={c.code}>{c.value}</option>
+  1907→                  ))}
+  1908→                </select>
+  1909→              </div>
+  1910→            </div>
+  1911→            <div className="flex gap-2 justify-end">
+  1912→              <Button size="sm" variant="outline" onClick={() => setShowMethodForm(false)}>Annuler</Button>
+  1913→              <Button size="sm" onClick={createMethod}>Créer</Button>
+  1914→            </div>
+  1915→          </CardContent>
+  1916→        </Card>
+  1917→      )}
+  1918→
+  1919→      {methods.length === 0 ? (
+  1920→        <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
+  1921→          Aucun mode de livraison. Cliquez sur "Nouveau mode" ci-dessus pour en créer un.
+  1922→        </CardContent></Card>
+  1923→      ) : (
+  1924→        methods.map(m => (
+  1925→          <Card key={m.id}>
+  1926→            <CardContent className="p-4">
+  1927→              <div className="flex items-center gap-3">
+  1928→                <div className="flex-1">
+  1929→                  <p className="font-medium text-sm">{m.label}</p>
+  1930→                  <p className="text-xs text-muted-foreground">
+  1931→                    <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{m.code}</code>
+  1932→                    {m.delay && ` · ${m.delay}`}
+  1933→                    {' · '}Prix base : {m.price === 0 ? 'Gratuit' : `${m.price.toFixed(2)} €`}
+  1934→                  </p>
+  1935→                </div>
+  1936→                <Badge variant={m.active ? 'default' : 'secondary'}>{m.active ? 'Actif' : 'Inactif'}</Badge>
+  1937→                <Button size="sm" variant="outline" onClick={() => toggleActive(m)}>
+  1938→                  {m.active ? 'Désactiver' : 'Activer'}
+  1939→                </Button>
+  1940→                <Button size="sm" variant="outline" onClick={() => toggleExpand(m.id)}>
+  1941→                  <Truck className="h-3.5 w-3.5 mr-1" /> Tranches de poids
+  1942→                </Button>
+  1943→                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => removeMethod(m.id)}>
+  1944→                  <Trash2 className="h-3.5 w-3.5" />
+  1945→                </Button>
+  1946→              </div>
+  1947→
+  1948→              {/* Carrier selector (inline) */}
+  1949→              <div className="mt-3 pt-3 border-t flex items-center gap-3">
+  1950→                <Label className="text-xs font-semibold shrink-0">Transporteur :</Label>
+  1951→                <select
+  1952→                  value={m.carrierCode || ''}
+  1953→                  onChange={e => updateMethodCarrier(m.id, e.target.value)}
+  1954→                  className="flex h-8 w-auto rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+  1955→                >
+  1956→                  <option value="">— Aucun —</option>
+  1957→                  {carriers.map(c => (
+  1958→                    <option key={c.id} value={c.code}>{c.value}</option>
+  1959→                  ))}
+  1960→                </select>
+  1961→                {m.carrierCode && (
+  1962→                  <Badge variant="outline" className="text-xs gap-1">
+  1963→                    <Truck className="h-3 w-3" />
+  1964→                    {carriers.find(c => c.code === m.carrierCode)?.value || m.carrierCode}
+  1965→                  </Badge>
+  1966→                )}
+  1967→                <span className="text-[11px] text-muted-foreground">
+  1968→                  Le transporteur est lié au suivi des colis (URL de tracking configurable dans Paramètres → Attributs).
+  1969→                </span>
+  1970→              </div>
+  1971→
+  1972→              {/* Weight rules */}
+  1973→              {expandedMethod === m.id && (
+  1974→                <div className="mt-4 pt-3 border-t space-y-2">
+  1975→                  <div className="flex items-center justify-between">
+  1976→                    <p className="text-xs font-semibold text-muted-foreground uppercase">Tranches de poids (grammes)</p>
+  1977→                    <span className="text-[11px] text-muted-foreground">Calcul auto selon le poids total du panier</span>
+  1978→                  </div>
+  1979→                  {(weightRules[m.id] || []).length === 0 ? (
+  1980→                    <p className="text-xs text-muted-foreground py-2">Aucune tranche définie — le prix de base ({m.price.toFixed(2)} €) est utilisé pour tous les poids.</p>
+  1981→                  ) : (
+  1982→                    <div className="space-y-1">
+  1983→                      {(weightRules[m.id] || []).map(r => (
+  1984→                        <div key={r.id} className="flex items-center gap-2 text-xs p-2 border rounded">
+  1985→                          <span className="flex-1">{r.weightMin}g - {r.weightMax}g</span>
+  1986→                          <Badge variant="secondary">{r.price.toFixed(2)} €</Badge>
+  1987→                          <Button size="sm" variant="ghost" className="text-red-600 h-6" onClick={() => removeWeightRule(r.id, m.id)}>
+  1988→                            <Trash2 className="h-3 w-3" />
+  1989→                          </Button>
+  1990→                        </div>
+  1991→                      ))}
+  1992→                    </div>
+  1993→                  )}
+  1994→                  {/* Add rule */}
+  1995→                  <div className="flex gap-2 items-end">
+  1996→                    <div className="space-y-1">
+  1997→                      <Label className="text-[10px]">Min (g)</Label>
+  1998→                      <Input type="number" value={(newRules[m.id] || { weightMin: '' }).weightMin} onChange={e => setNewRules(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || { weightMin: '', weightMax: '', price: '' }), weightMin: e.target.value } }))} className="w-20 h-8 text-xs" placeholder="0" />
+  1999→                    </div>
+  2000→                    <div className="space-y-1">
+  2001→                      <Label className="text-[10px]">Max (g)</Label>
+  2002→                      <Input type="number" value={(newRules[m.id] || { weightMax: '' }).weightMax} onChange={e => setNewRules(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || { weightMin: '', weightMax: '', price: '' }), weightMax: e.target.value } }))} className="w-20 h-8 text-xs" placeholder="500" />
+  2003→                    </div>
+  2004→                    <div className="space-y-1">
+  2005→                      <Label className="text-[10px]">Prix (€)</Label>
+  2006→                      <Input type="number" step="0.01" value={(newRules[m.id] || { price: '' }).price} onChange={e => setNewRules(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || { weightMin: '', weightMax: '', price: '' }), price: e.target.value } }))} className="w-20 h-8 text-xs" placeholder="3.50" />
+  2007→                    </div>
+  2008→                    <Button size="sm" onClick={() => addWeightRule(m.id)}>
+  2009→                      <Plus className="h-3.5 w-3.5" />
+  2010→                    </Button>
+  2011→                  </div>
+  2012→                </div>
+  2013→              )}
+  2014→            </CardContent>
+  2015→          </Card>
+  2016→        ))
+  2017→      )}
+  2018→    </div>
+  2019→  )
+  2020→}
+  2021→
+  2022→// ═══════════════════════════════════════════════════════════════════════════
+  2023→// ONGLET 6 — CATÉGORIES (placeholder — déjà géré dans Paramètres → Boutique)
+  2024→// ═══════════════════════════════════════════════════════════════════════════
+  2025→
+  2026→interface CategoryData {
+  2027→  slug: string
+  2028→  label: string
+  2029→  parentId: string | null
+  2030→  backgroundImage: string | null
+  2031→  bgColor: string | null
+  2032→  bgOpacity: number
+  2033→  emoji: string
+  2034→  order: number
+  2035→}
+  2036→
+  2037→function CategoriesTab() {
+  2038→  const [cats, setCats] = useState<CategoryData[]>([])
+  2039→  const [loading, setLoading] = useState(true)
+  2040→  const [uploading, setUploading] = useState<string | null>(null)
+  2041→  const [editing, setEditing] = useState<string | null>(null)
+  2042→  const [editForm, setEditForm] = useState<CategoryData | null>(null)
+  2043→  const [showAddForm, setShowAddForm] = useState(false)
+  2044→  const [newCat, setNewCat] = useState({ slug: '', label: '', emoji: '📦', parentId: '' })
+  2045→  const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
+  2046→  const [currentPage, setCurrentPage] = useState(1)
+  2047→  const pageSize = 10 // top-level categories per page
+  2048→
+  2049→  const fetchCats = () => {
+
+[showing lines 1450-2049 of 2841; use offset=2050 with limit to continue reading]

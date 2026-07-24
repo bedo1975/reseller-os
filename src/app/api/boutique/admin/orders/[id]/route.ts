@@ -15,7 +15,13 @@ export async function PATCH(
     const { status, notes, trackingNumber, carrier } = body
 
     const data: any = {}
-    if (typeof status === 'string') data.status = status
+    if (typeof status === 'string') {
+      const ALLOWED_STATUSES = ['pending', 'paid', 'preparation', 'shipped', 'delivered', 'cancelled']
+      if (!ALLOWED_STATUSES.includes(status)) {
+        return NextResponse.json({ error: `Statut invalide. Valeurs autorisées : ${ALLOWED_STATUSES.join(', ')}` }, { status: 400 })
+      }
+      data.status = status
+    }
     if (typeof notes === 'string') data.notes = notes
 
     const order = await db.boutiqueOrder.update({ where: { id }, data })

@@ -1443,3 +1443,73 @@ All LinkEditor instances now support drag-and-drop:
 - Turbopack crashes in the sandbox (known bug) but TypeScript passes clean
 - Build with webpack on the user's server will work fine
 - Zip: 863 KB, MD5: 67fc618eb0c92adfdedcc256cfcadcee
+
+---
+Task ID: 4-features-batch
+Agent: main
+Task: Implement 4 features for the boutique — (1) Email templates with HtmlEditor + design preset, (2) "PREPARATION" order status, (3) Boutique closed ON/OFF switch, (4) Collapsible filters per category.
+
+## Feature 1 — Email templates with HTML editor + modern design preset
+**File:** `src/components/modules/settings-module.tsx`
+
+- Imported `HtmlEditor` from `@/components/ui/html-editor`.
+- Added `getModernPreset(templateType: string): string` helper that returns a modern, inline-styled HTML email template (rounded container, gradient header with shop name, body content, colored CTA button, footer). Handles all 5 template types: `templateRegister`, `templateValidate`, `templatePasswordLost`, `templateOrder`, `templateOrderStatus`.
+- `EmailSection`:
+  - Added `emailDesign` state + `saveDesign()` that PUTs `{ emailDesign }` to `/api/boutique/admin/settings` (BoutiqueSettings).
+  - Added "Design des emails" card with 3 options (Moderne / Classique / Minimaliste → `modern` / `classic` / `minimal`). Saved automatically on selection.
+  - Replaced the 4 Textareas with 5 `<HtmlEditor>` instances (one per template, including `templateValidate` which had no UI before). Each has a "Charger un modèle" button that fills the editor with `getModernPreset(type)`.
+
+## Feature 2 — "PREPARATION" status for boutique orders
+**Files:**
+- `src/components/modules/boutique-admin-module.tsx`
+- `src/app/api/boutique/admin/orders/[id]/route.ts`
+- `src/lib/email.ts`
+- `src/app/boutique/compte/commandes/page.tsx`
+
+- `STATUS_OPTIONS` array: added `{ value: 'preparation', label: 'En préparation', color: 'bg-purple-100 text-purple-700' }` between `paid` and `shipped`. The filter dropdown and the status edit dialog pick it up automatically.
+- PATCH `/api/boutique/admin/orders/[id]`: added an explicit whitelist `['pending','paid','preparation','shipped','delivered','cancelled']` returning 400 on invalid values (no behavioral change for valid ones).
+- `notifyOrderStatusChange` in `src/lib/email.ts`: added `preparation: 'En préparation'` to `statusLabels` so client emails display the proper French label.
+- Client "Mes commandes" page (`/boutique/compte/commandes`): added `preparation` to its local `STATUS_LABELS` map so the badge renders correctly.
+
+## Feature 3 — Boutique closed ON/OFF switch
+**Files:**
+- `src/components/modules/boutique-admin-module.tsx` (admin AppearanceTab → Général)
+- `src/app/boutique/produit/[sku]/page.tsx`
+- `src/app/boutique/checkout/page.tsx`
+- `src/app/boutique/panier/page.tsx`
+
+- Admin: added a new "Boutique fermée" Card at the bottom of the Général sub-tab. Contains a `<Switch>` bound to `form.boutiqueClosed`, a status badge (Ouverte / Fermée), and — when closed — a `<Textarea>` for `form.boutiqueClosedMessage`. The card is highlighted red when closed. The standard "Sauvegarder l'apparence" button already sends these fields via PUT to `/api/boutique/admin/settings` (the API already accepts `boutiqueClosed` and `boutiqueClosedMessage`).
+- Product detail page: imports `useBoutiqueSettings`. When `settings.boutiqueClosed === true`, the "Ajouter au panier" and "Acheter maintenant" buttons are replaced by an amber banner showing `boutiqueClosedMessage`.
+- Checkout page: when closed, the "Confirmer la commande" button is replaced by the same amber banner.
+- Cart page: when closed, the "Passer la commande" button is replaced by the same banner.
+- All three pages import `AlertCircle` from `lucide-react` for the banner icon.
+
+## Feature 4 — Collapsible filters + custom attributes per category
+**Files:**
+- `src/components/modules/boutique-admin-module.tsx` (CategoriesTab edit form)
+- `src/app/boutique/categorie/[cat]/page.tsx`
+
+### Admin — CategoriesTab
+- Added `filtersJson?: string | null` to the `CategoryData` interface.
+- Added `CategoryFilter` interface + `FILTER_TYPES` constant (`size`/`color`/`condition`/`brand` with default French labels) + `parseFilters()` helper that merges stored JSON with the 4 known types (falling back to defaults).
+- New state: `editFilters: CategoryFilter[]` (loaded from `parseFilters(c.filtersJson)` in `startEdit`, cleared in `cancelEdit`).
+- New `updateFilter()` helper to patch a single filter entry.
+- `saveEdit()` now sends `filtersJson: JSON.stringify(editFilters)` in the PATCH body.
+- New UI section in the edit form (after the "Aperçu" block, before the action buttons): for each of the 4 filter types, a row with:
+  - `<Switch>` to activate/deactivate the filter
+  - `<Input>` for the custom label (placeholder "Libellé affiché")
+  - Checkbox "Replié par défaut"
+  Inactive rows are dimmed (opacity-70). Icon `Filter` and `ChevronDown` imported from lucide-react.
+
+### Storefront — Category page
+- Rewrote `src/app/boutique/categorie/[cat]/page.tsx`:
+  - `categoryInfo` state now stores `filtersJson` too.
+  - `parseFilters()` (local) returns the configured active filters, or falls back to `[size, condition]` if no config / no active filters.
+  - Replaced separate `sizeFilter`/`conditionFilter` states with a single `filterValues: Record<string, string>` keyed by filter type. Added `availableValues` memo that extracts unique values for size/color/condition/brand from loaded products.
+  - Sidebar: for each active filter, renders a collapsible section (chevron button toggles a `collapsedFilters` Set). Collapsed-by-default state initialized from the filter config on category change. Subcategory filter kept separate (above the dynamic filters). Mobile filters use a `<Select>` per active filter.
+  - Filter application uses `filterValues[type]` for size/color/condition/brand. `hasActiveFilters` and `resetFilters` updated accordingly.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (83/83 static pages). No new TS/lint errors introduced (the only pre-existing errors are in `html-editor.tsx` and `hours-editor.tsx`, untouched by this task).
+- `bash scripts/make-zip.sh`: zip = 836 KB, MD5: `35ce52589c5249e0cf998e064ffafd9b`.
+- Copied zip to `download/`, `.next/standalone/public/`, `.next/standalone/download/` (all 4 copies share the same MD5).

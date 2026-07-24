@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, Package } from 'lucide-react'
+import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, Package, AlertCircle } from 'lucide-react'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 
 interface CartItem {
@@ -188,35 +188,32 @@ export default function CartPage() {
                 <span className="text-gray-600">Sous-total</span>
                 <span className="font-medium">{subtotal.toFixed(2)} €</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Livraison</span>
-                <span className="font-medium">
-                  {shipping === 0 ? (
-                    <span className="text-green-600">Offerte</span>
-                  ) : (
-                    `${shipping.toFixed(2)} €`
-                  )}
-                </span>
-              </div>
-              {shipping > 0 && freeShipEnabled && (
-                <p className="text-xs text-gray-400 pt-1">
-                  Plus que <strong>{(freeShipThreshold - subtotal).toFixed(2)} €</strong> pour la livraison offerte
-                </p>
-              )}
+              <p className="text-xs text-gray-400 pt-1">
+                Les frais de livraison seront calculés lors de la sélection du mode de livraison.
+              </p>
             </div>
 
             <div className="border-t border-gray-200 mt-4 pt-4 flex justify-between items-baseline">
-              <span className="font-semibold text-gray-900">Total</span>
-              <span className="text-xl font-bold text-[#007bff]">{total.toFixed(2)} €</span>
+              <span className="font-semibold text-gray-900">Sous-total</span>
+              <span className="text-xl font-bold text-[#007bff]">{subtotal.toFixed(2)} €</span>
             </div>
 
-            <Button
-              onClick={() => router.push('/boutique/checkout')}
-              className="w-full mt-5 h-11 bg-[#007bff] hover:bg-[#0056b3]"
-            >
-              Passer la commande
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
+            {settings.boutiqueClosed === true ? (
+              <div className="mt-5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-4 py-3 text-sm flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+                <span className="whitespace-pre-wrap">
+                  {settings.boutiqueClosedMessage || 'La boutique est temporairement fermée. Revenez bientôt !'}
+                </span>
+              </div>
+            ) : (
+              <Button
+                onClick={() => router.push('/boutique/checkout')}
+                className="w-full mt-5 h-11 bg-[#007bff] hover:bg-[#0056b3]"
+              >
+                Passer la commande
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            )}
 
             <p className="text-xs text-gray-400 text-center mt-3">
               Paiement sécurisé · Satisfait ou remboursé 14j

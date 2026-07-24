@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Lock, ShoppingBag, ChevronRight } from 'lucide-react'
+import { Lock, ShoppingBag, ChevronRight, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 
@@ -386,23 +386,32 @@ export default function CheckoutPage() {
               <span className="text-xl font-bold text-[#007bff]">{total.toFixed(2)} €</span>
             </div>
 
-            <Button
-              onClick={submitOrder}
-              disabled={submitting}
-              className="w-full mt-5 h-11 bg-[#007bff] hover:bg-[#0056b3]"
-            >
-              {submitting ? (
-                <span className="flex items-center gap-2">
-                  <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Traitement...
+            {settings.boutiqueClosed === true ? (
+              <div className="mt-5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-4 py-3 text-sm flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+                <span className="whitespace-pre-wrap">
+                  {settings.boutiqueClosedMessage || 'La boutique est temporairement fermée. Revenez bientôt !'}
                 </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <Lock className="h-4 w-4" />
-                  Confirmer la commande
-                </span>
-              )}
-            </Button>
+              </div>
+            ) : (
+              <Button
+                onClick={submitOrder}
+                disabled={submitting}
+                className="w-full mt-5 h-11 bg-[#007bff] hover:bg-[#0056b3]"
+              >
+                {submitting ? (
+                  <span className="flex items-center gap-2">
+                    <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Traitement...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Lock className="h-4 w-4" />
+                    Confirmer la commande
+                  </span>
+                )}
+              </Button>
+            )}
 
             <p className="text-xs text-gray-400 text-center mt-3">
               En validant, vous acceptez nos{' '}

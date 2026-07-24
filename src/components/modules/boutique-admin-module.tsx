@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
-  ChevronRight, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3,
+  ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -122,6 +122,7 @@ interface Order {
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'En attente', color: 'bg-amber-100 text-amber-700' },
   { value: 'paid', label: 'Payée', color: 'bg-blue-100 text-blue-700' },
+  { value: 'preparation', label: 'En préparation', color: 'bg-purple-100 text-purple-700' },
   { value: 'shipped', label: 'Expédiée', color: 'bg-indigo-100 text-indigo-700' },
   { value: 'delivered', label: 'Livrée', color: 'bg-green-100 text-green-700' },
   { value: 'cancelled', label: 'Annulée', color: 'bg-red-100 text-red-700' },
@@ -765,6 +766,9 @@ interface BoutiqueSettingsData {
   footerBgColor: string
   freeShippingEnabled: boolean
   freeShippingThreshold: number
+  boutiqueClosed: boolean
+  boutiqueClosedMessage: string
+  emailDesign: string
   hoursJson: string
   hoursVisible: boolean
   cgvText: string | null
@@ -1014,6 +1018,45 @@ function AppearanceTab() {
             <Label className="text-xs">Téléphone (optionnel)</Label>
             <Input value={form.footerPhone || ''} onChange={e => set('footerPhone', e.target.value)} placeholder="06 12 34 56 78" />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Boutique fermée */}
+      <Card className={form.boutiqueClosed ? 'border-red-300 bg-red-50/40 dark:bg-red-950/20' : ''}>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="h-4 w-4" /> Boutique fermée
+            {form.boutiqueClosed
+              ? <Badge className="bg-red-600 hover:bg-red-600">Fermée</Badge>
+              : <Badge variant="secondary">Ouverte</Badge>
+            }
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Activez cette option pour suspendre temporairement les commandes. Les boutons d'achat et de checkout seront masqués sur la boutique, et le message sera affiché aux clients.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={!!form.boutiqueClosed}
+              onCheckedChange={(v) => set('boutiqueClosed', v)}
+            />
+            <Label className="text-sm cursor-pointer" onClick={() => set('boutiqueClosed', !form.boutiqueClosed)}>
+              {form.boutiqueClosed ? 'Boutique fermée — les commandes sont désactivées' : 'Boutique ouverte — les commandes sont activées'}
+            </Label>
+          </div>
+          {form.boutiqueClosed && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Message affiché aux clients</Label>
+              <Textarea
+                value={form.boutiqueClosedMessage || ''}
+                onChange={e => set('boutiqueClosedMessage', e.target.value)}
+                rows={3}
+                placeholder="La boutique est temporairement fermée. Revenez bientôt !"
+              />
+              <p className="text-[11px] text-muted-foreground">Ce message sera affiché sur les pages produit, panier et checkout à la place des boutons d'achat.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -2029,6 +2072,41 @@ interface CategoryData {
   bgOpacity: number
   emoji: string
   order: number
+  filtersJson?: string | null
+}
+
+// Filter types configurable per category — used by the storefront sidebar.
+const FILTER_TYPES = [
+  { type: 'size', defaultLabel: 'Taille' },
+  { type: 'color', defaultLabel: 'Couleur' },
+  { type: 'condition', defaultLabel: 'État' },
+  { type: 'brand', defaultLabel: 'Marque' },
+] as const
+
+interface CategoryFilter {
+  type: string
+  label: string
+  active: boolean
+  collapsed: boolean
+}
+
+function parseFilters(json: string | null | undefined): CategoryFilter[] {
+  try {
+    const arr = JSON.parse(json || '[]')
+    if (!Array.isArray(arr)) return []
+    // Merge with FILTER_TYPES to ensure all known types are present + sane defaults
+    return FILTER_TYPES.map(ft => {
+      const found = arr.find((x: any) => x && x.type === ft.type)
+      return {
+        type: ft.type,
+        label: (found && typeof found.label === 'string' && found.label) || ft.defaultLabel,
+        active: !!(found && found.active),
+        collapsed: !!(found && found.collapsed),
+      }
+    })
+  } catch {
+    return FILTER_TYPES.map(ft => ({ type: ft.type, label: ft.defaultLabel, active: false, collapsed: false }))
+  }
 }
 
 function CategoriesTab() {
@@ -2037,6 +2115,7 @@ function CategoriesTab() {
   const [uploading, setUploading] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<CategoryData | null>(null)
+  const [editFilters, setEditFilters] = useState<CategoryFilter[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
   const [newCat, setNewCat] = useState({ slug: '', label: '', emoji: '📦', parentId: '' })
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
@@ -2060,11 +2139,17 @@ function CategoriesTab() {
       bgColor: c.bgColor ?? null,
       bgOpacity: c.bgOpacity ?? 0.5,
     })
+    setEditFilters(parseFilters(c.filtersJson))
   }
 
   const cancelEdit = () => {
     setEditing(null)
     setEditForm(null)
+    setEditFilters([])
+  }
+
+  const updateFilter = (idx: number, patch: Partial<CategoryFilter>) => {
+    setEditFilters(prev => prev.map((f, i) => i === idx ? { ...f, ...patch } : f))
   }
 
   const saveEdit = async () => {
@@ -2081,6 +2166,7 @@ function CategoriesTab() {
           bgOpacity: editForm.bgOpacity,
           order: editForm.order,
           parentId: editForm.parentId,
+          filtersJson: JSON.stringify(editFilters),
         }),
       })
       if (!res.ok) {
@@ -2410,6 +2496,54 @@ function CategoriesTab() {
                         <span className="text-2xl mr-2">{editForm.emoji}</span>
                         <span className="font-bold text-lg">{editForm.label}</span>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Filtres de la catégorie */}
+                  <div className="space-y-2 pt-2 border-t">
+                    <Label className="text-xs font-semibold flex items-center gap-1">
+                      <Filter className="h-3.5 w-3.5" /> Filtres de la catégorie
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Activez les filtres disponibles dans la sidebar de la page catégorie. Personnalisez le libellé (ex. « Pointure » au lieu de « Taille ») et choisissez si le filtre est replié par défaut.
+                    </p>
+                    <div className="space-y-2">
+                      {editFilters.map((f, idx) => (
+                        <div
+                          key={f.type}
+                          className={cn(
+                            'flex flex-wrap items-center gap-3 p-2.5 rounded-md border',
+                            f.active ? 'border-foreground/30 bg-card' : 'border-border/60 bg-card/50 opacity-70',
+                          )}
+                        >
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Switch
+                              checked={f.active}
+                              onCheckedChange={(v) => updateFilter(idx, { active: v })}
+                            />
+                            <span className="text-xs font-medium w-16 capitalize">
+                              {FILTER_TYPES.find(ft => ft.type === f.type)?.defaultLabel || f.type}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-[160px]">
+                            <Input
+                              value={f.label}
+                              onChange={(e) => updateFilter(idx, { label: e.target.value })}
+                              placeholder="Libellé affiché"
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={f.collapsed}
+                              onChange={(e) => updateFilter(idx, { collapsed: e.target.checked })}
+                              className="rounded"
+                            />
+                            Replié par défaut
+                          </label>
+                        </div>
+                      ))}
                     </div>
                   </div>
 

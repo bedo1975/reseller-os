@@ -22,6 +22,9 @@ export interface BoutiqueSettings {
   footerBgColor: string
   freeShippingEnabled: boolean
   freeShippingThreshold: number
+  boutiqueClosed: boolean
+  boutiqueClosedMessage: string
+  emailDesign: string
   hoursJson: string
   hoursVisible: boolean
   cgvText: string | null
@@ -85,6 +88,9 @@ const DEFAULTS: BoutiqueSettings = {
   footerBgColor: '0a3d62',
   freeShippingEnabled: false,
   freeShippingThreshold: 50,
+  boutiqueClosed: false,
+  boutiqueClosedMessage: 'La boutique est temporairement fermée. Revenez bientôt !',
+  emailDesign: 'modern',
   hoursJson: '[]',
   hoursVisible: true,
   cgvText: null,

@@ -8,7 +8,6 @@ export async function POST() {
   try {
     const user = await requireAdmin()
 
-    // Get the admin user's email (the recipient of the test)
     const adminUser = await db.user.findUnique({ where: { id: user.id } })
     if (!adminUser?.email) {
       return NextResponse.json(
@@ -17,7 +16,6 @@ export async function POST() {
       )
     }
 
-    // Check that SMTP is configured
     const settings = await db.emailSettings.findUnique({ where: { userId: user.id } })
     if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPassword) {
       return NextResponse.json(
@@ -26,27 +24,65 @@ export async function POST() {
       )
     }
 
-    // Try to send the test email
+    // Get the email design from BoutiqueSettings
+    const boutiqueSettings = await db.boutiqueSettings.findUnique({ where: { id: 'default' } })
+    const design = boutiqueSettings?.emailDesign || 'modern'
+    const shopName = boutiqueSettings?.logoText || 'Votre Boutique'
+
+    // Build test email HTML based on the selected design
+    let html: string
+
+    if (design === 'classic') {
+      html = `
+        <table style="width:100%;max-width:560px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;border:1px solid #ddd;">
+          <tr><td style="background:#0a3d62;color:#fff;padding:16px;text-align:center;font-size:20px;font-weight:bold;">${shopName}</td></tr>
+          <tr><td style="padding:24px;color:#333;">
+            <h2 style="margin:0 0 12px 0;font-size:18px;">Email de test</h2>
+            <p style="margin:0 0 12px 0;">Bonjour,</p>
+            <p style="margin:0 0 12px 0;">Ceci est un email de test envoyé depuis votre boutique (design <strong>Classique</strong>).</p>
+            <p style="margin:0 0 12px 0;">Si vous le recevez, votre configuration SMTP fonctionne correctement.</p>
+            <p style="margin:0 0 0 0;font-size:13px;color:#666;">Serveur : ${settings.smtpHost}:${settings.smtpPort} · Sécurisé : ${settings.smtpSecure ? 'Oui' : 'Non'} · Utilisateur : ${settings.smtpUser}</p>
+          </td></tr>
+          <tr><td style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#999;">© ${new Date().getFullYear()} ${shopName}. Tous droits réservés.</td></tr>
+        </table>
+      `
+    } else if (design === 'minimal') {
+      html = `
+        <div style="max-width:480px;margin:0 auto;font-family:Georgia,serif;padding:40px 20px;text-align:center;">
+          <h1 style="font-size:22px;font-weight:normal;color:#222;margin:0 0 24px 0;">${shopName}</h1>
+          <p style="font-size:15px;line-height:1.8;color:#555;margin:0 0 16px 0;">Ceci est un email de test envoyé depuis votre boutique (design <em>Minimaliste</em>).</p>
+          <p style="font-size:15px;line-height:1.8;color:#555;margin:0 0 16px 0;">Si vous le recevez, votre configuration SMTP fonctionne correctement.</p>
+          <hr style="border:none;border-top:1px solid #eee;margin:32px 0;">
+          <p style="font-size:12px;color:#aaa;margin:0;">© ${new Date().getFullYear()} ${shopName}</p>
+        </div>
+      `
+    } else {
+      // modern (default)
+      html = `
+        <div style="max-width:560px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+          <div style="background:linear-gradient(135deg,#007bff 0%,#0056b3 100%);padding:28px 24px;text-align:center;">
+            <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">${shopName}</h1>
+          </div>
+          <div style="padding:28px 24px;text-align:center;background:#fff;">
+            <h2 style="margin:0 0 12px 0;font-size:18px;color:#212529;">Email de test ✉️</h2>
+            <p style="font-size:15px;line-height:1.6;color:#495057;margin:0 0 12px 0;">Ceci est un email de test envoyé depuis votre boutique (design <strong>Moderne</strong>).</p>
+            <p style="font-size:15px;line-height:1.6;color:#495057;margin:0 0 16px 0;">Si vous le recevez, votre configuration SMTP fonctionne correctement.</p>
+            <div style="display:inline-block;background:#e7f1ff;color:#007bff;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:600;margin-top:8px;">
+              ${settings.smtpHost}:${settings.smtpPort} · ${settings.smtpSecure ? 'SSL/TLS' : 'STARTTLS'}
+            </div>
+          </div>
+          <div style="background:#f8f9fa;padding:16px 24px;text-align:center;font-size:12px;color:#6c757d;">
+            © ${new Date().getFullYear()} ${shopName}. Tous droits réservés.
+          </div>
+        </div>
+      `
+    }
+
     const sent = await sendEmail({
       to: adminUser.email,
-      subject: '[DBoxPro] Email de test',
-      text: `Bonjour,\n\nCeci est un email de test envoyé depuis DBoxPro.\n\nSi vous le recevez, votre configuration SMTP fonctionne correctement.\n\nDétails de la config :\n- Serveur : ${settings.smtpHost}:${settings.smtpPort}\n- Sécurisé (SSL/TLS) : ${settings.smtpSecure ? 'Oui' : 'Non'}\n- Utilisateur : ${settings.smtpUser}\n- From : ${settings.fromEmail || settings.smtpUser}\n\nCordialement,\nL'équipe DBoxPro`,
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #007bff;">Email de test DBoxPro</h2>
-          <p>Bonjour,</p>
-          <p>Ceci est un email de test envoyé depuis DBoxPro.</p>
-          <p>Si vous le recevez, votre configuration SMTP fonctionne correctement.</p>
-          <h3 style="margin-top: 24px; color: #333;">Détails de la configuration</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: 600;">Serveur</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${settings.smtpHost}:${settings.smtpPort}</td></tr>
-            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: 600;">Sécurisé (SSL/TLS)</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${settings.smtpSecure ? 'Oui' : 'Non'}</td></tr>
-            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: 600;">Utilisateur</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${settings.smtpUser}</td></tr>
-            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: 600;">Adresse d'envoi</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${settings.fromEmail || settings.smtpUser}</td></tr>
-          </table>
-          <p style="margin-top: 24px; color: #666; font-size: 12px;">Cordialement,<br>L'équipe DBoxPro</p>
-        </div>
-      `,
+      subject: `[Test] Email de test — Design ${design}`,
+      text: 'Ceci est un email de test. Si vous le recevez, votre configuration SMTP fonctionne correctement.',
+      html,
     })
 
     if (!sent) {
@@ -56,7 +92,7 @@ export async function POST() {
       )
     }
 
-    return NextResponse.json({ ok: true, sentTo: adminUser.email })
+    return NextResponse.json({ ok: true, sentTo: adminUser.email, design })
   } catch (error: any) {
     console.error('POST /api/email-settings/test error:', error)
     if (error?.message === 'UNAUTHORIZED' || error?.message === 'FORBIDDEN') {

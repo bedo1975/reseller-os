@@ -31,6 +31,7 @@ export async function GET() {
       backgroundImage: c.backgroundImage,
       bgColor: c.bgColor,
       bgOpacity: c.bgOpacity,
+      filtersJson: c.filtersJson,
       count: counts[c.slug] || 0,
       subcategories: allCats
         .filter(s => s.parentId === c.slug)

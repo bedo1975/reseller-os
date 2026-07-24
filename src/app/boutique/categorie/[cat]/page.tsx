@@ -8,7 +8,7 @@ import { ProductCard } from '@/components/boutique/product-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { ChevronRight, Package, Filter, X } from 'lucide-react'
+import { ChevronRight, ChevronDown, Package, Filter as FilterIcon, X } from 'lucide-react'
 
 const CONDITION_LABELS: Record<string, string> = {
   'neuf': 'Neuf avec étiquette',
@@ -32,63 +32,171 @@ interface Product {
   quantity?: number
 }
 
+// Filter config shape (mirrors BoutiqueCategory.filtersJson)
+interface CategoryFilterConfig {
+  type: string
+  label: string
+  active: boolean
+  collapsed: boolean
+}
+
+// Default filter fallback when a category has no filtersJson configured
+const DEFAULT_FILTERS: CategoryFilterConfig[] = [
+  { type: 'size', label: 'Taille', active: true, collapsed: false },
+  { type: 'condition', label: 'État', active: true, collapsed: false },
+]
+
+function parseFilters(json: string | null | undefined): CategoryFilterConfig[] {
+  try {
+    const arr = JSON.parse(json || '[]')
+    if (!Array.isArray(arr) || arr.length === 0) return DEFAULT_FILTERS
+    // Only keep entries that are marked active — but if none are active, fall back to defaults
+    const normalized = arr
+      .filter((x: any) => x && typeof x.type === 'string')
+      .map((x: any) => ({
+        type: String(x.type),
+        label: (typeof x.label === 'string' && x.label) || x.type,
+        active: !!x.active,
+        collapsed: !!x.collapsed,
+      }))
+    const hasActive = normalized.some((f: CategoryFilterConfig) => f.active)
+    return hasActive ? normalized : DEFAULT_FILTERS
+  } catch {
+    return DEFAULT_FILTERS
+  }
+}
+
 export default function CategoryPage({ params }: { params: Promise<{ cat: string }> }) {
   const { cat } = use(params)
   const [sort, setSort] = useState('newest')
-  const [sizeFilter, setSizeFilter] = useState<string>('all')
-  const [conditionFilter, setConditionFilter] = useState<string>('all')
+  // Per-filter selection state — keyed by filter type ('size' | 'color' | 'condition' | 'brand')
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({})
   const [subcatFilter, setSubcatFilter] = useState<string>('all')
-  const [categoryInfo, setCategoryInfo] = useState<{ label: string; emoji: string } | null>(null)
+  const [categoryInfo, setCategoryInfo] = useState<{
+    label: string
+    emoji: string
+    filtersJson?: string | null
+  } | null>(null)
   const [subcats, setSubcats] = useState<Subcat[]>([])
+  // Collapsed-state per filter section (UI only) — initialized from filtersJson on category change
+  const [collapsedFilters, setCollapsedFilters] = useState<Set<string>>(new Set())
 
-  // Fetch category tree to get labels + subcategories from DB
+  // Fetch category tree to get labels + subcategories + filtersJson from DB
   useEffect(() => {
     fetch('/api/boutique/categories')
       .then(r => r.json())
       .then(data => {
         const found = (data.categories || []).find((c: any) => c.slug === cat)
         if (found) {
-          setCategoryInfo({ label: found.label, emoji: found.emoji })
+          setCategoryInfo({ label: found.label, emoji: found.emoji, filtersJson: found.filtersJson })
           setSubcats(found.subcategories || [])
         }
       })
       .catch(() => {})
   }, [cat])
 
+  // Parse the filters config (falls back to size+condition if not configured)
+  const filtersConfig = useMemo<CategoryFilterConfig[]>(
+    () => parseFilters(categoryInfo?.filtersJson),
+    [categoryInfo?.filtersJson],
+  )
+  const activeFilters = useMemo(
+    () => filtersConfig.filter(f => f.active),
+    [filtersConfig],
+  )
+
+  // Initialize collapsed state when filtersConfig changes
+  useEffect(() => {
+    setCollapsedFilters(new Set(filtersConfig.filter(f => f.collapsed).map(f => f.type)))
+    // Reset selections when category changes
+    setFilterValues({})
+    setSubcatFilter('all')
+  }, [filtersConfig])
+
   const { data, loading } = useFetch<{ products: Product[]; count: number }>(
     `/api/boutique/products?category=${cat}&sort=${sort}`
   )
   const allProducts = data?.products || []
 
-  // Extract unique sizes and conditions from products
-  const availableSizes = useMemo(() => {
-    const sizes = new Set<string>()
-    allProducts.forEach(p => { if (p.size) sizes.add(p.size) })
-    return Array.from(sizes).sort()
-  }, [allProducts])
-
-  const availableConditions = useMemo(() => {
-    const conditions = new Set<string>()
-    allProducts.forEach(p => { if (p.condition) conditions.add(p.condition) })
-    return Array.from(conditions)
+  // Extract unique values per filter type from loaded products
+  const availableValues = useMemo(() => {
+    const out: Record<string, string[]> = { size: [], color: [], condition: [], brand: [] }
+    const sets: Record<string, Set<string>> = { size: new Set(), color: new Set(), condition: new Set(), brand: new Set() }
+    allProducts.forEach(p => {
+      if (p.size) sets.size.add(p.size)
+      if (p.color) sets.color.add(p.color)
+      if (p.condition) sets.condition.add(p.condition)
+      if (p.brand) sets.brand.add(p.brand)
+    })
+    for (const k of Object.keys(sets)) {
+      out[k] = Array.from(sets[k]).sort()
+    }
+    return out
   }, [allProducts])
 
   // Apply filters client-side
   const products = useMemo(() => {
     return allProducts.filter(p => {
-      if (sizeFilter !== 'all' && p.size !== sizeFilter) return false
-      if (conditionFilter !== 'all' && p.condition !== conditionFilter) return false
+      if (filterValues.size && p.size !== filterValues.size) return false
+      if (filterValues.color && p.color !== filterValues.color) return false
+      if (filterValues.condition && p.condition !== filterValues.condition) return false
+      if (filterValues.brand && p.brand !== filterValues.brand) return false
       if (subcatFilter !== 'all' && p.subcategory !== subcatFilter) return false
       return true
     })
-  }, [allProducts, sizeFilter, conditionFilter, subcatFilter])
+  }, [allProducts, filterValues, subcatFilter])
 
-  const hasActiveFilters = sizeFilter !== 'all' || conditionFilter !== 'all' || subcatFilter !== 'all'
+  const hasActiveFilters =
+    subcatFilter !== 'all' ||
+    Object.values(filterValues).some(v => !!v)
+
+  const setFilterValue = (type: string, value: string) => {
+    setFilterValues(prev => {
+      const next = { ...prev }
+      if (!value) delete next[type]
+      else next[type] = value
+      return next
+    })
+  }
+
+  const toggleCollapse = (type: string) => {
+    setCollapsedFilters(prev => {
+      const next = new Set(prev)
+      if (next.has(type)) next.delete(type)
+      else next.add(type)
+      return next
+    })
+  }
 
   const resetFilters = () => {
-    setSizeFilter('all')
-    setConditionFilter('all')
+    setFilterValues({})
     setSubcatFilter('all')
+  }
+
+  // Helper to render the list of options for a given filter type
+  const renderFilterOptions = (f: CategoryFilterConfig) => {
+    const values = availableValues[f.type] || []
+    if (values.length === 0) return null
+    const current = filterValues[f.type] || ''
+    return (
+      <div className="space-y-1">
+        <button
+          onClick={() => setFilterValue(f.type, '')}
+          className={`block w-full text-left px-2 py-1 rounded text-sm ${!current ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+        >
+          {f.type === 'condition' ? 'Tous les états' : f.type === 'size' ? 'Toutes les tailles' : f.type === 'color' ? 'Toutes les couleurs' : 'Toutes les marques'}
+        </button>
+        {values.map(v => (
+          <button
+            key={v}
+            onClick={() => setFilterValue(f.type, v)}
+            className={`block w-full text-left px-2 py-1 rounded text-sm ${current === v ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            {f.type === 'condition' ? (CONDITION_LABELS[v] || v) : v}
+          </button>
+        ))}
+      </div>
+    )
   }
 
   const categoryLabel = categoryInfo?.label || cat
@@ -131,17 +239,17 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
       <div className="flex gap-6">
         {/* Sidebar filters */}
         <aside className="hidden md:block w-56 shrink-0 space-y-5">
-          <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1">
-                <Filter className="h-4 w-4" /> Filtres
+                <FilterIcon className="h-4 w-4" /> Filtres
               </h3>
               {hasActiveFilters && (
                 <button onClick={resetFilters} className="text-xs text-[#007bff] hover:underline">Effacer</button>
               )}
             </div>
 
-            {/* Subcategory filter */}
+            {/* Subcategory filter (kept separate — not part of filtersJson) */}
             {subcats.length > 0 && (
               <div className="space-y-2">
                 <Label className="text-xs font-semibold text-gray-700 uppercase">Sous-catégorie</Label>
@@ -165,53 +273,27 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
               </div>
             )}
 
-            {/* Size filter */}
-            {availableSizes.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-gray-700 uppercase">Taille</Label>
-                <div className="space-y-1">
+            {/* Dynamic collapsible filters from filtersJson */}
+            {activeFilters.map(f => {
+              const values = availableValues[f.type] || []
+              if (values.length === 0) return null
+              const isCollapsed = collapsedFilters.has(f.type)
+              return (
+                <div key={f.type} className="border-t border-gray-100 pt-3">
                   <button
-                    onClick={() => setSizeFilter('all')}
-                    className={`block w-full text-left px-2 py-1 rounded text-sm ${sizeFilter === 'all' ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                    type="button"
+                    onClick={() => toggleCollapse(f.type)}
+                    className="flex items-center justify-between w-full text-left mb-2"
                   >
-                    Toutes les tailles
+                    <Label className="text-xs font-semibold text-gray-700 uppercase cursor-pointer">
+                      {f.label}
+                    </Label>
+                    <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                   </button>
-                  {availableSizes.map(s => (
-                    <button
-                      key={s}
-                      onClick={() => setSizeFilter(s)}
-                      className={`block w-full text-left px-2 py-1 rounded text-sm ${sizeFilter === s ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-                    >
-                      {s}
-                    </button>
-                  ))}
+                  {!isCollapsed && renderFilterOptions(f)}
                 </div>
-              </div>
-            )}
-
-            {/* Condition filter */}
-            {availableConditions.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-gray-700 uppercase">État</Label>
-                <div className="space-y-1">
-                  <button
-                    onClick={() => setConditionFilter('all')}
-                    className={`block w-full text-left px-2 py-1 rounded text-sm ${conditionFilter === 'all' ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    Tous les états
-                  </button>
-                  {availableConditions.map(c => (
-                    <button
-                      key={c}
-                      onClick={() => setConditionFilter(c)}
-                      className={`block w-full text-left px-2 py-1 rounded text-sm ${conditionFilter === c ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-                    >
-                      {CONDITION_LABELS[c] || c}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+              )
+            })}
           </div>
         </aside>
 
@@ -219,24 +301,27 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
         <div className="flex-1 min-w-0">
           {/* Mobile filters */}
           <div className="md:hidden mb-4 flex gap-2 flex-wrap">
-            {availableSizes.length > 0 && (
-              <Select value={sizeFilter} onValueChange={setSizeFilter}>
-                <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue placeholder="Taille" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes tailles</SelectItem>
-                  {availableSizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            )}
-            {availableConditions.length > 0 && (
-              <Select value={conditionFilter} onValueChange={setConditionFilter}>
-                <SelectTrigger className="w-[150px] h-8 text-xs"><SelectValue placeholder="État" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous états</SelectItem>
-                  {availableConditions.map(c => <SelectItem key={c} value={c}>{CONDITION_LABELS[c] || c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            )}
+            {activeFilters.map(f => {
+              const values = availableValues[f.type] || []
+              if (values.length === 0) return null
+              return (
+                <Select
+                  key={f.type}
+                  value={filterValues[f.type] || 'all'}
+                  onValueChange={(v) => setFilterValue(f.type, v === 'all' ? '' : v)}
+                >
+                  <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue placeholder={f.label} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toutes / Tous</SelectItem>
+                    {values.map(v => (
+                      <SelectItem key={v} value={v}>
+                        {f.type === 'condition' ? (CONDITION_LABELS[v] || v) : v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )
+            })}
             {hasActiveFilters && (
               <button onClick={resetFilters} className="text-xs text-[#007bff] flex items-center gap-1 px-2">
                 <X className="h-3 w-3" /> Effacer

@@ -36,6 +36,17 @@ function applyTemplate(template: string | null, defaultText: string, vars: Recor
   return text
 }
 
+/**
+ * If the template contains HTML tags, treat it as HTML.
+ * Otherwise, convert plain text newlines to <br> for email rendering.
+ */
+function asHtml(text: string): string {
+  if (/<[a-z][\s\S]*>/i.test(text)) {
+    return text // already HTML
+  }
+  return text.replace(/\n/g, '<br>')
+}
+
 export interface SendEmailParams {
   to: string
   subject: string
@@ -144,6 +155,7 @@ export async function notifyAdminReply(clientId: string, subject: string, body: 
       to: client.email,
       subject: `Réponse à votre message : ${subject}`,
       text,
+      html: asHtml(text),
     })
   } catch (e: any) {
     console.error('[email] notifyAdminReply error:', e?.message)
@@ -157,7 +169,7 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
     const template = config?.templateOrder || null
     const text = applyTemplate(
       template,
-      `Bonjour ${clientFirstName},\n\nMerci pour votre commande !\n\nNuméro de commande : ${orderId}\nMontant total : ${total.toFixed(2)} €\n\nVous pouvez suivre votre commande dans votre espace client.\n\nÀ bientôt sur DBoxPro !`,
+      `Bonjour ${clientFirstName},\n\nMerci pour votre commande !\n\nNuméro de commande : ${orderId}\nMontant total : ${total.toFixed(2)} €\n\nVous pouvez suivre votre commande dans votre espace client.\n\nÀ bientôt !`,
       { firstName: clientFirstName, orderId, total: total.toFixed(2) + ' €' },
     )
 
@@ -165,6 +177,7 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
       to: clientEmail,
       subject: `Confirmation de commande ${orderId}`,
       text,
+      html: asHtml(text),
     })
 
     // Also notify admin
@@ -188,6 +201,7 @@ export async function notifyOrderStatusChange(clientEmail: string, clientFirstNa
     const statusLabels: Record<string, string> = {
       pending: 'En attente',
       paid: 'Payée',
+      preparation: 'En préparation',
       shipped: 'Expédiée',
       delivered: 'Livrée',
       cancelled: 'Annulée',
@@ -206,6 +220,7 @@ export async function notifyOrderStatusChange(clientEmail: string, clientFirstNa
       to: clientEmail,
       subject: `Mise à jour commande ${orderId} — ${statusLabel}`,
       text,
+      html: asHtml(text),
     })
   } catch (e: any) {
     console.error('[email] notifyOrderStatusChange error:', e?.message)
@@ -219,14 +234,15 @@ export async function notifyClientRegistration(clientEmail: string, clientFirstN
     const template = config?.templateRegister || null
     const text = applyTemplate(
       template,
-      `Bienvenue ${clientFirstName} !\n\nVotre compte a été créé avec succès sur DBoxPro.\n\nVous pouvez maintenant passer commande, suivre vos commandes et nous contacter via la messagerie.\n\nÀ bientôt !`,
+      `Bienvenue ${clientFirstName} !\n\nVotre compte a été créé avec succès.\n\nVous pouvez maintenant passer commande, suivre vos commandes et nous contacter via la messagerie.\n\nÀ bientôt !`,
       { firstName: clientFirstName, email: clientEmail },
     )
 
     await sendEmail({
       to: clientEmail,
-      subject: 'Bienvenue sur DBoxPro !',
+      subject: 'Bienvenue !',
       text,
+      html: asHtml(text),
     })
   } catch (e: any) {
     console.error('[email] notifyClientRegistration error:', e?.message)

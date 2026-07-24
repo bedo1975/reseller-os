@@ -19,6 +19,7 @@ export async function PATCH(
     if (body.backgroundImage !== undefined) data.backgroundImage = body.backgroundImage || null
     if (typeof body.order === 'number' || typeof body.order === 'string') data.order = parseInt(body.order) || 0
     if (body.parentId !== undefined) data.parentId = body.parentId || null
+    if (typeof body.filtersJson === 'string') data.filtersJson = body.filtersJson
 
     // bgColor (hex 6 chars without #)
     if (body.bgColor !== undefined) {

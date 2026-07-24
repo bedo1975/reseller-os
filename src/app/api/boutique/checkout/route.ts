@@ -117,7 +117,6 @@ export async function POST(req: NextRequest) {
       })
 
       invoiceNumbers.push(invoiceNumber)
-      subtotal += salePrice
       orderItems.push({
         sku: item.sku,
         brand: stockItem.brand,

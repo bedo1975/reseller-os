@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -20,17 +20,14 @@ export function HtmlEditor({ value, onChange, placeholder, className, minHeight 
   const editorRef = useRef<HTMLDivElement>(null)
   const isInternalChange = useRef(false)
 
-  // Sync external value → editor content (only when different)
-  const syncFromProp = useCallback(() => {
-    if (!editorRef.current || isInternalChange.current) return
-    if (editorRef.current.innerHTML !== value) {
-      editorRef.current.innerHTML = value || ''
-    }
-  }, [value])
-
-  // Initialize content on mount
-  const initEditor = useCallback(() => {
-    if (editorRef.current) {
+  // Sync external value → editor content when value changes externally
+  // (e.g., when "Charger un modèle" button sets a preset)
+  useEffect(() => {
+    if (!editorRef.current) return
+    if (isInternalChange.current) return
+    // Only update if the new value differs from what's already in the editor
+    const current = editorRef.current.innerHTML
+    if (value !== current) {
       editorRef.current.innerHTML = value || ''
     }
   }, [value])
