@@ -60,6 +60,26 @@ export async function GET(
     const addrLine2 = `${addrPostal} ${addrCity}`.trim()
     const clientAddress = [addrLine, esc(addrLine2), esc(addrCountry)].filter(Boolean).join('<br>')
 
+    // Parse relay address JSON (if order is delivered to a Mondial Relay point)
+    let relayBlockHtml = ''
+    if (order.relayId) {
+      let relay: any = null
+      try { relay = JSON.parse(order.relayAddress || '{}') } catch { relay = {} }
+      const rAddr = esc(relay.address || '')
+      const rCp = esc(relay.postalCode || '')
+      const rCity = esc(relay.city || '')
+      const relayAddressHtml = [rAddr, `${rCp} ${rCity}`.trim()].filter(Boolean).join('<br>')
+      relayBlockHtml = `
+  <div class="relay-block">
+    <div class="section-title">Point relais</div>
+    <div class="section-content">
+      <strong>${escapeHtml(order.relayName || 'Point relais')}</strong><br>
+      ${relayAddressHtml || '—'}<br>
+      <span style="font-size:11px; color:#666;">Réf. relais : ${escapeHtml(order.relayId)}</span>
+    </div>
+  </div>`
+    }
+
     const STATUS_LABELS: Record<string, string> = {
       pending: 'En attente', paid: 'Payée', shipped: 'Expédiée',
       delivered: 'Livrée', cancelled: 'Annulée',
@@ -82,11 +102,12 @@ export async function GET(
   .badge { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
   .badge-status { background: #fef3c7; color: #92400e; }
   .badge-date { background: #dbeafe; color: #1e40af; }
-  .sections { display: flex; gap: 30px; margin-bottom: 25px; }
-  .section { flex: 1; }
+  .sections { display: flex; gap: 30px; margin-bottom: 25px; flex-wrap: wrap; }
+  .section { flex: 1; min-width: 200px; }
   .section-title { font-size: 10px; text-transform: uppercase; color: #888; margin-bottom: 6px; font-weight: 600; }
   .section-content { font-size: 13px; line-height: 1.6; }
   .section-content strong { font-size: 14px; }
+  .relay-block { background: #eff6ff; border-left: 3px solid #007bff; padding: 10px 14px; border-radius: 4px; margin-bottom: 20px; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
   thead th { background: #f3f4f6; padding: 10px 8px; text-align: left; font-size: 10px; text-transform: uppercase; color: #555; border-bottom: 2px solid #1a1a1a; }
   tbody td { padding: 12px 8px; border-bottom: 1px solid #e5e7eb; font-size: 13px; vertical-align: top; }
@@ -118,6 +139,8 @@ export async function GET(
     <span class="badge badge-status">Statut : ${STATUS_LABELS[order.status] || order.status}</span>
     <span class="badge badge-date">${new Date(order.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
   </div>
+
+  ${relayBlockHtml}
 
   <div class="sections">
     <div class="section">

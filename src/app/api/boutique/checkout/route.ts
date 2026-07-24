@@ -15,13 +15,19 @@ import { notifyNewOrder } from '@/lib/email'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { customer, items, shippingMethodCode, paymentMethodCode, notes } = body
+    const { customer, items, shippingMethodCode, paymentMethodCode, notes, relayId, relayName, relayAddress } = body
 
     if (!customer?.email || !customer?.firstName || !customer?.lastName || !customer?.address) {
       return NextResponse.json({ error: 'Coordonnées client incomplètes' }, { status: 400 })
     }
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'Panier vide' }, { status: 400 })
+    }
+
+    // If the selected shipping method is a relay one, a relay point MUST be chosen.
+    const isRelayMethod = !!shippingMethodCode && /relay/i.test(shippingMethodCode)
+    if (isRelayMethod && (!relayId || !relayName || !relayAddress)) {
+      return NextResponse.json({ error: 'Veuillez sélectionner un point relais.' }, { status: 400 })
     }
 
     // Check if a client is logged in (optional)
@@ -43,6 +49,7 @@ export async function POST(req: NextRequest) {
         db.shippingMethod.create({ data: { code: 'standard', label: 'Standard (3-5j)', price: 3.50, delay: '3 à 5 jours ouvrés', active: true, order: 0 } }),
         db.shippingMethod.create({ data: { code: 'tracked', label: 'Suivi (2-3j)', price: 5.90, delay: '2 à 3 jours ouvrés', active: true, order: 1 } }),
         db.shippingMethod.create({ data: { code: 'pickup', label: 'Retrait (gratuit)', price: 0, delay: 'Sur rendez-vous', active: true, order: 2 } }),
+        db.shippingMethod.create({ data: { code: 'relay', label: 'Point relais (Mondial Relay)', price: 3.20, delay: '3 à 6 jours ouvrés', active: true, order: 3 } }),
       ])
     }
 
@@ -154,6 +161,9 @@ export async function POST(req: NextRequest) {
         notes: notes || null,
         status: 'pending',
         invoiceNumbers: JSON.stringify(invoiceNumbers),
+        relayId: isRelayMethod ? String(relayId) : null,
+        relayName: isRelayMethod ? String(relayName) : null,
+        relayAddress: isRelayMethod ? String(relayAddress) : null,
       },
     })
 

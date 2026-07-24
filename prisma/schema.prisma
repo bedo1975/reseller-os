@@ -438,6 +438,9 @@ model BoutiqueSettings {
   // Configuration PayPal
   paypalClientId   String?
   paypalSecret     String?
+  // Configuration Mondial Relay (points relais)
+  mondialRelayEnseigne String?  // Code marchand (ex: "BDTEST")
+  mondialRelayApiKey   String?  // Clé privée API
   // Couleurs personnalisables (hex sans #)
   primaryColor    String   @default("007bff")
   primaryDarkColor String  @default("0056b3")
@@ -572,6 +575,10 @@ model BoutiqueOrder {
   status        String   @default("pending")  // pending | paid | shipped | delivered | cancelled
   // Liste des numéros de facture Reseller OS (pour retrouver les Sales)
   invoiceNumbers String  // JSON array
+  // Point relais (livraison Mondial Relay)
+  relayId        String?
+  relayName      String?
+  relayAddress   String?  // JSON: {address, postalCode, city, lat, lng}
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

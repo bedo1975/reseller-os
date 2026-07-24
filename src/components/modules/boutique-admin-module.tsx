@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
-  ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter,
+  ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -810,6 +810,8 @@ interface BoutiqueSettingsData {
   stripeSecretKey: string | null
   paypalClientId: string | null
   paypalSecret: string | null
+  mondialRelayEnseigne: string | null
+  mondialRelayApiKey: string | null
 }
 
 function AppearanceTab() {
@@ -1628,6 +1630,10 @@ function ShippingTab() {
   const [showMethodForm, setShowMethodForm] = useState(false)
   const [methodForm, setMethodForm] = useState({ code: '', label: '', price: '', delay: '', carrierCode: '', order: '0' })
   const { attributes: allAttrs, refresh: refreshAttrs } = useSettings()
+  // Mondial Relay config
+  const [mrEnseigne, setMrEnseigne] = useState('')
+  const [mrApiKey, setMrApiKey] = useState('')
+  const [savingMr, setSavingMr] = useState(false)
 
   const fetchMethods = useCallback(async () => {
     setLoading(true)
@@ -1649,6 +1655,8 @@ function ShippingTab() {
       const data = await res.json()
       setFreeShippingEnabled(data.freeShippingEnabled ?? false)
       setFreeShippingThreshold(data.freeShippingThreshold ?? 50)
+      setMrEnseigne(data.mondialRelayEnseigne || '')
+      setMrApiKey(data.mondialRelayApiKey || '')
     } catch {}
   }, [])
 
@@ -1666,6 +1674,26 @@ function ShippingTab() {
       toast.error('Erreur')
     } finally {
       setSavingFreeShip(false)
+    }
+  }
+
+  // Save Mondial Relay config (enseigne + clé API)
+  const saveMondialRelay = async () => {
+    setSavingMr(true)
+    try {
+      await fetch('/api/boutique/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mondialRelayEnseigne: mrEnseigne.trim(),
+          mondialRelayApiKey: mrApiKey.trim(),
+        }),
+      })
+      toast.success('Configuration Mondial Relay enregistrée')
+    } catch {
+      toast.error('Erreur')
+    } finally {
+      setSavingMr(false)
     }
   }
 
@@ -1803,6 +1831,57 @@ function ShippingTab() {
 
   return (
     <div className="space-y-4">
+      {/* Configuration Mondial Relay */}
+      <Card className={!mrEnseigne || !mrApiKey ? 'border-amber-300' : 'border-green-300'}>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <MapPin className="h-4 w-4" /> Configuration Mondial Relay
+            {mrEnseigne && mrApiKey
+              ? <Badge className="bg-green-600 hover:bg-green-600">Configuré</Badge>
+              : <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100">À configurer</Badge>
+            }
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Identifiants pour l'API Mondial Relay (recherche de points relais et création d'étiquettes).
+            Sans ces identifiants, la recherche de points relais utilise des données de démonstration (mock).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Enseigne (code client)</Label>
+              <Input
+                value={mrEnseigne}
+                onChange={e => setMrEnseigne(e.target.value)}
+                placeholder="Ex : BOUTIQUE01"
+                className="font-mono text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">Code enseigne fourni par Mondial Relay lors de l'ouverture du compte.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Clé API / clé privée</Label>
+              <Input
+                type="password"
+                value={mrApiKey}
+                onChange={e => setMrApiKey(e.target.value)}
+                placeholder="Clé secrète"
+                className="font-mono text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">Utilisée pour signer les requêtes (hash de sécurité).</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={saveMondialRelay} disabled={savingMr}>
+              {savingMr ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+              Enregistrer
+            </Button>
+            <span className="text-[11px] text-muted-foreground">
+              🔒 Les identifiants sont stockés dans la base locale et ne sont jamais exposés au client.
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Livraison offerte */}
       <Card className={freeShippingEnabled ? 'border-green-400 bg-green-50/50 dark:bg-green-950/20' : ''}>
         <CardHeader>

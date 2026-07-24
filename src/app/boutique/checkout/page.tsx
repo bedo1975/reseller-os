@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -8,9 +8,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Lock, ShoppingBag, ChevronRight, AlertCircle } from 'lucide-react'
+import { Lock, ShoppingBag, ChevronRight, AlertCircle, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
+import dynamic from 'next/dynamic'
+import type { RelayPoint } from '@/components/boutique/relay-map'
+
+// Leaflet must be rendered client-side only (it accesses window at import time).
+const RelayMap = dynamic(
+  () => import('@/components/boutique/relay-map'),
+  { ssr: false, loading: () => <Skeleton className="h-[400px] w-full rounded-lg" /> }
+)
 
 interface CartItem {
   sku: string
@@ -57,6 +65,7 @@ export default function CheckoutPage() {
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([])
   const [shippingMethod, setShippingMethod] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('')
+  const [selectedRelay, setSelectedRelay] = useState<RelayPoint | null>(null)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -140,6 +149,18 @@ export default function CheckoutPage() {
       .catch(() => {})
   }, [shippingMethod, cart])
 
+  // Whether the currently selected shipping method is a "point relais" one.
+  const isRelayShipping = useMemo(() => {
+    return !!shippingMethod && /relay/i.test(shippingMethod)
+  }, [shippingMethod])
+
+  // Reset the selected relay when the customer switches away from a relay method.
+  useEffect(() => {
+    if (!isRelayShipping && selectedRelay) {
+      setSelectedRelay(null)
+    }
+  }, [isRelayShipping, selectedRelay])
+
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }))
 
   const validateForm = () => {
@@ -151,6 +172,7 @@ export default function CheckoutPage() {
     if (!form.city.trim()) return 'Ville requise'
     if (!shippingMethod) return 'Veuillez sélectionner un mode de livraison'
     if (!paymentMethod) return 'Veuillez sélectionner un mode de paiement'
+    if (isRelayShipping && !selectedRelay) return 'Veuillez sélectionner un point relais'
     return null
   }
 
@@ -172,6 +194,15 @@ export default function CheckoutPage() {
           shippingMethodCode: shippingMethod,
           paymentMethodCode: paymentMethod,
           notes: form.notes,
+          relayId: isRelayShipping && selectedRelay ? selectedRelay.id : undefined,
+          relayName: isRelayShipping && selectedRelay ? selectedRelay.name : undefined,
+          relayAddress: isRelayShipping && selectedRelay ? JSON.stringify({
+            address: selectedRelay.address,
+            postalCode: selectedRelay.postalCode,
+            city: selectedRelay.city,
+            lat: selectedRelay.lat,
+            lng: selectedRelay.lng,
+          }) : undefined,
         }),
       })
       const data = await res.json()
@@ -291,7 +322,10 @@ export default function CheckoutPage() {
                       className="accent-[#007bff]"
                     />
                     <div className="flex-1">
-                      <p className="font-medium text-sm text-gray-900">{opt.label}</p>
+                      <p className="font-medium text-sm text-gray-900 flex items-center gap-2">
+                        {opt.label}
+                        {/relay/i.test(opt.code) && <MapPin className="h-3.5 w-3.5 text-[#007bff]" />}
+                      </p>
                       {opt.delay && <p className="text-xs text-gray-500">{opt.delay}</p>}
                     </div>
                     <span className="font-medium text-sm">
@@ -301,6 +335,32 @@ export default function CheckoutPage() {
                 ))
               )}
             </div>
+
+            {/* Relay point picker — only shown for relay-type shipping methods */}
+            {isRelayShipping && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="mb-3">
+                  <h3 className="font-medium text-sm text-gray-900 flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-[#007bff]" />
+                    Choisissez votre point relais
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Sélectionnez un point relais près de chez vous. Le code postal est pré-rempli depuis votre adresse.
+                  </p>
+                </div>
+                <RelayMap
+                  postalCode={form.postalCode}
+                  onSelect={(relay) => setSelectedRelay(relay)}
+                  selectedRelayId={selectedRelay?.id}
+                />
+                {isRelayShipping && !selectedRelay && (
+                  <p className="mt-2 text-xs text-amber-700 flex items-center gap-1">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    La sélection d'un point relais est obligatoire pour confirmer la commande.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Payment method */}
