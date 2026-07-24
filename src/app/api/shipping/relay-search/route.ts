@@ -84,18 +84,30 @@ const HOURS = [
   'Lun-Ven: 6h-22h, Sam: 7h-22h, Dim: 9h-13h',
 ]
 
+// Reverse geocode: get the real city name from lat/lng using Nominatim
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&accept-language=fr`
+
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Junashop/1.0' },
+    })
+    const data = await res.json()
+    if (data?.address) {
+      // Try village, town, city, municipality in order
+      const addr = data.address
+      return addr.village || addr.town || addr.city || addr.municipality || addr.county || ''
+    }
+  } catch (e) {
+    console.error('[relay-search] reverse geocode error:', e)
+  }
+  return ''
+}
+
 // Generate mock relay points around a real lat/lng
-function generateMockRelays(lat: number, lng: number, postalCode: string, cityName: string): RelayPoint[] {
+async function generateMockRelays(lat: number, lng: number, postalCode: string, cityName: string): Promise<RelayPoint[]> {
   const count = 8
   const relays: RelayPoint[] = []
-
-  // Nearby city name variations
-  const nearbyCities = [
-    cityName,
-    `${cityName} Centre`,
-    `${cityName} Sud`,
-    `${cityName} Nord`,
-  ]
 
   for (let i = 0; i < count; i++) {
     // Random offset: ±0.03° lat (≈±3km), ±0.04° lng (≈±3km)
@@ -109,10 +121,12 @@ function generateMockRelays(lat: number, lng: number, postalCode: string, cityNa
     const lngDiff = lngOffset * 111 * Math.cos(lat * Math.PI / 180)
     const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff)
 
+    // Reverse geocode each point to get the real city name
+    const realCityName = await reverseGeocode(rLat, rLng)
+
     const name = RELAY_NAMES[Math.floor(Math.random() * RELAY_NAMES.length)]
     const streetNum = Math.floor(Math.random() * 80) + 1
     const street = STREET_NAMES[Math.floor(Math.random() * STREET_NAMES.length)]
-    const city = nearbyCities[Math.floor(Math.random() * nearbyCities.length)]
     const hours = HOURS[Math.floor(Math.random() * HOURS.length)]
 
     relays.push({
@@ -120,7 +134,7 @@ function generateMockRelays(lat: number, lng: number, postalCode: string, cityNa
       name: `Relais ${name}`,
       address: `${streetNum} ${street}`,
       postalCode,
-      city,
+      city: realCityName || cityName,
       lat: rLat,
       lng: rLng,
       distance: parseFloat(distance.toFixed(2)),
@@ -152,12 +166,12 @@ export async function POST(req: NextRequest) {
 
     if (geo) {
       // Use real coordinates + real city name
-      const relays = generateMockRelays(geo.lat, geo.lng, postalCode, geo.cityName)
+      const relays = await generateMockRelays(geo.lat, geo.lng, postalCode, geo.cityName)
       return NextResponse.json({ relays })
     }
 
     // Fallback: if geocoding fails, use approximate center of France
-    const relays = generateMockRelays(46.6034, 1.8883, postalCode, city || `Commune ${postalCode}`)
+    const relays = await generateMockRelays(46.6034, 1.8883, postalCode, city || `Commune ${postalCode}`)
     return NextResponse.json({ relays })
   } catch (error) {
     console.error('POST /api/shipping/relay-search error:', error)
