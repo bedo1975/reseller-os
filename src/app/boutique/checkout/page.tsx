@@ -12,13 +12,23 @@ import { Lock, ShoppingBag, ChevronRight, AlertCircle, MapPin } from 'lucide-rea
 import { toast } from 'sonner'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 import dynamic from 'next/dynamic'
+import { Suspense } from 'react'
 import type { RelayPoint } from '@/components/boutique/relay-map'
 
 // Leaflet must be rendered client-side only (it accesses window at import time).
-const RelayMap = dynamic(
-  () => import('@/components/boutique/relay-map'),
+const RelayMapInner = dynamic(
+  () => import('@/components/boutique/relay-map').then(m => ({ default: m.RelayMap })),
   { ssr: false, loading: () => <Skeleton className="h-[400px] w-full rounded-lg" /> }
 )
+
+// Wrap in Suspense to handle react-leaflet's internal suspense
+function RelayMap(props: React.ComponentProps<typeof RelayMapInner>) {
+  return (
+    <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-lg" />}>
+      <RelayMapInner {...props} />
+    </Suspense>
+  )
+}
 
 interface CartItem {
   sku: string

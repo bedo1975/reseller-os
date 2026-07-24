@@ -1513,3 +1513,43 @@ Task: Implement 4 features for the boutique — (1) Email templates with HtmlEdi
 - `npx next build --webpack`: ✓ Compiled successfully (83/83 static pages). No new TS/lint errors introduced (the only pre-existing errors are in `html-editor.tsx` and `hours-editor.tsx`, untouched by this task).
 - `bash scripts/make-zip.sh`: zip = 836 KB, MD5: `35ce52589c5249e0cf998e064ffafd9b`.
 - Copied zip to `download/`, `.next/standalone/public/`, `.next/standalone/download/` (all 4 copies share the same MD5).
+
+---
+Task ID: mondial-relay-points-relais
+Agent: main
+Task: Implement Mondial Relay point relais with Leaflet map in checkout
+
+## Architecture
+- API route: POST /api/shipping/relay-search — returns mock relay points around a postal code
+- Component: src/components/boutique/relay-map.tsx — Leaflet map with markers + popups + list
+- Checkout integration: when shipping method code contains "relay", show the map
+- Schema: BoutiqueOrder has relayId, relayName, relayAddress (JSON)
+- Schema: BoutiqueSettings has mondialRelayEnseigne, mondialRelayApiKey
+- Preparation slip: shows relay block with name + address when relayId is set
+- Default shipping method "relay" (3.20€, 3-6 jours) auto-created
+
+## Mock data
+- 8 relay points generated around the given postal code
+- Realistic French names, addresses, hours
+- Rough lat/lng mapping for 20 major French departments
+- Distance calculated from center point
+- Sorted by distance
+- Ready to swap to real Mondial Relay API when credentials are available (see TODO comment in route)
+
+## Dependencies installed
+- leaflet@1.9.4
+- react-leaflet@5.0.0
+- @types/leaflet
+
+## Files created
+- src/app/api/shipping/relay-search/route.ts
+- src/components/boutique/relay-map.tsx
+
+## Files modified
+- prisma/schema.prisma (mondialRelayEnseigne, mondialRelayApiKey on BoutiqueSettings; relay fields on BoutiqueOrder already existed)
+- src/app/api/boutique/checkout/route.ts (default relay shipping method + store relay info)
+- src/app/boutique/checkout/page.tsx (RelayMap integration — already done by sub-agent)
+
+## Build
+- npx next build --webpack: success
+- Zip: 980 KB, MD5: eeafb0b03825e9a072961634ce7c95e6
