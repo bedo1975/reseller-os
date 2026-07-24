@@ -69,13 +69,47 @@ const CITIES: Record<string, string[]> = {
   '75': ['Paris'], '69': ['Lyon'], '13': ['Marseille'], '31': ['Toulouse'],
   '06': ['Nice'], '44': ['Nantes'], '67': ['Strasbourg'], '33': ['Bordeaux'],
   '59': ['Lille'], '35': ['Rennes'], '38': ['Grenoble'], '42': ['Saint-Étienne'],
-  '34': ['Montpellier'],
+  '34': ['Montpellier'], '30': ['Nîmes'], '17': ['La Rochelle'], '33': ['Bordeaux', 'Mérignac'],
+  '83': ['Toulon'], '06': ['Nice', 'Cannes'], '74': ['Annecy'], '73': ['Chambéry'],
+  '01': ['Bourg-en-Bresse'], '21': ['Dijon'], '25': ['Besançon'], '22': ['Saint-Brieuc'],
+  '29': ['Brest', 'Quimper'], '56': ['Vannes', 'Lorient'], '50': ['Saint-Lô', 'Cherbourg'],
+  '61': ['Alençon'], '14': ['Caen'], '27': ['Évreux'], '76': ['Rouen', 'Le Havre'],
+  '80': ['Amiens'], '60': ['Beauvais', 'Compiègne'], '02': ['Saint-Quentin', 'Laon'],
+  '51': ['Reims', 'Châlons-en-Champagne'], '08': ['Charleville-Mézières'],
+  '55': ['Bar-le-Duc'], '52': ['Chaumont'], '10': ['Troyes'], '89': ['Auxerre', 'Sens'],
+  '58': ['Nevers'], '18': ['Bourges'], '36': ['Châteauroux'], '37': ['Tours'],
+  '41': ['Blois'], '45': ['Orléans'], '28': ['Chartres'], '78': ['Versailles'],
+  '91': ['Évry', 'Corbeil-Essonnes'], '95': ['Cergy', 'Argenteuil'],
+  '77': ['Meaux', 'Melun'], '93': ['Bobigny', 'Montreuil'], '94': ['Créteil', 'Nogent-sur-Marne'],
+  '92': ['Nanterre', 'Boulogne-Billancourt'], '60': ['Beauvais'],
+  '62': ['Arras', 'Calais', 'Boulogne-sur-Mer'], '59': ['Lille', 'Roubaix', 'Tourcoing'],
+  '57': ['Metz'], '54': ['Nancy'], '55': ['Bar-le-Duc'], '88': ['Épinal'],
+  '67': ['Strasbourg', 'Haguenau'], '68': ['Mulhouse', 'Colmar'], '90': ['Belfort'],
+  '70': ['Vesoul'], '39': ['Lons-le-Saunier', 'Dole'], '25': ['Besançon', 'Montbéliard'],
+  '21': ['Dijon', 'Beaune'], '71': ['Mâcon', 'Chalon-sur-Saône'], '58': ['Nevers'],
+  '03': ['Moulins', 'Vichy'], '63': ['Clermont-Ferrand', 'Riom'], '15': ['Aurillac'],
+  '43': ['Le Puy-en-Velay'], '07': ['Aubenas', 'Privas'], '26': ['Valence', 'Montélimar'],
+  '38': ['Grenoble', 'Voiron'], '73': ['Chambéry', 'Annecy'], '74': ['Annecy', 'Thonon-les-Bains'],
+  '05': ['Gap', 'Briançon'], '04': ['Digne-les-Bains', 'Manosque'], '06': ['Nice', 'Grasse'],
+  '83': ['Toulon', 'Draguignan'], '13': ['Marseille', 'Aubagne', 'Istres'],
+  '84': ['Avignon', 'Orange'], '30': ['Nîmes', 'Alès'], '48': ['Mende'],
+  '12': ['Rodez', 'Millau'], '46': ['Cahors'], '82': ['Montauban'],
+  '32': ['Auch'], '65': ['Tarbes', 'Lourdes'], '64': ['Bayonne', 'Pau'],
+  '40': ['Mont-de-Marsan', 'Dax'], '24': ['Périgueux', 'Bergerac'],
+  '19': ['Brive-la-Gaillarde', 'Tulle'], '23': ['Guéret'], '87': ['Limoges'],
+  '16': ['Angoulême', 'Cognac'], '79': ['Niort', 'Bressuire'], '86': ['Poitiers', 'Châtellerault'],
+  '37': ['Tours', 'Loches'], '41': ['Blois', 'Vendôme'], '49': ['Angers', 'Cholet'],
+  '53': ['Laval'], '72': ['Le Mans'], '85': ['La Roche-sur-Yon', 'Les Sables-d\'Olonne'],
+  '44': ['Nantes', 'Saint-Nazaire'], '29': ['Brest', 'Quimper'],
+  '22': ['Saint-Brieuc', 'Lannion'], '56': ['Vannes', 'Lorient', 'Lannion'],
+  '35': ['Rennes', 'Saint-Malo', 'Redon'], '18': ['Bourges', 'Vierzon'],
+  '36': ['Châteauroux'], '41': ['Blois'],
 }
 
 function generateMockRelays(postalCode: string): RelayPoint[] {
   const center = postalCodeToLatLng(postalCode)
   const dept = postalCode.substring(0, 2)
-  const cities = CITIES[dept] || ['Ville']
+  const cities = CITIES[dept] || [`Commune ${postalCode}`]
   const count = 8
   const relays: RelayPoint[] = []
 
