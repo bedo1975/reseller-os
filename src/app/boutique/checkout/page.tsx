@@ -89,38 +89,51 @@ export default function CheckoutPage() {
   })
 
   useEffect(() => {
-    // Load shipping methods from API
-    fetch('/api/boutique/admin/shipping')
-      .then(r => r.json())
-      .then(async data => {
-        const methods = data.methods || []
-        // Pre-calculate shipping cost for ALL methods at once (based on cart weight)
-        // This avoids the "base price flash" when the user selects a method
-        const calculatedOptions = await Promise.all(methods.map(async (m: any) => {
-          try {
-            const calcRes = await fetch('/api/boutique/shipping-calculate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                shippingMethodCode: m.code,
-                items: cart.map(i => ({ sku: i.sku, qty: i.qty })),
-              }),
-            })
-            const calcData = await calcRes.json()
-            return {
-              code: m.code,
-              label: m.label,
-              price: calcData.shippingCost != null ? calcData.shippingCost : m.price,
-              delay: m.delay,
+    // Load cart FIRST so we can calculate shipping with the right items
+    try {
+      const c = JSON.parse(localStorage.getItem('boutique_cart') || '[]')
+      setCart(c)
+      if (c.length === 0) {
+        router.push('/boutique/panier')
+        return
+      }
+
+      // Now load shipping methods AND pre-calculate prices based on cart weight
+      fetch('/api/boutique/admin/shipping')
+        .then(r => r.json())
+        .then(async data => {
+          const methods = data.methods || []
+          // Pre-calculate shipping cost for ALL methods at once (based on cart weight)
+          const calculatedOptions = await Promise.all(methods.map(async (m: any) => {
+            try {
+              const calcRes = await fetch('/api/boutique/shipping-calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  shippingMethodCode: m.code,
+                  items: c.map((i: any) => ({ sku: i.sku, qty: i.qty })),
+                }),
+              })
+              const calcData = await calcRes.json()
+              return {
+                code: m.code,
+                label: m.label,
+                price: calcData.shippingCost != null ? calcData.shippingCost : m.price,
+                delay: m.delay,
+              }
+            } catch {
+              return { code: m.code, label: m.label, price: m.price, delay: m.delay }
             }
-          } catch {
-            return { code: m.code, label: m.label, price: m.price, delay: m.delay }
-          }
-        }))
-        setShippingOptions(calculatedOptions)
-        if (calculatedOptions.length > 0 && !shippingMethod) setShippingMethod(calculatedOptions[0].code)
-      })
-      .catch(() => {})
+          }))
+          setShippingOptions(calculatedOptions)
+          if (calculatedOptions.length > 0 && !shippingMethod) setShippingMethod(calculatedOptions[0].code)
+        })
+        .catch(() => {})
+    } catch {
+      router.push('/boutique/panier')
+      return
+    }
+    setLoaded(true)
 
     // Load payment methods from API
     fetch('/api/boutique/payments')
@@ -131,19 +144,6 @@ export default function CheckoutPage() {
         if (methods.length > 0 && !paymentMethod) setPaymentMethod(methods[0].code)
       })
       .catch(() => {})
-
-    try {
-      const c = JSON.parse(localStorage.getItem('boutique_cart') || '[]')
-      setCart(c)
-      if (c.length === 0) {
-        router.push('/boutique/panier')
-        return
-      }
-    } catch {
-      router.push('/boutique/panier')
-      return
-    }
-    setLoaded(true)
   }, [router])
 
   const subtotal = cart.reduce((s, i) => s + (i.price || 0) * i.qty, 0)
