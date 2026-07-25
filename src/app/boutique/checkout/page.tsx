@@ -202,6 +202,7 @@ export default function CheckoutPage() {
           customer: form,
           items: cart.map(i => ({ sku: i.sku, qty: i.qty, price: i.price })),
           shippingMethodCode: shippingMethod,
+          shippingCost: shipping, // send the calculated shipping cost from frontend
           paymentMethodCode: paymentMethod,
           notes: form.notes,
           relayId: isRelayShipping && selectedRelay ? selectedRelay.id : undefined,

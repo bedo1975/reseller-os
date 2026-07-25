@@ -15,7 +15,7 @@ import { notifyNewOrder } from '@/lib/email'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { customer, items, shippingMethodCode, paymentMethodCode, notes, relayId, relayName, relayAddress } = body
+    const { customer, items, shippingMethodCode, paymentMethodCode, notes, relayId, relayName, relayAddress, shippingCost: clientShippingCost } = body
 
     if (!customer?.email || !customer?.firstName || !customer?.lastName || !customer?.address) {
       return NextResponse.json({ error: 'Coordonnées client incomplètes' }, { status: 400 })
@@ -54,10 +54,50 @@ export async function POST(req: NextRequest) {
     }
 
     const shippingMethod = shippingMethods.find(m => m.code === shippingMethodCode) || shippingMethods[0]
-    let shippingCost = shippingMethod?.price || 0
+    // Use the shipping cost from the frontend if provided (it was calculated via shipping-calculate API)
+    // Otherwise fall back to base price, then recalculate from weight rules
+    let shippingCost: number | null = typeof clientShippingCost === 'number' ? clientShippingCost : null
 
     // Get boutique settings (for free shipping threshold)
     const boutiqueSettings = await getBoutiqueSettings()
+
+    // If frontend didn't send a shipping cost, calculate from weight rules
+    if (shippingCost === null) {
+      shippingCost = shippingMethod?.price || 0
+
+      if (shippingMethod && shippingMethod.code) {
+        const methodWithRules = await db.shippingMethod.findUnique({
+          where: { code: shippingMethod.code },
+          include: { weightRules: { orderBy: { weightMin: 'asc' } } },
+        })
+        if (methodWithRules && methodWithRules.weightRules.length > 0) {
+          // Calculate total weight from items
+          let totalWeight = 0
+          for (const item of items) {
+            const stockItem = await db.stockItem.findFirst({
+              where: { sku: item.sku },
+              select: { weight: true },
+            })
+            const itemWeight = stockItem?.weight || 0
+            totalWeight += itemWeight * (item.qty || 1)
+          }
+          // Default: items without weight = 500g each
+          if (totalWeight === 0 && items.length > 0) {
+            totalWeight = items.reduce((s: number, i: any) => s + 500 * (i.qty || 1), 0)
+          }
+          // Find the matching weight rule
+          const rule = methodWithRules.weightRules.find(r => totalWeight >= r.weightMin && totalWeight <= r.weightMax)
+          if (rule) {
+            shippingCost = rule.price
+          } else {
+            const highestRule = methodWithRules.weightRules[methodWithRules.weightRules.length - 1]
+            if (highestRule && totalWeight > highestRule.weightMax) {
+              shippingCost = highestRule.price
+            }
+          }
+        }
+      }
+    }
 
     // Get payment method (for label)
     let paymentMethodLabel = paymentMethodCode || 'demo'
