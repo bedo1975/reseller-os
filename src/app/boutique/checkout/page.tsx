@@ -92,15 +92,33 @@ export default function CheckoutPage() {
     // Load shipping methods from API
     fetch('/api/boutique/admin/shipping')
       .then(r => r.json())
-      .then(data => {
+      .then(async data => {
         const methods = data.methods || []
-        setShippingOptions(methods.map((m: any) => ({
-          code: m.code,
-          label: m.label,
-          price: m.price,
-          delay: m.delay,
-        })))
-        if (methods.length > 0 && !shippingMethod) setShippingMethod(methods[0].code)
+        // Pre-calculate shipping cost for ALL methods at once (based on cart weight)
+        // This avoids the "base price flash" when the user selects a method
+        const calculatedOptions = await Promise.all(methods.map(async (m: any) => {
+          try {
+            const calcRes = await fetch('/api/boutique/shipping-calculate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                shippingMethodCode: m.code,
+                items: cart.map(i => ({ sku: i.sku, qty: i.qty })),
+              }),
+            })
+            const calcData = await calcRes.json()
+            return {
+              code: m.code,
+              label: m.label,
+              price: calcData.shippingCost != null ? calcData.shippingCost : m.price,
+              delay: m.delay,
+            }
+          } catch {
+            return { code: m.code, label: m.label, price: m.price, delay: m.delay }
+          }
+        }))
+        setShippingOptions(calculatedOptions)
+        if (calculatedOptions.length > 0 && !shippingMethod) setShippingMethod(calculatedOptions[0].code)
       })
       .catch(() => {})
 
@@ -136,28 +154,8 @@ export default function CheckoutPage() {
   const shipping = (freeShipEnabled && subtotal >= freeShipThreshold) ? 0 : rawShipping
   const total = subtotal + shipping
 
-  // Auto-calculate shipping based on weight when shipping method or cart changes
-  useEffect(() => {
-    if (!shippingMethod || cart.length === 0) return
-    fetch('/api/boutique/shipping-calculate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        shippingMethodCode: shippingMethod,
-        items: cart.map(i => ({ sku: i.sku, qty: i.qty })),
-      }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.shippingCost != null) {
-          // Update the shipping option price dynamically
-          setShippingOptions(prev => prev.map(opt =>
-            opt.code === shippingMethod ? { ...opt, price: data.shippingCost } : opt
-          ))
-        }
-      })
-      .catch(() => {})
-  }, [shippingMethod, cart])
+  // Note: shipping prices are pre-calculated for all methods when they are loaded (see useEffect above).
+  // No need to recalculate when switching methods — the price is already correct.
 
   // Whether the currently selected shipping method is a "point relais" one.
   const isRelayShipping = useMemo(() => {
