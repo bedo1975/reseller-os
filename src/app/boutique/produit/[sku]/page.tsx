@@ -64,9 +64,11 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
     setAdding(true)
     try {
       const cart = JSON.parse(localStorage.getItem('boutique_cart') || '[]')
+      const maxQty = product.quantity || 1
       const existing = cart.find((i: any) => i.sku === product.sku)
       if (existing) {
-        existing.qty += 1
+        // Don't exceed stock quantity
+        existing.qty = Math.min(existing.qty + 1, maxQty)
       } else {
         cart.push({
           sku: product.sku,
@@ -77,6 +79,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           price: product.price,
           mainPhoto: product.mainPhoto,
           qty: 1,
+          maxQty: maxQty,
         })
       }
       localStorage.setItem('boutique_cart', JSON.stringify(cart))

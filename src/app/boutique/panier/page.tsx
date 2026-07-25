@@ -16,6 +16,7 @@ interface CartItem {
   price: number | null
   mainPhoto?: string | null
   qty: number
+  maxQty?: number // stock quantity available
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -51,7 +52,10 @@ export default function CartPage() {
   const updateQty = (sku: string, delta: number) => {
     const newCart = cart.map(i => {
       if (i.sku === sku) {
-        return { ...i, qty: Math.max(1, i.qty + delta) }
+        const newQty = Math.max(1, i.qty + delta)
+        // Respect stock quantity: don't exceed maxQty if known
+        const max = i.maxQty && i.maxQty > 0 ? i.maxQty : 99
+        return { ...i, qty: Math.min(newQty, max) }
       }
       return i
     })
@@ -135,7 +139,7 @@ export default function CartPage() {
                   <div className="flex items-center border border-gray-300 rounded-md">
                     <button
                       onClick={() => updateQty(item.sku, -1)}
-                      className="p-1.5 hover:bg-gray-100"
+                      className="p-1.5 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
                       disabled={item.qty <= 1}
                     >
                       <Minus className="h-3 w-3" />
@@ -143,11 +147,16 @@ export default function CartPage() {
                     <span className="px-3 text-sm font-medium">{item.qty}</span>
                     <button
                       onClick={() => updateQty(item.sku, 1)}
-                      className="p-1.5 hover:bg-gray-100"
+                      className="p-1.5 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                      disabled={item.maxQty != null && item.qty >= item.maxQty}
+                      title={item.maxQty != null && item.qty >= item.maxQty ? `Stock maximum: ${item.maxQty}` : ''}
                     >
                       <Plus className="h-3 w-3" />
                     </button>
                   </div>
+                  {item.maxQty != null && item.qty >= item.maxQty && (
+                    <span className="text-[10px] text-amber-600 font-medium">Stock max atteint</span>
+                  )}
                   <button
                     onClick={() => removeItem(item.sku)}
                     className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1"
