@@ -54,6 +54,7 @@ interface ShippingOption {
   label: string
   price: number
   delay: string
+  carrierCode?: string | null
 }
 
 interface PaymentOption {
@@ -120,9 +121,10 @@ export default function CheckoutPage() {
                 label: m.label,
                 price: calcData.shippingCost != null ? calcData.shippingCost : m.price,
                 delay: m.delay,
+                carrierCode: m.carrierCode || null,
               }
             } catch {
-              return { code: m.code, label: m.label, price: m.price, delay: m.delay }
+              return { code: m.code, label: m.label, price: m.price, delay: m.delay, carrierCode: m.carrierCode || null }
             }
           }))
           setShippingOptions(calculatedOptions)
@@ -159,7 +161,7 @@ export default function CheckoutPage() {
 
   // Whether the currently selected shipping method is a "point relais" one.
   const isRelayShipping = useMemo(() => {
-    return !!shippingMethod && /relay/i.test(shippingMethod)
+    return !!shippingMethod && /relay|pickup|point_relay|chronopost_relay/i.test(shippingMethod)
   }, [shippingMethod])
 
   // Reset the selected relay when the customer switches away from a relay method.
@@ -360,6 +362,7 @@ export default function CheckoutPage() {
                 <RelayMap
                   postalCode={form.postalCode}
                   city={form.city}
+                  carrier={shippingOptions.find(s => s.code === shippingMethod)?.carrierCode || undefined}
                   onSelect={(relay) => setSelectedRelay(relay)}
                   selectedRelayId={selectedRelay?.id}
                 />

@@ -7,9 +7,13 @@ import { NextRequest, NextResponse } from 'next/server'
 // Uses Nominatim (free OpenStreetMap geocoding API, no key required) to get the real
 // lat/lng of the given postal code + city, then generates mock relay points around it.
 //
-// TODO: Replace mock relay data with real Mondial Relay API call when credentials are available.
-// The Mondial Relay API uses SOAP (WSDL at https://api.mondialrelay.com/Web_Services.asmx)
-// Required fields: Enseigne (merchant code), Security key, Country code (FR), Postal code, search radius
+// Supports two carriers:
+// - "mondial_relay" → Mondial Relay points (TODO: replace with real SOAP API)
+// - "chronopost" → Chronopost Pickup points (TODO: replace with real REST API)
+//
+// When the user has API credentials, replace the mock with real API calls.
+// Mondial Relay: SOAP WSDL at https://api.mondialrelay.com/Web_Services.asmx
+// Chronopost: REST API at https://api.chronopost.com (requires compte marché)
 
 interface RelayPoint {
   id: string
@@ -60,12 +64,19 @@ async function geocode(postalCode: string, city?: string): Promise<{ lat: number
   return null
 }
 
-const RELAY_NAMES = [
+const RELAY_NAMES_MR = [
   'Tabac Presse', 'Bureau de Poste', 'Carrefour Express', 'Relais Tabac du Marché',
   'Point Relais Proxi', 'Magasin Presse Tabac', 'Commerçant Point Relais',
   'Bureautique & Tabac', 'Relais Fleuriste', 'Supérette Point Relais',
   'Pharmacie Point Relais', 'Tabac Le Central', 'Maison de la Presse',
   'Relais Service Express', 'Boutique Tabac Presse',
+]
+
+const RELAY_NAMES_CHRONO = [
+  'Pickup Chrono', 'Relais Chronopost', 'Point Pickup Express', 'Tabac Pickup',
+  'Commerçant Pickup', 'Pickup Relais Proxi', 'Relais Chrono Express',
+  'Boutique Pickup', 'Point Chrono Service', 'Pickup Tabac Presse',
+  'Relais Express Pickup', 'Commerçant Chrono Relais',
 ]
 
 const STREET_NAMES = [
@@ -105,9 +116,12 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 }
 
 // Generate mock relay points around a real lat/lng
-async function generateMockRelays(lat: number, lng: number, postalCode: string, cityName: string): Promise<RelayPoint[]> {
+async function generateMockRelays(lat: number, lng: number, postalCode: string, cityName: string, carrier: string = 'mondial_relay'): Promise<RelayPoint[]> {
   const count = 8
   const relays: RelayPoint[] = []
+  const relayNames = carrier === 'chronopost' ? RELAY_NAMES_CHRONO : RELAY_NAMES_MR
+  const idPrefix = carrier === 'chronopost' ? 'CHR' : 'MR'
+  const namePrefix = carrier === 'chronopost' ? 'Pickup' : 'Relais'
 
   for (let i = 0; i < count; i++) {
     // Random offset: ±0.03° lat (≈±3km), ±0.04° lng (≈±3km)
@@ -124,14 +138,14 @@ async function generateMockRelays(lat: number, lng: number, postalCode: string, 
     // Reverse geocode each point to get the real city name
     const realCityName = await reverseGeocode(rLat, rLng)
 
-    const name = RELAY_NAMES[Math.floor(Math.random() * RELAY_NAMES.length)]
+    const name = relayNames[Math.floor(Math.random() * relayNames.length)]
     const streetNum = Math.floor(Math.random() * 80) + 1
     const street = STREET_NAMES[Math.floor(Math.random() * STREET_NAMES.length)]
     const hours = HOURS[Math.floor(Math.random() * HOURS.length)]
 
     relays.push({
-      id: `MR-${postalCode}-${String(i + 1).padStart(3, '0')}`,
-      name: `Relais ${name}`,
+      id: `${idPrefix}-${postalCode}-${String(i + 1).padStart(3, '0')}`,
+      name: `${namePrefix} ${name}`,
       address: `${streetNum} ${street}`,
       postalCode,
       city: realCityName || cityName,
@@ -149,16 +163,21 @@ async function generateMockRelays(lat: number, lng: number, postalCode: string, 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { postalCode, city } = body
+    const { postalCode, city, carrier } = body
 
     if (!postalCode || postalCode.length < 4) {
       return NextResponse.json({ error: 'Code postal requis' }, { status: 400 })
     }
 
-    // TODO: Replace with real Mondial Relay API call when credentials are available
-    // const settings = await getBoutiqueSettings()
-    // if (settings.mondialRelayEnseigne && settings.mondialRelayApiKey) {
+    // Determine which carrier to use (default: mondial_relay)
+    const carrierCode = carrier || 'mondial_relay'
+
+    // TODO: Replace with real API calls when credentials are available
+    // if (carrierCode === 'mondial_relay' && settings.mondialRelayEnseigne && settings.mondialRelayApiKey) {
     //   return await searchMondialRelayAPI(postalCode, settings)
+    // }
+    // if (carrierCode === 'chronopost' && settings.chronopostApiKey) {
+    //   return await searchChronopostAPI(postalCode, settings)
     // }
 
     // Geocode the real location using Nominatim (free, no API key)
@@ -166,12 +185,12 @@ export async function POST(req: NextRequest) {
 
     if (geo) {
       // Use real coordinates + real city name
-      const relays = await generateMockRelays(geo.lat, geo.lng, postalCode, geo.cityName)
+      const relays = await generateMockRelays(geo.lat, geo.lng, postalCode, geo.cityName, carrierCode)
       return NextResponse.json({ relays })
     }
 
     // Fallback: if geocoding fails, use approximate center of France
-    const relays = await generateMockRelays(46.6034, 1.8883, postalCode, city || `Commune ${postalCode}`)
+    const relays = await generateMockRelays(46.6034, 1.8883, postalCode, city || `Commune ${postalCode}`, carrierCode)
     return NextResponse.json({ relays })
   } catch (error) {
     console.error('POST /api/shipping/relay-search error:', error)

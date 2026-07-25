@@ -49,7 +49,8 @@ export async function POST(req: NextRequest) {
         db.shippingMethod.create({ data: { code: 'standard', label: 'Standard (3-5j)', price: 3.50, delay: '3 à 5 jours ouvrés', active: true, order: 0 } }),
         db.shippingMethod.create({ data: { code: 'tracked', label: 'Suivi (2-3j)', price: 5.90, delay: '2 à 3 jours ouvrés', active: true, order: 1 } }),
         db.shippingMethod.create({ data: { code: 'pickup', label: 'Retrait (gratuit)', price: 0, delay: 'Sur rendez-vous', active: true, order: 2 } }),
-        db.shippingMethod.create({ data: { code: 'relay', label: 'Point relais (Mondial Relay)', price: 3.20, delay: '3 à 6 jours ouvrés', active: true, order: 3 } }),
+        db.shippingMethod.create({ data: { code: 'relay', label: 'Point relais (Mondial Relay)', price: 3.20, delay: '3 à 6 jours ouvrés', carrierCode: 'mondial_relay', active: true, order: 3 } }),
+        db.shippingMethod.create({ data: { code: 'chronopost_relay', label: 'Point relais (Chronopost Shop2Shop)', price: 4.50, delay: '2 à 4 jours ouvrés', carrierCode: 'chronopost', active: true, order: 4 } }),
       ])
     }
 
