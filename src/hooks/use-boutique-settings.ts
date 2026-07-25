@@ -62,6 +62,8 @@ export interface BoutiqueSettings {
   trustPageReturnsTitle: string
   trustPageReturnsContent: string | null
   gaTagId: string | null
+  seoTitle: string | null
+  seoDescription: string | null
   stripePublicKey: string | null
   stripeSecretKey: string | null
   paypalClientId: string | null

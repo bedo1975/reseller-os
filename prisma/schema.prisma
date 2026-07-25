@@ -498,6 +498,9 @@ model BoutiqueSettings {
   trustPageReturnsContent  String? // HTML
   // Google Analytics — ID de mesure (ex: G-XXXXXXXXXX)
   gaTagId                  String?
+  // SEO — titre et description personnalisables pour l'onglet navigateur
+  seoTitle                 String?  // ex: "Junashop — Vêtements seconde main"
+  seoDescription           String?  // ex: "Achetez des vêtements et accessoires seconde main..."
   updatedAt       DateTime @updatedAt
 }
 

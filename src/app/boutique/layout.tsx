@@ -59,6 +59,22 @@ export default function BoutiqueLayout({ children }: { children: React.ReactNode
     }
   }, [pathname])
 
+  // Update document title and meta description from boutique settings (SEO)
+  useEffect(() => {
+    if (settings.seoTitle) {
+      document.title = settings.seoTitle
+    }
+    if (settings.seoDescription) {
+      let meta = document.querySelector('meta[name="description"]')
+      if (!meta) {
+        meta = document.createElement('meta')
+        meta.setAttribute('name', 'description')
+        document.head.appendChild(meta)
+      }
+      meta.setAttribute('content', settings.seoDescription)
+    }
+  }, [settings.seoTitle, settings.seoDescription])
+
   const logout = async () => {
     await fetch('/api/boutique/client/logout', { method: 'POST' })
     setClient(null)

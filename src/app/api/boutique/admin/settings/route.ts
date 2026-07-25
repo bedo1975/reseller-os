@@ -43,6 +43,7 @@ export async function PUT(req: NextRequest) {
       stripePublicKey, stripeSecretKey, stripeWebhookSecret,
       paypalClientId, paypalSecret, paypalWebhookId,
       mondialRelayEnseigne, mondialRelayApiKey,
+      seoTitle, seoDescription,
     } = body
 
     const data: any = {}
@@ -112,6 +113,8 @@ export async function PUT(req: NextRequest) {
     // Mondial Relay
     if (typeof mondialRelayEnseigne === 'string') data.mondialRelayEnseigne = mondialRelayEnseigne || null
     if (typeof mondialRelayApiKey === 'string') data.mondialRelayApiKey = mondialRelayApiKey || null
+    if (typeof seoTitle === 'string') data.seoTitle = seoTitle || null
+    if (typeof seoDescription === 'string') data.seoDescription = seoDescription || null
 
     const settings = await db.boutiqueSettings.upsert({
       where: { id: 'default' },

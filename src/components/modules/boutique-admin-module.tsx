@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
-  ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin,
+  ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -806,6 +806,8 @@ interface BoutiqueSettingsData {
   trustPageReturnsTitle: string
   trustPageReturnsContent: string | null
   gaTagId: string | null
+  seoTitle: string | null
+  seoDescription: string | null
   stripePublicKey: string | null
   stripeSecretKey: string | null
   paypalClientId: string | null
@@ -1577,6 +1579,40 @@ function AppearanceTab() {
             Le script GA4 sera injecté automatiquement sur toutes les pages de la boutique si un ID est renseigné.
             Créez votre propriété sur <a href="https://analytics.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">analytics.google.com</a> pour obtenir votre ID.
           </p>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* SEO */}
+      {subTab === 'misc' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Search className="h-4 w-4" /> SEO — Référencement</CardTitle>
+          <CardDescription className="text-xs">
+            Personnalisez le titre et la description affichés dans les onglets du navigateur et les résultats de recherche Google.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Titre de la page (balise &lt;title&gt;)</Label>
+            <Input
+              value={form.seoTitle || ''}
+              onChange={e => set('seoTitle', e.target.value)}
+              placeholder="Junashop — Vêtements et accessoires seconde main"
+            />
+            <p className="text-[11px] text-muted-foreground">Affiché dans l'onglet du navigateur. Si vide, le nom de la boutique est utilisé. Recommandé : 50-60 caractères.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Description (balise meta description)</Label>
+            <Textarea
+              value={form.seoDescription || ''}
+              onChange={e => set('seoDescription', e.target.value)}
+              rows={3}
+              placeholder="Achetez des vêtements et accessoires seconde main soigneusement sélectionnés. Livraison rapide, paiement sécurisé."
+              className="text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">Affichée dans les résultats Google. Recommandé : 150-160 caractères.</p>
+          </div>
         </CardContent>
       </Card>
       )}
