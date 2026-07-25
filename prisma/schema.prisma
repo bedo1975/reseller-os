@@ -441,6 +441,9 @@ model BoutiqueSettings {
   // Configuration Mondial Relay (points relais)
   mondialRelayEnseigne String?  // Code marchand (ex: "BDTEST")
   mondialRelayApiKey   String?  // Clé privée API
+  // Configuration Chronopost Shop2Shop (points relais)
+  chronopostAccountNumber String?  // Numéro de compte Chronopost
+  chronopostApiKey         String?  // Clé API Chronopost
   // Couleurs personnalisables (hex sans #)
   primaryColor    String   @default("007bff")
   primaryDarkColor String  @default("0056b3")

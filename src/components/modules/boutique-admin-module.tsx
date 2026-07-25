@@ -808,6 +808,8 @@ interface BoutiqueSettingsData {
   gaTagId: string | null
   seoTitle: string | null
   seoDescription: string | null
+  chronopostAccountNumber: string | null
+  chronopostApiKey: string | null
   stripePublicKey: string | null
   stripeSecretKey: string | null
   paypalClientId: string | null
@@ -1670,6 +1672,10 @@ function ShippingTab() {
   const [mrEnseigne, setMrEnseigne] = useState('')
   const [mrApiKey, setMrApiKey] = useState('')
   const [savingMr, setSavingMr] = useState(false)
+  // Chronopost Shop2Shop config
+  const [chronoAccount, setChronoAccount] = useState('')
+  const [chronoApiKey, setChronoApiKey] = useState('')
+  const [savingChrono, setSavingChrono] = useState(false)
 
   const fetchMethods = useCallback(async () => {
     setLoading(true)
@@ -1693,6 +1699,8 @@ function ShippingTab() {
       setFreeShippingThreshold(data.freeShippingThreshold ?? 50)
       setMrEnseigne(data.mondialRelayEnseigne || '')
       setMrApiKey(data.mondialRelayApiKey || '')
+      setChronoAccount(data.chronopostAccountNumber || '')
+      setChronoApiKey(data.chronopostApiKey || '')
     } catch {}
   }, [])
 
@@ -1730,6 +1738,26 @@ function ShippingTab() {
       toast.error('Erreur')
     } finally {
       setSavingMr(false)
+    }
+  }
+
+  // Save Chronopost config
+  const saveChronopost = async () => {
+    setSavingChrono(true)
+    try {
+      await fetch('/api/boutique/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chronopostAccountNumber: chronoAccount.trim(),
+          chronopostApiKey: chronoApiKey.trim(),
+        }),
+      })
+      toast.success('Configuration Chronopost enregistrée')
+    } catch {
+      toast.error('Erreur')
+    } finally {
+      setSavingChrono(false)
     }
   }
 
@@ -1909,6 +1937,56 @@ function ShippingTab() {
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={saveMondialRelay} disabled={savingMr}>
               {savingMr ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+              Enregistrer
+            </Button>
+            <span className="text-[11px] text-muted-foreground">
+              🔒 Les identifiants sont stockés dans la base locale et ne sont jamais exposés au client.
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Configuration Chronopost Shop2Shop */}
+      <Card className={!chronoAccount || !chronoApiKey ? 'border-amber-300' : 'border-green-300'}>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <MapPin className="h-4 w-4" /> Configuration Chronopost Shop2Shop
+            {chronoAccount && chronoApiKey
+              ? <Badge className="bg-green-600 hover:bg-green-600">Configuré</Badge>
+              : <Badge variant="secondary">Non configuré</Badge>
+            }
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Identifiants API Chronopost pour la recherche de points relais Pickup.
+            Créez votre compte sur <a href="https://www.chronopost.fr/fr/espace-client" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">chronopost.fr</a> → Espace Client → API.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Numéro de compte Chronopost</Label>
+              <Input
+                value={chronoAccount}
+                onChange={e => setChronoAccount(e.target.value)}
+                placeholder="Ex: 12345678"
+                className="font-mono text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">Numéro de compte marchand Chronopost (8 chiffres).</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Clé API</Label>
+              <Input
+                value={chronoApiKey}
+                onChange={e => setChronoApiKey(e.target.value)}
+                placeholder="Clé API / mot de passe API"
+                className="font-mono text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">Clé utilisée pour authentifier les requêtes API.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={saveChronopost} disabled={savingChrono}>
+              {savingChrono ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
               Enregistrer
             </Button>
             <span className="text-[11px] text-muted-foreground">
