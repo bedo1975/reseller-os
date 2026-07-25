@@ -24,7 +24,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Plus, Trash2, Star, Edit, Tag, Layers, Ruler, Palette, AlertCircle, Truck, ExternalLink, Users, Settings as SettingsIcon,
-  FileText, Database, Download, Upload, HardDrive, ShieldAlert, RefreshCw, FileDown, Sparkles, Key, ExternalLink as LinkIcon, CheckCircle2, Percent, Bell, Clock, Calendar, Store, Package, Mail,
+  FileText, Database, Download, Upload, HardDrive, ShieldAlert, RefreshCw, FileDown, Sparkles, Key, ExternalLink as LinkIcon, CheckCircle2, Percent, Bell, Clock, Calendar, Store, Package, Mail, BookOpen,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -93,7 +93,7 @@ const TABS: TabDef[] = [
   },
 ]
 
-type SectionKey = 'attributes' | 'users' | 'invoicing' | 'maintenance' | 'ai' | 'tax' | 'reminders' | 'boutique' | 'email'
+type SectionKey = 'attributes' | 'users' | 'invoicing' | 'maintenance' | 'ai' | 'tax' | 'reminders' | 'boutique' | 'email' | 'howto'
 
 export function SettingsModule() {
   const { data: session } = useSession()
@@ -139,6 +139,7 @@ export function SettingsModule() {
         {navBtn('email', Mail, 'Email')}
         {navBtn('users', Users, 'Utilisateurs', true)}
         {navBtn('maintenance', HardDrive, 'Maintenance', true)}
+        {navBtn('howto', BookOpen, 'Guide')}
       </div>
 
       {section === 'users' && isAdmin ? (
@@ -155,6 +156,8 @@ export function SettingsModule() {
         <EmailSection />
       ) : section === 'maintenance' && isAdmin ? (
         <MaintenanceSection />
+      ) : section === 'howto' ? (
+        <HowToSection />
       ) : (
         <AttributesSection />
       )}
@@ -2888,5 +2891,186 @@ function BoutiquePaymentsTab() {
         </Button>
       )}
     </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION GUIDE — How To (documentation de configuration)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function HowToSection() {
+  return (
+    <div className="space-y-4 max-w-4xl">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5" /> Guide de configuration</CardTitle>
+          <CardDescription>Tout ce qu'il faut savoir pour configurer Reseller OS — de A à Z</CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          Ce guide décrit chaque module et comment le configurer. Cliquez sur une section ci-dessous pour la déplier.
+        </CardContent>
+      </Card>
+
+      <HowToCard title="1. Attributs" icon={SettingsIcon}>
+        <p>Les attributs sont les valeurs réutilisables dans tout l'app :</p>
+        <ul className="list-disc list-inside ml-2 space-y-1 mt-2">
+          <li><strong>États</strong> : neuf, très bon état, bon état, correct.</li>
+          <li><strong>Tailles</strong> : XS, S, M, L, XL, 38, 40, 42, TU, etc.</li>
+          <li><strong>Couleurs</strong> : Bleu, Rouge, Noir, etc.</li>
+          <li><strong>Transporteurs</strong> : Colissimo, Chronopost, Mondial Relay — avec URL de suivi (format <code>{`{tracking}`}</code>).</li>
+          <li><strong>Plateformes</strong> : Vinted, Leboncoin, eBay.</li>
+          <li><strong>Lots d'origine</strong> : pour tracer vos achats en lot.</li>
+        </ul>
+        <p className="mt-2"><strong>Note :</strong> les catégories et sous-catégories sont gérées dans <em>Boutique Admin → Catégories</em>.</p>
+      </HowToCard>
+
+      <HowToCard title="2. Facturation" icon={FileText}>
+        <p>Configurez votre société pour générer des factures :</p>
+        <ul className="list-disc list-inside ml-2 space-y-1 mt-2">
+          <li><strong>Société émettrice</strong> : nom, adresse, SIRET, RCS, NAF, capital.</li>
+          <li><strong>TVA</strong> : activez/désactivez (franchise en base si désactivé).</li>
+          <li><strong>Numérotation</strong> : préfixe (ex: <code>F-{`{YEAR}`}-</code>), longueur du compteur.</li>
+          <li><strong>Mentions légales</strong> : pied de page des factures.</li>
+        </ul>
+      </HowToCard>
+
+      <HowToCard title="3. Taux d'imposition (URSSAF)" icon={Percent}>
+        <p>Configurez votre régime fiscal :</p>
+        <ul className="list-disc list-inside ml-2 space-y-1 mt-2">
+          <li><strong>Catégorie</strong> : achat-revente, prestation de service, etc.</li>
+          <li><strong>Taux</strong> : pourcentage URSSAF (12,3% par défaut pour achat-revente).</li>
+        </ul>
+        <p className="mt-2">Alimente les rapports <strong>Fiscalité → Synthèse</strong> et <strong>Livre des recettes</strong>.</p>
+      </HowToCard>
+
+      <HowToCard title="4. Rappels" icon={Bell}>
+        <p>Créez des rappels récurrents (journalier, hebdomadaire, mensuel, annuel). Les rappels apparaissent en pop-up à la connexion.</p>
+      </HowToCard>
+
+      <HowToCard title="5. Intelligence Artificielle" icon={Sparkles}>
+        <p>Générez des descriptions de produits avec l'IA :</p>
+        <ul className="list-disc list-inside ml-2 space-y-1 mt-2">
+          <li><strong>Z.ai</strong> : gratuit, aucune config requise.</li>
+          <li><strong>Autres</strong> : Gemini, Mistral, OpenAI — nécessitent une clé API.</li>
+        </ul>
+      </HowToCard>
+
+      <HowToCard title="6. Email (SMTP)" icon={Mail}>
+        <p>Configurez l'envoi d'emails automatiques :</p>
+        <ul className="list-disc list-inside ml-2 space-y-1 mt-2">
+          <li><strong>SMTP</strong> : hôte, port, sécurisé (SSL/TLS), utilisateur, mot de passe.</li>
+          <li><strong>Design</strong> : 3 styles (Moderne, Classique, Minimaliste).</li>
+          <li><strong>5 templates</strong> : Inscription, Validation, Mot de passe perdu, Commande, Statut commande.</li>
+          <li><strong>Éditeur WYSIWYG</strong> : bouton "Charger un modèle" pour un design moderne.</li>
+          <li><strong>Variables</strong> : <code>{`{firstName}`}</code>, <code>{`{orderId}`}</code>, <code>{`{total}`}</code>, <code>{`{status}`}</code>.</li>
+          <li><strong>Email de suivi</strong> : si statut = Expédiée + n° de suivi → bloc "Suivi de votre colis" avec lien.</li>
+          <li><strong>Astuce Gmail</strong> : utilisez un mot de passe d'application.</li>
+        </ul>
+      </HowToCard>
+
+      <HowToCard title="7. Utilisateurs" icon={Users}>
+        <p>Gérez les comptes staff :</p>
+        <ul className="list-disc list-inside ml-2 space-y-1 mt-2">
+          <li><strong>Admin</strong> : accès complet (fiscalité, rentabilité, maintenance, utilisateurs).</li>
+          <li><strong>Staff</strong> : accès limité (stock, ventes, sourcing, publication, colis, BI).</li>
+        </ul>
+      </HowToCard>
+
+      <HowToCard title="8. Maintenance" icon={HardDrive}>
+        <p>Sauvegardez et restaurez votre base de données (SQLite). Faites une sauvegarde avant chaque mise à jour.</p>
+      </HowToCard>
+
+      <HowToCard title="9. Boutique Admin" icon={Store}>
+        <p className="font-semibold mt-3">Apparence</p>
+        <ul className="list-disc list-inside ml-2 space-y-1">
+          <li><strong>Général</strong> : logo upload, nom, top bar, contact, <strong>boutique fermée</strong> (ON/OFF + message).</li>
+          <li><strong>Couleurs</strong> : principale, foncée, fond header/top bar/footer.</li>
+          <li><strong>Hero</strong> : titre, sous-titre, CTA, image de fond.</li>
+          <li><strong>Confiance</strong> : 4 badges cliquables vers pages confiance.</li>
+          <li><strong>Menu</strong> : liens drag-and-drop + œil pour masquer.</li>
+          <li><strong>Footer</strong> : 3 colonnes éditables avec liens drag-and-drop.</li>
+          <li><strong>Pages confiance</strong> : Paiement, Livraison, Retours (éditeur WYSIWYG).</li>
+          <li><strong>Horaires/CGV</strong> : master switch + éditeur par jour + CGV/Mentions légales WYSIWYG + Google Analytics (GA4).</li>
+        </ul>
+        <p className="font-semibold mt-3">Livraison</p>
+        <ul className="list-disc list-inside ml-2 space-y-1">
+          <li><strong>Modes</strong> : Standard, Suivi, Point relais, Retrait — avec prix + délai.</li>
+          <li><strong>Tranches de poids</strong> : prix calculé selon le poids du panier.</li>
+          <li><strong>Transporteur</strong> : association pour le suivi de colis.</li>
+          <li><strong>Livraison offerte</strong> : ON/OFF + seuil.</li>
+          <li><strong>Point relais</strong> : carte Leaflet + points relais (Mondial Relay).</li>
+          <li><strong>Config API</strong> : Stripe, PayPal, Mondial Relay (clés API).</li>
+        </ul>
+        <p className="font-semibold mt-3">Catégories</p>
+        <ul className="list-disc list-inside ml-2 space-y-1">
+          <li>Catégories + sous-catégories (arborescence avec parentId).</li>
+          <li>Image de fond, couleur, opacité, emoji, ordre, collapse.</li>
+          <li>Filtres personnalisés par catégorie (Taille, Couleur, État, Marque).</li>
+          <li>Si pas d'emoji → affiche le nombre de produits.</li>
+        </ul>
+        <p className="font-semibold mt-3">Paiements</p>
+        <ul className="list-disc list-inside ml-2 space-y-1">
+          <li>Démo (simulation), Stripe (CB), PayPal, Manuel (virement/chèque).</li>
+          <li>Activez/désactivez chaque mode.</li>
+        </ul>
+      </HowToCard>
+
+      <HowToCard title="10. Modules principaux" icon={Package}>
+        <p className="font-semibold">Stock</p>
+        <p className="ml-2 text-muted-foreground">Articles avec SKU, titre, marque, catégorie, photos, prix, poids. Statuts : À photographier → Publié → Vendu.</p>
+        <p className="font-semibold mt-2">Ventes</p>
+        <p className="ml-2 text-muted-foreground">Multi-plateformes avec calcul de marge. Factures PDF.</p>
+        <p className="font-semibold mt-2">Colis</p>
+        <p className="ml-2 text-muted-foreground">Vue Kanban : À préparer → En transit → Livré.</p>
+        <p className="font-semibold mt-2">Vinted Deals</p>
+        <p className="ml-2 text-muted-foreground">Recherche de deals + alertes cron.</p>
+        <p className="font-semibold mt-2">Product Trend</p>
+        <p className="ml-2 text-muted-foreground">Tendances multi-marketplaces + snapshots + export CSV.</p>
+        <p className="font-semibold mt-2">Shooting Photo</p>
+        <p className="ml-2 text-muted-foreground">Sessions photos + attachement au stock.</p>
+      </HowToCard>
+
+      <HowToCard title="11. Déploiement serveur" icon={Upload}>
+        <ul className="list-disc list-inside ml-2 space-y-1">
+          <li><strong>PC</strong> : <code>push.bat "description"</code></li>
+          <li><strong>Serveur</strong> : <code>./pull.sh</code> (backup DB + git pull + build + restart + purge cache nginx)</li>
+          <li>Build avec <strong>webpack</strong> (pas Turbopack).</li>
+          <li>Protégez le <code>.env</code> (<code>attrib +r .env</code> sur Windows).</li>
+        </ul>
+      </HowToCard>
+
+      <HowToCard title="12. Sitemap & SEO" icon={ExternalLink}>
+        <ul className="list-disc list-inside ml-2 space-y-1">
+          <li>Sitemap auto-généré à <code>/sitemap.xml</code>.</li>
+          <li>Mise à jour auto via <code>revalidatePath</code>.</li>
+          <li>Google Analytics : ID GA4 dans <em>Apparence → Horaires/CGV</em>.</li>
+        </ul>
+      </HowToCard>
+    </div>
+  )
+}
+
+function HowToCard({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Card>
+      <CardHeader>
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center justify-between w-full text-left"
+        >
+          <CardTitle className="text-base flex items-center gap-2">
+            <Icon className="h-4 w-4" />
+            {title}
+          </CardTitle>
+          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+      </CardHeader>
+      {open && (
+        <CardContent className="text-sm text-muted-foreground space-y-2">
+          {children}
+        </CardContent>
+      )}
+    </Card>
   )
 }
