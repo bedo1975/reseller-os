@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Loader2, Package, ChevronRight, Truck, FileText, ExternalLink } from 'lucide-react'
+import { Loader2, Package, ChevronRight, Truck, FileText, ExternalLink, TicketPercent } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 interface OrderItem {
@@ -25,6 +25,8 @@ interface Order {
   paymentMethod: string | null
   subtotal: number
   total: number
+  couponCode: string | null
+  discountAmount: number
   status: string
   invoiceNumbers: string[]
   trackingNumber?: string | null
@@ -158,6 +160,15 @@ export default function MesCommandesPage() {
                     <span>Sous-total</span>
                     <span>{order.subtotal.toFixed(2)} €</span>
                   </div>
+                  {order.couponCode && order.discountAmount > 0 && (
+                    <div className="flex justify-between text-green-700">
+                      <span className="flex items-center gap-1">
+                        <TicketPercent className="h-3.5 w-3.5" />
+                        Code promo <code className="font-mono bg-green-50 px-1 py-0.5 rounded">{order.couponCode}</code>
+                      </span>
+                      <span className="font-medium">−{order.discountAmount.toFixed(2)} €</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-gray-500">
                     <span>{order.shippingMethod}</span>
                     <span>{order.shippingCost === 0 ? 'Gratuit' : `${order.shippingCost.toFixed(2)} €`}</span>

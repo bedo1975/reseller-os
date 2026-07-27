@@ -73,6 +73,31 @@ export async function GET(
     const designation = `${sale.stockItem.brand} ${sale.stockItem.category} ${sale.stockItem.size || ''} ${sale.stockItem.color || ''}`.trim().replace(/\s+/g, ' ')
     const itemDescription = sale.stockItem.description || ''
 
+    // Look up the parent BoutiqueOrder (if this sale belongs to a boutique order with a coupon)
+    let couponNotice = ''
+    try {
+      // Find BoutiqueOrder where invoiceNumbers JSON contains this invoiceNumber
+      const matchingOrders = await db.boutiqueOrder.findMany({
+        where: { invoiceNumbers: { contains: invoiceNumber } },
+        select: { orderId: true, couponCode: true, discountAmount: true, subtotal: true },
+        take: 1,
+      })
+      const parentOrder = matchingOrders[0]
+      if (parentOrder && parentOrder.couponCode && parentOrder.discountAmount > 0) {
+        couponNotice = `
+          <div style="background:#ecfdf5; padding:10px 14px; border-radius:6px; font-size:11px; color:#065f46; margin-bottom:24px; border-left:3px solid #10b981;">
+            <strong>🎁 Code promo appliqué :</strong> <code style="font-family:monospace; background:#d1fae5; padding:1px 6px; border-radius:3px;">${escapeHtml(parentOrder.couponCode)}</code>
+            — remise de <strong>${parentOrder.discountAmount.toFixed(2)} €</strong> sur l'ensemble de la commande
+            <span style="color:#047857;">(${escapeHtml(parentOrder.orderId)})</span>.
+            <div style="margin-top:4px; color:#047857; font-size:10px;">
+              Sous-total commande : ${parentOrder.subtotal.toFixed(2)} € · Remise : −${parentOrder.discountAmount.toFixed(2)} €
+            </div>
+          </div>`
+      }
+    } catch (e) {
+      console.error('Coupon lookup failed:', e)
+    }
+
     const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -142,6 +167,8 @@ export async function GET(
       </div>
     </div>
   </div>
+
+  ${couponNotice}
 
   <table>
     <thead>

@@ -3,13 +3,16 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Package, Mail, Download } from 'lucide-react'
+import { CheckCircle2, Package, Mail, Download, TicketPercent } from 'lucide-react'
 
 interface OrderInfo {
   orderId: string
   invoiceNumbers: string[]
   totalAmount: number
   shippingCost: number
+  subtotal?: number
+  couponCode?: string | null
+  discountAmount?: number
   customer: { firstName: string; lastName: string; email: string }
   itemCount: number
 }
@@ -66,6 +69,21 @@ export default function ConfirmationPage() {
             <span className="text-gray-600">Articles</span>
             <span className="font-medium">{order.itemCount}</span>
           </div>
+          {typeof order.subtotal === 'number' && (
+            <div className="flex justify-between text-gray-600">
+              <span>Sous-total</span>
+              <span className="font-medium">{order.subtotal.toFixed(2)} €</span>
+            </div>
+          )}
+          {order.couponCode && (order.discountAmount || 0) > 0 && (
+            <div className="flex justify-between text-green-700">
+              <span className="flex items-center gap-1">
+                <TicketPercent className="h-3.5 w-3.5" />
+                Code promo <code className="font-mono bg-green-50 px-1 py-0.5 rounded">{order.couponCode}</code>
+              </span>
+              <span className="font-medium">−{order.discountAmount!.toFixed(2)} €</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-gray-600">Livraison</span>
             <span className="font-medium">

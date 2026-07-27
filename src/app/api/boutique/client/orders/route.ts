@@ -37,6 +37,8 @@ export async function GET() {
         paymentMethod: o.paymentMethod,
         subtotal: o.subtotal,
         total: o.total,
+        couponCode: o.couponCode,
+        discountAmount: o.discountAmount,
         status: o.status,
         invoiceNumbers,
         trackingNumber,
