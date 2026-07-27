@@ -67,10 +67,12 @@ interface StockItem {
   status: string
   platform: string | null
   platforms: string  // JSON array
+  quantity: number
+  soldCount: number
   suggestedPrice: number | null
   description: string | null
   measurements: string | null
-  sale?: { id: string; salePrice: number; profit: number } | null
+  sales?: Array<{ id: string; salePrice: number; profit: number; saleDate: string; invoiceNumber: string | null }> | null
 }
 
 export function StockModule() {
@@ -136,7 +138,7 @@ export function StockModule() {
   const soldItems = filtered.filter(i => i.status === 'VENDU')
   const totalStockValue = inStockItems.reduce((sum, i) => sum + i.purchaseCost, 0)
   const totalSuggestedValue = inStockItems.reduce((sum, i) => sum + (i.suggestedPrice || 0), 0)
-  const totalSoldValue = soldItems.reduce((sum, i) => sum + (i.sale?.salePrice || 0), 0)
+  const totalSoldValue = soldItems.reduce((sum, i) => sum + (i.sales?.reduce((ss, sl) => ss + sl.salePrice, 0) || 0), 0)
 
   // ─── Gestion des cards cliquables ───
   const [showStockDetail, setShowStockDetail] = useState(false)
@@ -339,8 +341,8 @@ export function StockModule() {
                       <td className="px-3 py-2 font-medium">{item.brand}</td>
                       <td className="px-3 py-2 text-muted-foreground">{item.platform || '—'}</td>
                       <td className="px-3 py-2 text-right">{formatEUR(item.purchaseCost)}</td>
-                      <td className="px-3 py-2 text-right font-semibold">{formatEUR(item.sale?.salePrice || 0)}</td>
-                      <td className="px-3 py-2 text-right text-emerald-600 font-semibold">{formatEUR(item.sale?.profit || 0)}</td>
+                      <td className="px-3 py-2 text-right font-semibold">{formatEUR(item.sales?.reduce((s, sl) => s + sl.salePrice, 0) || 0)}</td>
+                      <td className="px-3 py-2 text-right text-emerald-600 font-semibold">{formatEUR(item.sales?.reduce((s, sl) => s + sl.profit, 0) || 0)}</td>
                     </tr>
                   ))}
                   {soldItems.length === 0 && (
@@ -1281,8 +1283,13 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 <Input type="number" value={form.weight} onChange={e => setForm({ ...form, weight: e.target.value })} placeholder="500" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Quantité</Label>
-                <Input type="number" min="1" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="1" />
+                <Label className="text-xs">Quantité disponible</Label>
+                <Input type="number" min="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="1" />
+                {item && item.soldCount > 0 && (
+                  <p className="text-[10px] text-muted-foreground">
+                    {item.soldCount} unité{item.soldCount > 1 ? 's' : ''} déjà vendue{item.soldCount > 1 ? 's' : ''} (non modifiable ici)
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -1565,6 +1572,14 @@ function StockDetail({ open, onOpenChange, item }: {
             <span className={cn('text-xs font-semibold px-2 py-1 rounded-full', getPubStatusColor(item.status))}>
               {getPubStatusLabel(item.status)}
             </span>
+            <span className="text-xs font-semibold px-2 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+              {item.quantity} dispo{item.quantity > 1 ? 's' : ''}
+            </span>
+            {item.soldCount > 0 && (
+              <span className="text-xs font-semibold px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                {item.soldCount} vendu{item.soldCount > 1 ? 's' : ''}
+              </span>
+            )}
             {item.platform && (
               <span className={cn('text-xs font-semibold px-2 py-1 rounded-full', getPlatformColor(item.platform))}>
                 {getPlatformLabel(item.platform)} (vente)
@@ -1604,16 +1619,24 @@ function StockDetail({ open, onOpenChange, item }: {
               <p>{item.description}</p>
             </div>
           )}
-          {item.sale && (
+          {item.sales && item.sales.length > 0 && (
             <div className="text-sm bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-lg border border-emerald-200 dark:border-emerald-900">
-              <p className="text-xs text-emerald-700 dark:text-emerald-300 uppercase mb-1 font-semibold">Vendu</p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-300 uppercase mb-1 font-semibold">
+                Vendu ({item.sales.length} unité{item.sales.length > 1 ? 's' : ''})
+              </p>
               <div className="flex items-center justify-between">
-                <span>Prix de vente</span>
-                <span className="font-semibold">{formatEUR(item.sale.salePrice)}</span>
+                <span>Prix de vente (dernier)</span>
+                <span className="font-semibold">{formatEUR(item.sales[0].salePrice)}</span>
               </div>
               <div className="flex items-center justify-between mt-1">
-                <span>Bénéfice</span>
-                <span className="font-semibold text-emerald-600">{formatEUR(item.sale.profit)}</span>
+                <span>Bénéfice total</span>
+                <span className="font-semibold text-emerald-600">
+                  {formatEUR(item.sales.reduce((s, sl) => s + sl.profit, 0))}
+                </span>
+              </div>
+              <div className="flex items-center justify-between mt-1 text-xs text-emerald-700/80 dark:text-emerald-300/80">
+                <span>CA total</span>
+                <span>{formatEUR(item.sales.reduce((s, sl) => s + sl.salePrice, 0))}</span>
               </div>
             </div>
           )}

@@ -11,7 +11,7 @@ export async function GET() {
     })
     const stockItems = await db.stockItem.findMany({
       where: { userId: user.id },
-      include: { sale: true },
+      include: { sales: { orderBy: { saleDate: 'desc' } } },
     })
 
     // 1. Marques les plus rentables

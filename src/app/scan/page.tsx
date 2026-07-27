@@ -266,16 +266,18 @@ export default function ScanPage() {
               )}
 
               {/* Vente si vendu */}
-              {foundItem.sale && (
+              {foundItem.sales && foundItem.sales.length > 0 && (
                 <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
-                  <p className="text-xs text-emerald-700 dark:text-emerald-300 uppercase font-semibold mb-1">Vendu</p>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300 uppercase font-semibold mb-1">
+                    Vendu ({foundItem.sales.length} unité{foundItem.sales.length > 1 ? 's' : ''})
+                  </p>
                   <div className="flex justify-between text-sm">
-                    <span>Prix de vente</span>
-                    <span className="font-bold">{formatEUR(foundItem.sale.salePrice)}</span>
+                    <span>Prix de vente (dernier)</span>
+                    <span className="font-bold">{formatEUR(foundItem.sales[0].salePrice)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span>Bénéfice réel</span>
-                    <span className="font-bold text-emerald-600">{formatEUR(foundItem.sale.profit)}</span>
+                    <span>Bénéfice total</span>
+                    <span className="font-bold text-emerald-600">{formatEUR(foundItem.sales.reduce((s: number, sl: any) => s + sl.profit, 0))}</span>
                   </div>
                 </div>
               )}

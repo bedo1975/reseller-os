@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
           } : {},
         ],
       },
-      include: { supplier: true, sale: true },
+      include: { supplier: true, sales: { orderBy: { saleDate: 'desc' } } },
       orderBy: { createdAt: 'desc' },
     })
 

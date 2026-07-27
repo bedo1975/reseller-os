@@ -13,7 +13,7 @@ export async function GET(
     const { sku } = await params
 
     const item = await db.stockItem.findFirst({
-      where: { sku, status: 'PUBLIE' },
+      where: { sku, status: 'PUBLIE', quantity: { gt: 0 } },
       select: {
         id: true,
         sku: true,

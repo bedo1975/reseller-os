@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
 
     const where: any = {
       status: 'PUBLIE',
+      quantity: { gt: 0 },
       // Only items with a price
       suggestedPrice: { gt: 0 },
     }

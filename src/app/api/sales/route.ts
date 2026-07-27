@@ -85,9 +85,19 @@ export async function POST(req: NextRequest) {
 
     // Quand l'article est vendu : on garde uniquement la plateforme de vente effective
     // platform = plateforme de vente, platforms = [] (vide, plus aucune publication active)
+    // Décrémente la quantité ; passe à VENDU seulement si plus de stock dispo.
+    const newQty = (item.quantity || 1) - 1
+    const newSoldCount = (item.soldCount || 0) + 1
+    const newStatus = newQty <= 0 ? 'VENDU' : 'PUBLIE'
     await db.stockItem.update({
       where: { id: stockItemId },
-      data: { status: 'VENDU', platform, platforms: JSON.stringify([]) },
+      data: {
+        quantity: Math.max(0, newQty),
+        soldCount: newSoldCount,
+        status: newStatus,
+        // On ne touche à platform/platforms que si l'article est totalement vendu
+        ...(newQty <= 0 ? { platform, platforms: JSON.stringify([]) } : {}),
+      },
     })
 
     return NextResponse.json(sale)

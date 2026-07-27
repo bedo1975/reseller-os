@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
         where: {
           purchaseDate: dateFilter,
         },
-        include: { supplier: true, sale: true },
+        include: { supplier: true, sales: { orderBy: { saleDate: 'desc' } } },
         orderBy: { purchaseDate: 'asc' },
       })
 
@@ -150,10 +150,11 @@ export async function GET(req: NextRequest) {
       const entries = items.map((item, idx) => {
         const montantTTC = item.purchaseCost
         const montantHT = vatEnabled ? montantTTC / (1 + vatRate / 100) : montantTTC
+        const firstSale = item.sales && item.sales.length > 0 ? item.sales[0] : null
         return {
           numero: idx + 1,
           date: item.purchaseDate,
-          invoiceNumber: item.purchaseInvoiceNumber || item.sale?.invoiceNumber || '—',
+          invoiceNumber: item.purchaseInvoiceNumber || firstSale?.invoiceNumber || '—',
           designation: `${item.brand} ${item.category} ${item.size || ''} ${item.color || ''}`.trim().replace(/\s+/g, ' '),
           fournisseur: item.supplier?.name || '—',
           siret: item.supplier?.siret || null,
@@ -163,8 +164,8 @@ export async function GET(req: NextRequest) {
           montant: parseFloat(montantTTC.toFixed(2)),
           montantHT: parseFloat(montantHT.toFixed(2)),
           sku: item.sku,
-          prixVente: item.sale ? parseFloat(item.sale.salePrice.toFixed(2)) : null,
-          vendu: !!item.sale,
+          prixVente: firstSale ? parseFloat(firstSale.salePrice.toFixed(2)) : null,
+          vendu: !!firstSale,
         }
       })
 

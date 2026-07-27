@@ -82,7 +82,13 @@ export async function DELETE(
     }
     await db.stockItem.update({
       where: { id: sale.stockItemId },
-      data: { status: 'PUBLIE' },
+      data: {
+        // Réincrémente le stock d'1 unité
+        quantity: { increment: 1 },
+        soldCount: { decrement: 1 },
+        // Repasse en PUBLIE si la quantité est redevenue > 0
+        status: 'PUBLIE',
+      },
     })
     await db.sale.delete({ where: { id } })
     return NextResponse.json({ success: true })

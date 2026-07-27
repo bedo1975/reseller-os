@@ -14,10 +14,10 @@ export async function GET(req: NextRequest) {
     const currentYear = yearStr ? parseInt(yearStr) : now.getFullYear()
 
     const [stockItems, sales, expenses, suppliers, taxSettings] = await Promise.all([
-      db.stockItem.findMany({ where: { userId: user.id }, include: { supplier: true, sale: true } }),
+      db.stockItem.findMany({ where: { userId: user.id }, include: { supplier: true, sales: { orderBy: { saleDate: 'desc' } } } }),
       db.sale.findMany({ where: { userId: user.id }, include: { stockItem: true } }),
       db.expense.findMany({ where: { userId: user.id } }),
-      db.supplier.findMany({ where: { userId: user.id }, include: { stockItems: { include: { sale: true } } } }),
+      db.supplier.findMany({ where: { userId: user.id }, include: { stockItems: { include: { sales: { orderBy: { saleDate: 'desc' } } } } } }),
       db.taxSettings.findUnique({ where: { userId: user.id } }),
     ])
 
@@ -109,10 +109,10 @@ export async function GET(req: NextRequest) {
       topBrands,
       monthlyEvolution,
       supplierStats: suppliers.map(s => {
-        const itemsSold = s.stockItems.filter(i => i.sale).length
+        const itemsSold = s.stockItems.filter(i => i.sales && i.sales.length > 0).length
         const totalSpent = s.stockItems.reduce((sum, i) => sum + i.purchaseCost, 0)
-        const totalRevenue = s.stockItems.reduce((sum, i) => sum + (i.sale?.salePrice || 0), 0)
-        const totalProfit = s.stockItems.reduce((sum, i) => sum + (i.sale?.profit || 0), 0)
+        const totalRevenue = s.stockItems.reduce((sum, i) => sum + (i.sales?.reduce((ss, sl) => ss + sl.salePrice, 0) || 0), 0)
+        const totalProfit = s.stockItems.reduce((sum, i) => sum + (i.sales?.reduce((ss, sl) => ss + sl.profit, 0) || 0), 0)
         return {
           id: s.id,
           name: s.name,

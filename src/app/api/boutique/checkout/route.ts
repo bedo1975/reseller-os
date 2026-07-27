@@ -117,13 +117,14 @@ export async function POST(req: NextRequest) {
     const orderItems: any[] = []
 
     for (const item of items) {
+      const qty = Math.max(1, parseInt(item.qty) || 1)
       const stockItem = await db.stockItem.findFirst({
-        where: { sku: item.sku, status: 'PUBLIE' },
+        where: { sku: item.sku, status: 'PUBLIE', quantity: { gte: qty } },
       })
       if (!stockItem) continue
 
       const salePrice = Number(item.price) || 0
-      subtotal += salePrice
+      subtotal += salePrice * qty
       const purchaseCost = stockItem.purchaseCost || 0
       const itemShipping = shippingCost / items.length
       const profit = salePrice - purchaseCost - itemShipping
@@ -159,9 +160,19 @@ export async function POST(req: NextRequest) {
         },
       })
 
+      // Décrémente le stock. Passe à VENDU seulement si quantité = 0.
+      const newQty = stockItem.quantity - qty
+      const newSoldCount = stockItem.soldCount + qty
+      const newStatus = newQty <= 0 ? 'VENDU' : 'PUBLIE'
       await db.stockItem.update({
         where: { id: stockItem.id },
-        data: { status: 'VENDU', platform: 'boutique' },
+        data: {
+          quantity: Math.max(0, newQty),
+          soldCount: newSoldCount,
+          status: newStatus,
+          // On ne touche à platform que si l'article est totalement vendu
+          ...(newQty <= 0 ? { platform: 'boutique' } : {}),
+        },
       })
 
       invoiceNumbers.push(invoiceNumber)
@@ -172,7 +183,7 @@ export async function POST(req: NextRequest) {
         size: stockItem.size,
         color: stockItem.color,
         price: salePrice,
-        qty: item.qty || 1,
+        qty,
       })
     }
 

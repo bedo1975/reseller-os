@@ -167,7 +167,8 @@ model StockItem {
 
   // Logistique
   weight        Float?   // poids en grammes (pour calcul frais de port)
-  quantity      Int      @default(1)  // quantité en stock
+  quantity      Int      @default(1)  // quantité disponible (restante)
+  soldCount     Int      @default(0)  // quantité vendue (dénormalisé pour affichage rapide)
 
   // Stockage
   warehouse     String?
@@ -194,7 +195,8 @@ model StockItem {
   userId        String?
   user          User?    @relation(fields: [userId], references: [id])
 
-  sale          Sale?
+  // 1 StockItem peut avoir plusieurs Sales (utile pour quantité > 1)
+  sales         Sale[]
 }
 
 // ─────────────────────────────────────────────
@@ -202,7 +204,7 @@ model StockItem {
 // ─────────────────────────────────────────────
 model Sale {
   id            String   @id @default(cuid())
-  stockItemId   String   @unique
+  stockItemId   String
   stockItem     StockItem @relation(fields: [stockItemId], references: [id])
 
   saleDate      DateTime @default(now())
@@ -229,6 +231,8 @@ model Sale {
 
   userId        String?
   user          User?    @relation(fields: [userId], references: [id])
+
+  @@index([stockItemId])
 }
 
 // ─────────────────────────────────────────────

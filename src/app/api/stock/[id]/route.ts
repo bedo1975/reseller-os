@@ -72,7 +72,7 @@ export async function PATCH(
     const item = await db.stockItem.update({
       where: { id },
       data: updateData,
-      include: { supplier: true, sale: true },
+      include: { supplier: true, sales: { orderBy: { saleDate: 'desc' } } },
     })
 
     // Invalidate sitemap if boutique visibility changed
@@ -106,20 +106,21 @@ export async function DELETE(
 
     const existing = await db.stockItem.findUnique({
       where: { id },
-      include: { sale: true },
+      include: { sales: true },
     })
     if (!existing || existing.userId !== user.id) {
       return NextResponse.json({ error: 'Article introuvable' }, { status: 404 })
     }
 
-    // If the item is sold (linked to a Sale), block deletion to preserve accounting integrity.
+    // If the item is sold (linked to any Sale), block deletion to preserve accounting integrity.
     // The user should "annuler la vente" first if they really want to delete the article.
-    if (existing.sale) {
+    if (existing.sales && existing.sales.length > 0) {
+      const firstSale = existing.sales[0]
       return NextResponse.json(
         {
-          error: `Impossible de supprimer : cet article est lié à une vente (SKU: ${existing.sku}, prix de vente: ${existing.sale.salePrice.toFixed(2)} €, date: ${new Date(existing.sale.saleDate).toLocaleDateString('fr-FR')}). Annulez d'abord la vente dans le module Ventes pour pouvoir supprimer cet article.`,
+          error: `Impossible de supprimer : cet article est lié à ${existing.sales.length} vente(s) (SKU: ${existing.sku}, dernier prix de vente: ${firstSale.salePrice.toFixed(2)} €, date: ${new Date(firstSale.saleDate).toLocaleDateString('fr-FR')}). Annulez d'abord les ventes dans le module Ventes pour pouvoir supprimer cet article.`,
           code: 'HAS_SALE',
-          saleId: existing.sale.id,
+          saleId: firstSale.id,
         },
         { status: 409 }
       )

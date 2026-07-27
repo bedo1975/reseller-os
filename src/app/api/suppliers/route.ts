@@ -7,15 +7,15 @@ export async function GET() {
     const user = await requireAuth()
     const suppliers = await db.supplier.findMany({
       where: { userId: user.id },
-      include: { stockItems: { include: { sale: true } } },
+      include: { stockItems: { include: { sales: { orderBy: { saleDate: 'desc' } } } } },
       orderBy: { createdAt: 'desc' },
     })
 
     const result = suppliers.map(s => {
-      const itemsSold = s.stockItems.filter(i => i.sale).length
+      const itemsSold = s.stockItems.filter(i => i.sales && i.sales.length > 0).length
       const totalSpent = s.stockItems.reduce((sum, i) => sum + i.purchaseCost, 0)
-      const totalRevenue = s.stockItems.reduce((sum, i) => sum + (i.sale?.salePrice || 0), 0)
-      const totalProfit = s.stockItems.reduce((sum, i) => sum + (i.sale?.profit || 0), 0)
+      const totalRevenue = s.stockItems.reduce((sum, i) => sum + (i.sales?.reduce((ss, sl) => ss + sl.salePrice, 0) || 0), 0)
+      const totalProfit = s.stockItems.reduce((sum, i) => sum + (i.sales?.reduce((ss, sl) => ss + sl.profit, 0) || 0), 0)
       return {
         id: s.id,
         name: s.name,
