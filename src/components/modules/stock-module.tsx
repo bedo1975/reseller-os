@@ -277,6 +277,7 @@ export function StockModule() {
                     <th className="px-3 py-2 font-medium">SKU</th>
                     <th className="px-3 py-2 font-medium">Marque</th>
                     <th className="px-3 py-2 font-medium">Statut</th>
+                    <th className="px-3 py-2 font-medium text-right">Qté dispo</th>
                     <th className="px-3 py-2 font-medium text-right">Coût</th>
                     <th className="px-3 py-2 font-medium text-right">Prix conseillé</th>
                   </tr>
@@ -291,18 +292,31 @@ export function StockModule() {
                           {getPubStatusLabel(item.status)}
                         </span>
                       </td>
+                      <td className="px-3 py-2 text-right">
+                        <span className={cn(
+                          'font-semibold px-1.5 py-0.5 rounded',
+                          item.quantity > 5 ? 'text-emerald-600' : item.quantity > 1 ? 'text-amber-600' : 'text-red-600'
+                        )}>
+                          {item.quantity}
+                        </span>
+                        {item.soldCount > 0 && (
+                          <span className="text-[9px] text-muted-foreground ml-1" title={`${item.soldCount} déjà vendu(s)`}>
+                            ({item.soldCount} vendus)
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right">{formatEUR(item.purchaseCost)}</td>
                       <td className="px-3 py-2 text-right text-emerald-600">{item.suggestedPrice ? formatEUR(item.suggestedPrice) : '—'}</td>
                     </tr>
                   ))}
                   {inStockItems.length === 0 && (
-                    <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">Aucun article en stock</td></tr>
+                    <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">Aucun article en stock</td></tr>
                   )}
                 </tbody>
                 {inStockItems.length > 0 && (
                   <tfoot>
                     <tr className="bg-muted/50 font-semibold text-xs">
-                      <td colSpan={3} className="px-3 py-2 text-right uppercase">Total</td>
+                      <td colSpan={4} className="px-3 py-2 text-right uppercase">Total</td>
                       <td className="px-3 py-2 text-right">{formatEUR(totalStockValue)}</td>
                       <td className="px-3 py-2 text-right text-emerald-600">{formatEUR(totalSuggestedValue)}</td>
                     </tr>
@@ -329,6 +343,7 @@ export function StockModule() {
                     <th className="px-3 py-2 font-medium">SKU</th>
                     <th className="px-3 py-2 font-medium">Marque</th>
                     <th className="px-3 py-2 font-medium">Plateforme</th>
+                    <th className="px-3 py-2 font-medium text-right">Qté vendue</th>
                     <th className="px-3 py-2 font-medium text-right">Coût achat</th>
                     <th className="px-3 py-2 font-medium text-right">Prix vente</th>
                     <th className="px-3 py-2 font-medium text-right">Bénéfice</th>
@@ -340,13 +355,21 @@ export function StockModule() {
                       <td className="px-3 py-2 font-mono text-[10px]">{item.sku}</td>
                       <td className="px-3 py-2 font-medium">{item.brand}</td>
                       <td className="px-3 py-2 text-muted-foreground">{item.platform || '—'}</td>
+                      <td className="px-3 py-2 text-right">
+                        <span className="font-semibold text-emerald-700 dark:text-emerald-400">{item.soldCount}</span>
+                        {item.quantity > 0 && (
+                          <span className="text-[9px] text-muted-foreground ml-1" title="encore disponible">
+                            ({item.quantity} restant)
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right">{formatEUR(item.purchaseCost)}</td>
                       <td className="px-3 py-2 text-right font-semibold">{formatEUR(item.sales?.reduce((s, sl) => s + sl.salePrice, 0) || 0)}</td>
                       <td className="px-3 py-2 text-right text-emerald-600 font-semibold">{formatEUR(item.sales?.reduce((s, sl) => s + sl.profit, 0) || 0)}</td>
                     </tr>
                   ))}
                   {soldItems.length === 0 && (
-                    <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">Aucun article vendu</td></tr>
+                    <tr><td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">Aucun article vendu</td></tr>
                   )}
                 </tbody>
               </table>
