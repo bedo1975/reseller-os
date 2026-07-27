@@ -46,7 +46,7 @@ export async function PUT(req: NextRequest) {
       chronopostAccountNumber, chronopostApiKey,
       seoTitle, seoDescription,
       gdprEnabled, gdprBannerTitle, gdprBannerMessage, gdprPrivacyPolicyUrl, gdprCookiesJson,
-      shareEnabled, shareColor, shareCollectEmails, shareSubject, shareMessage, shareButtonText,
+      shareEnabled, shareColor, shareCollectEmails, shareSiteUrl, shareSubject, shareMessage, shareButtonText,
     } = body
 
     const data: any = {}
@@ -130,6 +130,11 @@ export async function PUT(req: NextRequest) {
     if (typeof shareEnabled === 'boolean') data.shareEnabled = shareEnabled
     if (typeof shareColor === 'string') data.shareColor = shareColor
     if (typeof shareCollectEmails === 'boolean') data.shareCollectEmails = shareCollectEmails
+    if (typeof shareSiteUrl === 'string') {
+      // Normalize: trim trailing slash, allow null/empty
+      const url = shareSiteUrl.trim()
+      data.shareSiteUrl = url ? url.replace(/\/+$/, '') : null
+    }
     if (typeof shareSubject === 'string') data.shareSubject = shareSubject
     if (typeof shareMessage === 'string') data.shareMessage = shareMessage
     if (typeof shareButtonText === 'string') data.shareButtonText = shareButtonText

@@ -77,6 +77,7 @@ export interface BoutiqueSettings {
   shareEnabled: boolean
   shareColor: string
   shareCollectEmails: boolean
+  shareSiteUrl: string | null
   shareSubject: string
   shareMessage: string
   shareButtonText: string
@@ -146,6 +147,7 @@ const DEFAULTS: BoutiqueSettings = {
   shareEnabled: true,
   shareColor: '#007bff',
   shareCollectEmails: true,
+  shareSiteUrl: null,
   shareSubject: 'Un ami vous recommande cet article',
   shareMessage: 'Bonjour,\n\nJ\'ai trouvé cet article sur {SITE_NAME} et j\'ai pensé qu\'il pourrait vous plaire.\n\nDécouvrez-le ici : {URL}',
   shareButtonText: 'Partager cet article',

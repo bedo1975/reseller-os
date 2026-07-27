@@ -49,27 +49,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Produit introuvable' }, { status: 404 })
     }
 
-    // Build absolute product URL using request origin (handles localhost in dev + domain in prod)
-    // Priority: x-forwarded-host (nginx/proxy) > host header > origin header > referer
-    const forwardedHost = req.headers.get('x-forwarded-host')
-    const forwardedProto = req.headers.get('x-forwarded-proto') || 'https'
-    const hostHeader = req.headers.get('host')
-    const originHeader = req.headers.get('origin')
-    const refererHeader = req.headers.get('referer')
+    // Build absolute product URL.
+    // Priority: admin-configured shareSiteUrl > x-forwarded-host > host header > origin > referer > req.url
+    let origin: string | null = null
 
-    let origin: string
-    if (forwardedHost) {
-      origin = `${forwardedProto}://${forwardedHost}`
-    } else if (hostHeader) {
-      origin = `${req.url.startsWith('https') ? 'https' : 'http'}://${hostHeader}`
-    } else if (originHeader) {
-      origin = originHeader
-    } else if (refererHeader) {
-      try { origin = new URL(refererHeader).origin } catch { origin = new URL(req.url).origin }
+    if (settings.shareSiteUrl) {
+      // Admin-configured URL (highest priority — guarantees correct domain in emails)
+      origin = settings.shareSiteUrl.replace(/\/+$/, '')
     } else {
-      origin = new URL(req.url).origin
+      // Fallback: try to detect from request headers
+      const forwardedHost = req.headers.get('x-forwarded-host')
+      const forwardedProto = req.headers.get('x-forwarded-proto') || 'https'
+      const hostHeader = req.headers.get('host')
+      const originHeader = req.headers.get('origin')
+      const refererHeader = req.headers.get('referer')
+
+      if (forwardedHost) {
+        origin = `${forwardedProto}://${forwardedHost}`
+      } else if (hostHeader) {
+        origin = `${req.url.startsWith('https') ? 'https' : 'http'}://${hostHeader}`
+      } else if (originHeader) {
+        origin = originHeader
+      } else if (refererHeader) {
+        try { origin = new URL(refererHeader).origin } catch { origin = new URL(req.url).origin }
+      } else {
+        origin = new URL(req.url).origin
+      }
     }
+
     const productUrl = `${origin}/boutique/produit/${encodeURIComponent(sku)}`
+    const safeOrigin = origin || ''
 
     // Build absolute photo URL (photos stored as /uploads/... or already absolute URLs)
     let photos: string[] = []
@@ -82,10 +91,10 @@ export async function POST(req: NextRequest) {
         mainPhoto = firstPhoto
       } else if (firstPhoto.startsWith('/uploads/')) {
         // Local upload — prepend origin
-        mainPhoto = `${origin}/api${firstPhoto}`
+        mainPhoto = `${safeOrigin}/api${firstPhoto}`
       } else if (firstPhoto.startsWith('/')) {
         // Other relative path — prepend origin
-        mainPhoto = `${origin}${firstPhoto}`
+        mainPhoto = `${safeOrigin}${firstPhoto}`
       } else {
         mainPhoto = firstPhoto
       }

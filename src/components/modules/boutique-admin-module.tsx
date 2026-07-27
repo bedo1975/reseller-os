@@ -3638,6 +3638,7 @@ function ShareTab() {
     shareEnabled: true,
     shareColor: '#007bff',
     shareCollectEmails: true,
+    shareSiteUrl: '',
     shareSubject: 'Un ami vous recommande cet article',
     shareMessage: 'Bonjour,\n\nJ\'ai trouvé cet article sur {SITE_NAME} et j\'ai pensé qu\'il pourrait vous plaire.\n\nDécouvrez-le ici : {URL}',
     shareButtonText: 'Partager cet article',
@@ -3665,6 +3666,7 @@ function ShareTab() {
           shareEnabled: data.shareEnabled !== false,
           shareColor: data.shareColor || '#007bff',
           shareCollectEmails: data.shareCollectEmails !== false,
+          shareSiteUrl: data.shareSiteUrl || '',
           shareSubject: data.shareSubject || 'Un ami vous recommande cet article',
           shareMessage: data.shareMessage || 'Bonjour,\n\nJ\'ai trouvé cet article sur {SITE_NAME} et j\'ai pensé qu\'il pourrait vous plaire.\n\nDécouvrez-le ici : {URL}',
           shareButtonText: data.shareButtonText || 'Partager cet article',
@@ -3787,6 +3789,21 @@ function ShareTab() {
               <Label className="text-sm cursor-pointer">
                 Collecter les emails des amis dans ce tableau (désactivé = aucune collecte, juste envoi de l'email)
               </Label>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">URL de la boutique (pour les emails de partage)</Label>
+              <Input
+                type="url"
+                value={settings.shareSiteUrl}
+                onChange={e => setSettings({ ...settings, shareSiteUrl: e.target.value })}
+                placeholder="https://junashop.fr"
+                className="font-mono text-xs"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                URL absolue utilisée dans les emails envoyés aux amis. Laisser vide = détection automatique (peut être incorrecte en localhost).
+                Sans slash final. Exemple : <code>https://junashop.fr</code>
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
