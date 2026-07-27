@@ -810,6 +810,11 @@ interface BoutiqueSettingsData {
   seoDescription: string | null
   chronopostAccountNumber: string | null
   chronopostApiKey: string | null
+  gdprEnabled: boolean
+  gdprBannerTitle: string
+  gdprBannerMessage: string
+  gdprPrivacyPolicyUrl: string | null
+  gdprCookiesJson: string
   stripePublicKey: string | null
   stripeSecretKey: string | null
   paypalClientId: string | null
@@ -1615,6 +1620,68 @@ function AppearanceTab() {
             />
             <p className="text-[11px] text-muted-foreground">Affichée dans les résultats Google. Recommandé : 150-160 caractères.</p>
           </div>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* RGPD / GDPR */}
+      {subTab === 'misc' && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4" /> RGPD — Consentement cookies</CardTitle>
+          <CardDescription className="text-xs">
+            Bannière de consentement cookies conforme au RGPD. Obligatoire pour les sites collectant des données personnelles.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={form.gdprEnabled !== false}
+              onCheckedChange={(v) => set('gdprEnabled', v)}
+            />
+            <Label className="text-sm cursor-pointer" onClick={() => set('gdprEnabled', form.gdprEnabled === false)}>
+              {form.gdprEnabled !== false ? 'Bannière RGPD activée' : 'Bannière RGPD désactivée'}
+            </Label>
+          </div>
+          {form.gdprEnabled !== false && (
+            <>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Titre de la bannière</Label>
+                <Input
+                  value={form.gdprBannerTitle || ''}
+                  onChange={e => set('gdprBannerTitle', e.target.value)}
+                  placeholder="Vos données personnelles"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Message de la bannière</Label>
+                <Textarea
+                  value={form.gdprBannerMessage || ''}
+                  onChange={e => set('gdprBannerMessage', e.target.value)}
+                  rows={3}
+                  placeholder="Nous utilisons des cookies pour améliorer votre expérience..."
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">URL de la politique de confidentialité</Label>
+                <Input
+                  value={form.gdprPrivacyPolicyUrl || ''}
+                  onChange={e => set('gdprPrivacyPolicyUrl', e.target.value)}
+                  placeholder="/boutique/mentions-legales"
+                />
+                <p className="text-[11px] text-muted-foreground">Lien affiché dans la bannière. Par défaut : page Mentions légales.</p>
+              </div>
+              <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-2.5 text-[11px] text-blue-800 dark:text-blue-200 space-y-1">
+                <p>📋 <strong>Catégories de cookies par défaut :</strong></p>
+                <ul className="list-disc list-inside ml-2 space-y-0.5">
+                  <li><strong>Cookies essentiels</strong> (panier, session) — obligatoires, non désactivables</li>
+                  <li><strong>Cookies d'analyse</strong> (Google Analytics) — optionnels, refusables</li>
+                </ul>
+                <p className="mt-1">Le client peut : "Tout accepter" / "Refuser les optionnels" / "Personnaliser"</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
       )}

@@ -45,6 +45,7 @@ export async function PUT(req: NextRequest) {
       mondialRelayEnseigne, mondialRelayApiKey,
       chronopostAccountNumber, chronopostApiKey,
       seoTitle, seoDescription,
+      gdprEnabled, gdprBannerTitle, gdprBannerMessage, gdprPrivacyPolicyUrl, gdprCookiesJson,
     } = body
 
     const data: any = {}
@@ -118,6 +119,12 @@ export async function PUT(req: NextRequest) {
     if (typeof chronopostApiKey === 'string') data.chronopostApiKey = chronopostApiKey || null
     if (typeof seoTitle === 'string') data.seoTitle = seoTitle || null
     if (typeof seoDescription === 'string') data.seoDescription = seoDescription || null
+    // RGPD
+    if (typeof gdprEnabled === 'boolean') data.gdprEnabled = gdprEnabled
+    if (typeof gdprBannerTitle === 'string') data.gdprBannerTitle = gdprBannerTitle
+    if (typeof gdprBannerMessage === 'string') data.gdprBannerMessage = gdprBannerMessage
+    if (typeof gdprPrivacyPolicyUrl === 'string') data.gdprPrivacyPolicyUrl = gdprPrivacyPolicyUrl || null
+    if (typeof gdprCookiesJson === 'string') data.gdprCookiesJson = gdprCookiesJson
 
     const settings = await db.boutiqueSettings.upsert({
       where: { id: 'default' },

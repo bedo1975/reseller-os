@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { ShoppingCart, Search, Menu, X, ChevronDown, User, LogOut } from 'lucide-react'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 import { GoogleAnalytics } from '@/components/boutique/google-analytics'
+import { GdprBanner } from '@/components/boutique/gdpr-banner'
 
 interface Subcat { code: string; value: string }
 interface NavCategory { slug: string; label: string; emoji: string; subcategories: Subcat[] }
@@ -127,6 +128,7 @@ export default function BoutiqueLayout({ children }: { children: React.ReactNode
   return (
     <div className="bg-white text-gray-900 antialiased min-h-screen flex flex-col" style={{ ['--primary' as any]: primaryColor, ['--primary-dark' as any]: primaryDarkColor }}>
       <GoogleAnalytics />
+      <GdprBanner />
       {/* Top bar */}
       <div className="text-white text-xs" style={{ backgroundColor: topbarBgColor }}>
         <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">

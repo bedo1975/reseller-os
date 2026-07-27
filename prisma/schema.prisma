@@ -504,6 +504,12 @@ model BoutiqueSettings {
   // SEO — titre et description personnalisables pour l'onglet navigateur
   seoTitle                 String?  // ex: "Junashop — Vêtements seconde main"
   seoDescription           String?  // ex: "Achetez des vêtements et accessoires seconde main..."
+  // RGPD / GDPR — consentement cookies
+  gdprEnabled              Boolean  @default(true)
+  gdprBannerTitle          String   @default("Vos données personnelles")
+  gdprBannerMessage        String   @default("Nous utilisons des cookies pour améliorer votre expérience, analyser le trafic et sécuriser les paiements. Vous pouvez accepter ou refuser les cookies non essentiels.")
+  gdprPrivacyPolicyUrl     String?  // URL de la page politique de confidentialité
+  gdprCookiesJson          String   @default("[]")  // JSON: [{ id, name, description, required, enabled }]
   updatedAt       DateTime @updatedAt
 }
 

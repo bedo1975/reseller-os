@@ -68,6 +68,11 @@ export interface BoutiqueSettings {
   stripeSecretKey: string | null
   paypalClientId: string | null
   paypalSecret: string | null
+  gdprEnabled: boolean
+  gdprBannerTitle: string
+  gdprBannerMessage: string
+  gdprPrivacyPolicyUrl: string | null
+  gdprCookiesJson: string
 }
 
 const DEFAULTS: BoutiqueSettings = {
@@ -126,6 +131,11 @@ const DEFAULTS: BoutiqueSettings = {
   stripeSecretKey: null,
   paypalClientId: null,
   paypalSecret: null,
+  gdprEnabled: true,
+  gdprBannerTitle: 'Vos données personnelles',
+  gdprBannerMessage: 'Nous utilisons des cookies pour améliorer votre expérience, analyser le trafic et sécuriser les paiements. Vous pouvez accepter ou refuser les cookies non essentiels.',
+  gdprPrivacyPolicyUrl: null,
+  gdprCookiesJson: '[]',
 }
 
 let cache: BoutiqueSettings | null = null
