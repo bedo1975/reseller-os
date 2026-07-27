@@ -31,7 +31,7 @@ export async function PATCH(
       'purchaseCost', 'purchaseDate', 'supplierId', 'lotReference', 'lotOrigin', 'lotCurrent',
       'purchaseInvoiceNumber', 'purchasePaymentMethod',
       'warehouse', 'rack', 'shelf', 'bin', 'weight', 'quantity',
-      'description', 'suggestedPrice', 'photos', 'barcode', 'measurements',
+      'description', 'suggestedPrice', 'salePrice', 'saleActive', 'photos', 'barcode', 'measurements',
       'status', 'platform', 'salePlatform', 'platforms',
     ]
     for (const key of allowed) {
@@ -40,6 +40,13 @@ export async function PATCH(
     if ('purchaseCost' in updateData) updateData.purchaseCost = parseFloat(updateData.purchaseCost as string)
     if ('suggestedPrice' in updateData && updateData.suggestedPrice) {
       updateData.suggestedPrice = parseFloat(updateData.suggestedPrice as string)
+    }
+    if ('salePrice' in updateData) {
+      if (updateData.salePrice === '' || updateData.salePrice === null) {
+        updateData.salePrice = null
+      } else {
+        updateData.salePrice = parseFloat(String(updateData.salePrice))
+      }
     }
     if ('weight' in updateData) {
       const w = updateData.weight

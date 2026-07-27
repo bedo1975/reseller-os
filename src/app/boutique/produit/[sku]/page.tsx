@@ -35,6 +35,8 @@ interface Product {
   color?: string | null
   condition?: string | null
   price: number | null
+  originalPrice?: number | null
+  saleActive?: boolean
   description?: string | null
   photos: string[]
   mainPhoto?: string | null
@@ -207,9 +209,25 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           </h1>
 
           {product.price != null && (
-            <p className="text-3xl font-bold text-[#007bff] mb-6">
-              {product.price.toFixed(2)} €
-            </p>
+            <div className="mb-6">
+              {product.saleActive && product.originalPrice ? (
+                <div className="flex items-center gap-3">
+                  <p className="text-3xl font-bold text-red-600">
+                    {product.price.toFixed(2)} €
+                  </p>
+                  <p className="text-xl text-gray-400 line-through">
+                    {product.originalPrice.toFixed(2)} €
+                  </p>
+                  <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full uppercase">
+                    Promo
+                  </span>
+                </div>
+              ) : (
+                <p className="text-3xl font-bold text-[#007bff]">
+                  {product.price.toFixed(2)} €
+                </p>
+              )}
+            </div>
           )}
 
           {/* Attributes */}

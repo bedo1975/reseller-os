@@ -25,6 +25,8 @@ export async function GET(
         color: true,
         condition: true,
         suggestedPrice: true,
+        salePrice: true,
+        saleActive: true,
         description: true,
         photos: true,
         measurements: true,
@@ -41,6 +43,10 @@ export async function GET(
     let photos: string[] = []
     try { photos = JSON.parse(item.photos) } catch {}
 
+    const basePrice = item.suggestedPrice ? parseFloat(item.suggestedPrice.toString()) : null
+    const isOnSale = item.saleActive && item.salePrice != null
+    const effectivePrice = isOnSale ? parseFloat(item.salePrice!.toString()) : basePrice
+
     const product = {
       id: item.id,
       sku: item.sku,
@@ -51,7 +57,9 @@ export async function GET(
       size: item.size,
       color: item.color,
       condition: item.condition,
-      price: item.suggestedPrice ? parseFloat(item.suggestedPrice.toString()) : null,
+      price: effectivePrice,
+      originalPrice: isOnSale ? basePrice : null,
+      saleActive: isOnSale,
       description: item.description,
       photos: photos.map(p => p.startsWith('/uploads/') ? `/api${p}` : p),
       mainPhoto: photos[0] ? (photos[0].startsWith('/uploads/') ? `/api${photos[0]}` : photos[0]) : null,

@@ -771,7 +771,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     purchaseCost: '', purchaseDate: new Date().toISOString().split('T')[0],
     supplierId: '', lotReference: '', lotOrigin: '', lotCurrent: '',
     warehouse: '', rack: '', shelf: '', bin: '', weight: '', quantity: '1',
-    description: '', suggestedPrice: '',
+    description: '', suggestedPrice: '', salePrice: '', saleActive: false,
     platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
   })
 
@@ -792,6 +792,8 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         weight: (item as { weight?: number }).weight ? String(item.weight) : '',
         quantity: String((item as { quantity?: number }).quantity || 1),
         description: item.description || '', suggestedPrice: item.suggestedPrice ? String(item.suggestedPrice) : '',
+        salePrice: (item as any).salePrice ? String((item as any).salePrice) : '',
+        saleActive: (item as any).saleActive === true,
         platforms: item.platforms || '[]',
         platform: item.platform || '',
         salePlatform: (item as { salePlatform?: string }).salePlatform || '',
@@ -804,7 +806,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         purchaseCost: '', purchaseDate: new Date().toISOString().split('T')[0],
         supplierId: '', lotReference: '', lotOrigin: '', lotCurrent: '',
         warehouse: '', rack: '', shelf: '', bin: '', weight: '', quantity: '1',
-        description: '', suggestedPrice: '',
+        description: '', suggestedPrice: '', salePrice: '', saleActive: false,
         platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
       })
       setPhotos([])
@@ -1355,6 +1357,21 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
               <div className="space-y-1.5">
                 <Label className="text-xs">Prix conseillé (€)</Label>
                 <Input type="number" step="0.01" value={form.suggestedPrice} onChange={e => setForm({ ...form, suggestedPrice: e.target.value })} placeholder="29.99" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Prix promo (€) {form.saleActive && <span className="text-green-600 font-semibold">— Actif</span>}</Label>
+                <div className="flex gap-2 items-center">
+                  <Input type="number" step="0.01" value={form.salePrice} onChange={e => setForm({ ...form, salePrice: e.target.value })} placeholder="19.99" disabled={!form.saleActive} className="flex-1" />
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={form.saleActive}
+                      onChange={e => setForm({ ...form, saleActive: e.target.checked })}
+                      className="rounded"
+                    />
+                    Promo
+                  </label>
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 mt-3">

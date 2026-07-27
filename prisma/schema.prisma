@@ -183,6 +183,8 @@ model StockItem {
   platform      String?  // legacy: plateforme de VENTE (rempli quand l'article est vendu)
   platforms     String   @default("[]")  // JSON array : plateformes où l'article est publié (ex: ["vinted","leboncoin"])
   suggestedPrice Float?
+  salePrice      Float?  // prix promo (si null ou saleActive false, pas de promo)
+  saleActive     Boolean @default(false) // active/désactive la promotion
   description   String?
   measurements  String?  // JSON serialisé
 

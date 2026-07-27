@@ -13,6 +13,8 @@ interface ProductCardProps {
     color?: string | null
     condition?: string | null
     price: number | null
+    originalPrice?: number | null
+    saleActive?: boolean
     mainPhoto?: string | null
   }
 }
@@ -69,9 +71,22 @@ export function ProductCard({ product }: ProductCardProps) {
         {product.color && (
           <p className="text-xs text-gray-500">{product.color}</p>
         )}
-        <p className="text-lg font-bold text-[#007bff] pt-1">
-          {product.price != null ? `${product.price.toFixed(2)} €` : '—'}
-        </p>
+        <div className="flex items-center gap-2 pt-1">
+          {product.saleActive && product.originalPrice ? (
+            <>
+              <p className="text-lg font-bold text-red-600">
+                {product.price != null ? `${product.price.toFixed(2)} €` : '—'}
+              </p>
+              <p className="text-sm text-gray-400 line-through">
+                {product.originalPrice.toFixed(2)} €
+              </p>
+            </>
+          ) : (
+            <p className="text-lg font-bold text-[#007bff]">
+              {product.price != null ? `${product.price.toFixed(2)} €` : '—'}
+            </p>
+          )}
+        </div>
       </div>
     </Link>
   )

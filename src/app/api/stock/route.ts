@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       purchaseCost, purchaseDate, supplierId, lotReference, lotOrigin, lotCurrent,
       purchaseInvoiceNumber, purchasePaymentMethod,
       warehouse, rack, shelf, bin, weight, quantity,
-      description, suggestedPrice, photos, barcode, measurements,
+      description, suggestedPrice, salePrice, saleActive, photos, barcode, measurements,
       status, platform, salePlatform, platforms,
     } = body
 
@@ -86,6 +86,8 @@ export async function POST(req: NextRequest) {
         quantity: parseInt(quantity) || 1,
         description: description || null,
         suggestedPrice: suggestedPrice ? parseFloat(suggestedPrice) : null,
+        salePrice: salePrice ? parseFloat(salePrice) : null,
+        saleActive: saleActive === true,
         photos: photos || JSON.stringify([]),
         barcode: barcode || null,
         measurements: measurements || null,
