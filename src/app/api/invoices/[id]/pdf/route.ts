@@ -84,12 +84,15 @@ export async function GET(
     const itemDescription = sale.stockItem.description || ''
     const shippingHT = settings.vatEnabled ? sale.shippingCost / (1 + vatRate / 100) : sale.shippingCost
     const shippingTTC = sale.shippingCost
-    const grandTotalTTC = totalTTC + shippingTTC
-    const grandTotalHT = totalHT + shippingHT
     const feesTotal = (sale.platformFees || 0) + (sale.platformFixedFees || 0)
 
-    // Look up the parent BoutiqueOrder (if this sale belongs to a boutique order with a coupon)
-    let couponNotice = ''
+    // Look up the parent BoutiqueOrder — if a coupon was applied, prorate the discount
+    // onto this invoice (each invoice = 1 item, but coupon applies to whole order).
+    let couponCode: string | null = null
+    let couponOrderId: string | null = null
+    let orderSubtotal = 0
+    let orderDiscountTotal = 0
+    let proratedDiscountTTC = 0
     if (invoiceNumber) {
       try {
         const matchingOrders = await db.boutiqueOrder.findMany({
@@ -99,20 +102,31 @@ export async function GET(
         })
         const parentOrder = matchingOrders[0]
         if (parentOrder && parentOrder.couponCode && parentOrder.discountAmount > 0) {
-          couponNotice = `
-            <div style="background:#ecfdf5; padding:10px 14px; border-radius:6px; font-size:11px; color:#065f46; margin-bottom:24px; border-left:3px solid #10b981;">
-              <strong>🎁 Code promo appliqué :</strong> <code style="font-family:monospace; background:#d1fae5; padding:1px 6px; border-radius:3px;">${escapeHtml(parentOrder.couponCode)}</code>
-              — remise de <strong>${parentOrder.discountAmount.toFixed(2)} €</strong> sur l'ensemble de la commande
-              <span style="color:#047857;">(${escapeHtml(parentOrder.orderId)})</span>.
-              <div style="margin-top:4px; color:#047857; font-size:10px;">
-                Sous-total commande : ${parentOrder.subtotal.toFixed(2)} € · Remise : −${parentOrder.discountAmount.toFixed(2)} €
-              </div>
-            </div>`
+          couponCode = parentOrder.couponCode
+          couponOrderId = parentOrder.orderId
+          orderSubtotal = parentOrder.subtotal
+          orderDiscountTotal = parentOrder.discountAmount
+          if (orderSubtotal > 0) {
+            proratedDiscountTTC = orderDiscountTotal * (totalTTC / orderSubtotal)
+            proratedDiscountTTC = Math.round(proratedDiscountTTC * 100) / 100
+          }
         }
       } catch (e) {
         console.error('Coupon lookup failed:', e)
       }
     }
+
+    const discountHT = settings.vatEnabled ? proratedDiscountTTC / (1 + vatRate / 100) : proratedDiscountTTC
+    const grandTotalTTC = totalTTC - proratedDiscountTTC + shippingTTC
+    const grandTotalHT = totalHT - discountHT + shippingHT
+
+    const couponNotice = couponCode && proratedDiscountTTC > 0 ? `
+      <div style="background:#ecfdf5; padding:10px 14px; border-radius:6px; font-size:11px; color:#065f46; margin-bottom:24px; border-left:3px solid #10b981;">
+        <strong>🎁 Code promo <code style="font-family:monospace; background:#d1fae5; padding:1px 6px; border-radius:3px;">${escapeHtml(couponCode)}</code></strong>
+        appliqué sur la commande <span style="color:#047857;">${escapeHtml(couponOrderId || '')}</span>.
+        Remise totale commande : <strong>−${orderDiscountTotal.toFixed(2)} €</strong> sur sous-total de ${orderSubtotal.toFixed(2)} €.
+        <div style="margin-top:2px; color:#047857; font-size:10px;">Part de cette facture : −${proratedDiscountTTC.toFixed(2)} € (prorata).</div>
+      </div>` : ''
 
     // Parse customer contact (JSON for boutique sales, plain text for others)
     let customerAddress = ''
@@ -233,6 +247,18 @@ export async function GET(
           : `<td class="right">${totalTTC.toFixed(2)} €</td><td class="right">${totalTTC.toFixed(2)} €</td>`
         }
       </tr>
+      ${proratedDiscountTTC > 0 ? `
+      <tr style="color:#065f46;">
+        <td>
+          <strong>Remise — Code promo ${escapeHtml(couponCode || '')}</strong>
+          <div style="font-size:10px; color:#047857; margin-top:2px;">Prorata de la remise commande ${escapeHtml(couponOrderId || '')}</div>
+        </td>
+        <td class="center">1</td>
+        ${settings.vatEnabled
+          ? `<td class="right">−${discountHT.toFixed(2)} €</td><td class="right">${vatRate.toFixed(1)}%</td><td class="right">−${discountHT.toFixed(2)} €</td>`
+          : `<td class="right">−${proratedDiscountTTC.toFixed(2)} €</td><td class="right">−${proratedDiscountTTC.toFixed(2)} €</td>`
+        }
+      </tr>` : ''}
       ${sale.shippingCost > 0 ? `
       <tr>
         <td>Frais de port</td>
@@ -254,6 +280,12 @@ export async function GET(
       <div class="totals-row">
         <span>TVA (${vatRate.toFixed(1)}%)</span>
         <span>${(grandTotalTTC - grandTotalHT).toFixed(2)} €</span>
+      </div>
+    ` : ''}
+    ${proratedDiscountTTC > 0 ? `
+      <div class="totals-row" style="color:#065f46;">
+        <span>Dont remise promo ${escapeHtml(couponCode || '')}</span>
+        <span>−${proratedDiscountTTC.toFixed(2)} €</span>
       </div>
     ` : ''}
     <div class="totals-row grand">
