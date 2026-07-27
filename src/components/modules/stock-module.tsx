@@ -506,6 +506,7 @@ export function StockModule() {
                     <TableHead className="hidden lg:table-cell">Taille</TableHead>
                     <TableHead className="hidden lg:table-cell">Couleur</TableHead>
                     <TableHead className="hidden xl:table-cell">Emplacement</TableHead>
+                    <TableHead className="text-right">Qté dispo</TableHead>
                     <TableHead className="text-right">Coût</TableHead>
                     <TableHead className="text-right hidden md:table-cell">Prix conseillé</TableHead>
                     <TableHead>Statut</TableHead>
@@ -557,6 +558,23 @@ export function StockModule() {
                               <MapPin className="h-3 w-3 shrink-0" /> {location}
                             </span>
                           ) : '—'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className={cn(
+                            'font-semibold px-1.5 py-0.5 rounded inline-block min-w-[28px]',
+                            item.quantity > 5
+                              ? 'text-emerald-600'
+                              : item.quantity > 1
+                                ? 'text-amber-600'
+                                : 'text-red-600'
+                          )}>
+                            {item.quantity}
+                          </span>
+                          {item.soldCount > 0 && (
+                            <span className="block text-[9px] text-muted-foreground" title={`${item.soldCount} déjà vendu(s)`}>
+                              {item.soldCount} vendu{item.soldCount > 1 ? 's' : ''}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right font-medium">{formatEUR(item.purchaseCost)}</TableCell>
                         <TableCell className="text-right hidden md:table-cell">
