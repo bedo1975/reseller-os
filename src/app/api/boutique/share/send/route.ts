@@ -49,9 +49,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Produit introuvable' }, { status: 404 })
     }
 
-    // Build absolute product URL using request origin
-    const origin = new URL(req.url).origin
+    // Build absolute product URL using request origin (handles localhost in dev + domain in prod)
+    // Priority: x-forwarded-host (nginx/proxy) > host header > origin header > referer
+    const forwardedHost = req.headers.get('x-forwarded-host')
+    const forwardedProto = req.headers.get('x-forwarded-proto') || 'https'
+    const hostHeader = req.headers.get('host')
+    const originHeader = req.headers.get('origin')
+    const refererHeader = req.headers.get('referer')
+
+    let origin: string
+    if (forwardedHost) {
+      origin = `${forwardedProto}://${forwardedHost}`
+    } else if (hostHeader) {
+      origin = `${req.url.startsWith('https') ? 'https' : 'http'}://${hostHeader}`
+    } else if (originHeader) {
+      origin = originHeader
+    } else if (refererHeader) {
+      try { origin = new URL(refererHeader).origin } catch { origin = new URL(req.url).origin }
+    } else {
+      origin = new URL(req.url).origin
+    }
     const productUrl = `${origin}/boutique/produit/${encodeURIComponent(sku)}`
+
+    // Build absolute photo URL (photos stored as /uploads/... or already absolute URLs)
+    let photos: string[] = []
+    try { photos = JSON.parse(stockItem.photos) } catch {}
+    const firstPhoto = photos[0]
+    let mainPhoto: string | null = null
+    if (firstPhoto) {
+      if (firstPhoto.startsWith('http://') || firstPhoto.startsWith('https://')) {
+        // Already absolute URL (e.g. external URL)
+        mainPhoto = firstPhoto
+      } else if (firstPhoto.startsWith('/uploads/')) {
+        // Local upload — prepend origin
+        mainPhoto = `${origin}/api${firstPhoto}`
+      } else if (firstPhoto.startsWith('/')) {
+        // Other relative path — prepend origin
+        mainPhoto = `${origin}${firstPhoto}`
+      } else {
+        mainPhoto = firstPhoto
+      }
+    }
 
     // Build email content
     const siteName = settings.logoText || 'Boutique'
@@ -74,12 +112,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Build HTML version
-    let photos: string[] = []
-    try { photos = JSON.parse(stockItem.photos) } catch {}
-    const mainPhoto = photos[0]
-      ? (photos[0].startsWith('/uploads/') ? `${origin}/api${photos[0]}` : photos[0])
-      : null
-
     const productTitle = stockItem.title || `${stockItem.brand} ${stockItem.category}`
     const priceText = stockItem.suggestedPrice
       ? `<div style="font-size:18px;font-weight:bold;color:#007bff;margin:8px 0 16px;">${parseFloat(stockItem.suggestedPrice.toString()).toFixed(2)} €</div>`
@@ -108,12 +140,12 @@ export async function POST(req: NextRequest) {
 
         <table style="width:100%;background:#f9fafb;border-radius:6px;overflow:hidden;border:1px solid #e5e7eb;">
           <tr>
-            ${mainPhoto ? `<td style="width:120px;padding:12px;">
-              <img src="${escapeHtml(mainPhoto)}" alt="${escapeHtml(productTitle)}" style="width:96px;height:96px;object-fit:cover;border-radius:6px;display:block;" />
+            ${mainPhoto ? `<td style="width:160px;padding:16px;">
+              <img src="${escapeHtml(mainPhoto)}" alt="${escapeHtml(productTitle)}" style="width:128px;height:128px;object-fit:cover;border-radius:8px;display:block;box-shadow:0 1px 3px rgba(0,0,0,0.1);" />
             </td>` : ''}
-            <td style="padding:12px;vertical-align:middle;">
+            <td style="padding:16px;vertical-align:middle;">
               <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(stockItem.brand)}</div>
-              <div style="font-size:16px;font-weight:600;color:#111827;margin:2px 0;">${escapeHtml(productTitle)}</div>
+              <div style="font-size:18px;font-weight:600;color:#111827;margin:4px 0;">${escapeHtml(productTitle)}</div>
               ${stockItem.size ? `<div style="font-size:12px;color:#6b7280;">Taille : ${escapeHtml(stockItem.size)}</div>` : ''}
               ${priceText}
             </td>
