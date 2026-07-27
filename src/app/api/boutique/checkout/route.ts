@@ -15,7 +15,7 @@ import { notifyNewOrder } from '@/lib/email'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { customer, items, shippingMethodCode, paymentMethodCode, notes, relayId, relayName, relayAddress, shippingCost: clientShippingCost } = body
+    const { customer, items, shippingMethodCode, paymentMethodCode, notes, relayId, relayName, relayAddress, shippingCost: clientShippingCost, couponCode } = body
 
     if (!customer?.email || !customer?.firstName || !customer?.lastName || !customer?.address) {
       return NextResponse.json({ error: 'Coordonnées client incomplètes' }, { status: 400 })
@@ -185,7 +185,41 @@ export async function POST(req: NextRequest) {
       shippingCost = 0
     }
 
-    const total = subtotal + shippingCost
+    // ── Coupon de réduction (re-validation server-side) ─────────
+    let discountAmount = 0
+    let appliedCouponCode: string | null = null
+    if (couponCode && typeof couponCode === 'string') {
+      const coupon = await db.coupon.findUnique({
+        where: { code: couponCode.trim().toUpperCase() },
+      })
+      if (coupon) {
+        const now = new Date()
+        const isStillActive = coupon.active
+          && (!coupon.startsAt || now >= coupon.startsAt)
+          && (!coupon.expiresAt || now <= coupon.expiresAt)
+          && (coupon.maxUses === null || coupon.usedCount < coupon.maxUses)
+          && subtotal >= coupon.minAmount
+        if (isStillActive) {
+          if (coupon.type === 'percent') {
+            discountAmount = (subtotal * coupon.value) / 100
+          } else {
+            discountAmount = coupon.value
+          }
+          if (discountAmount > subtotal) discountAmount = subtotal
+          discountAmount = Math.round(discountAmount * 100) / 100
+          appliedCouponCode = coupon.code
+        }
+      }
+    }
+
+    const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount)
+
+    // Re-check free shipping with the discounted subtotal (consistent with frontend)
+    if (boutiqueSettings.freeShippingEnabled && subtotalAfterDiscount >= (boutiqueSettings.freeShippingThreshold || 50)) {
+      shippingCost = 0
+    }
+
+    const total = subtotalAfterDiscount + shippingCost
 
     // Create the BoutiqueOrder
     const order = await db.boutiqueOrder.create({
@@ -199,6 +233,8 @@ export async function POST(req: NextRequest) {
         paymentMethod: paymentMethodLabel,
         subtotal: parseFloat(subtotal.toFixed(2)),
         total: parseFloat(total.toFixed(2)),
+        couponCode: appliedCouponCode,
+        discountAmount: parseFloat(discountAmount.toFixed(2)),
         notes: notes || null,
         status: 'pending',
         invoiceNumbers: JSON.stringify(invoiceNumbers),
@@ -207,6 +243,18 @@ export async function POST(req: NextRequest) {
         relayAddress: isRelayMethod ? String(relayAddress) : null,
       },
     })
+
+    // Increment coupon usage counter (if a coupon was applied)
+    if (appliedCouponCode) {
+      try {
+        await db.coupon.updateMany({
+          where: { code: appliedCouponCode },
+          data: { usedCount: { increment: 1 } },
+        })
+      } catch (e) {
+        console.error('Failed to increment coupon usage:', e)
+      }
+    }
 
     // Increment invoice counter (single update)
     if (invoiceSettings) {
@@ -226,6 +274,8 @@ export async function POST(req: NextRequest) {
       totalAmount: parseFloat(total.toFixed(2)),
       shippingCost,
       subtotal: parseFloat(subtotal.toFixed(2)),
+      discountAmount: parseFloat(discountAmount.toFixed(2)),
+      couponCode: appliedCouponCode,
       customer: {
         firstName: customer.firstName,
         lastName: customer.lastName,

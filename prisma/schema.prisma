@@ -585,6 +585,9 @@ model BoutiqueOrder {
   paymentMethod String?  // code du PaymentMethod utilisé
   subtotal      Float
   total         Float
+  // Coupon de réduction (optionnel)
+  couponCode    String?
+  discountAmount Float  @default(0)
   notes         String?
   status        String   @default("pending")  // pending | paid | shipped | delivered | cancelled
   // Liste des numéros de facture Reseller OS (pour retrouver les Sales)
@@ -718,4 +721,34 @@ model ProductTrendSnapshot {
   createdAt   DateTime @default(now())
 
   @@index([searchId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// COUPONS DE RÉDUCTION — Boutique
+// ═══════════════════════════════════════════════════════════════════════
+model Coupon {
+  id            String   @id @default(cuid())
+  code          String   @unique  // code saisi par le client (ex: "SUMMER25")
+  name          String              // nom interne (ex: "Promo été 2026")
+  description   String?             // description libre
+  // Type de remise: "percent" (% du panier) ou "fixed" (montant en €)
+  type          String   @default("percent")  // percent | fixed
+  value         Float               // ex: 25 (pour 25%) ou 10 (pour 10€)
+  // Montant minimum du panier pour activer le coupon (optionnel)
+  minAmount     Float    @default(0)
+  // Plage de validité (optionnel — null = pas de limite)
+  startsAt      DateTime?
+  expiresAt     DateTime?
+  // Limite d'utilisation global (null = illimité)
+  maxUses       Int?
+  // Nombre de fois que le coupon a été utilisé
+  usedCount     Int      @default(0)
+  // Limite par client (null = illimité)
+  maxUsesPerClient Int?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([active])
+  @@index([expiresAt])
 }

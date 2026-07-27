@@ -5,6 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
+  TicketPercent,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,7 +28,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { formatEUR, formatDate } from '@/lib/constants'
 
-type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories'
+type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons'
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'orders', label: 'Commandes', icon: Package },
@@ -37,6 +38,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'shipping', label: 'Livraison', icon: Truck },
   { id: 'payments', label: 'Paiements', icon: Euro },
   { id: 'categories', label: 'Catégories', icon: Layers },
+  { id: 'coupons', label: 'Coupons', icon: TicketPercent },
 ]
 
 export function BoutiqueAdminModule() {
@@ -84,6 +86,7 @@ export function BoutiqueAdminModule() {
       {tab === 'shipping' && <ShippingTab />}
       {tab === 'payments' && <PaymentsTab />}
       {tab === 'categories' && <CategoriesTab />}
+      {tab === 'coupons' && <CouponsTab />}
     </div>
   )
 }
@@ -114,6 +117,8 @@ interface Order {
   paymentMethod: string | null
   subtotal: number
   total: number
+  couponCode: string | null
+  discountAmount: number
   status: string
   invoiceNumbers: string[]
   createdAt: string
@@ -269,6 +274,30 @@ function OrdersTab() {
                         <span className="font-medium">{(item.price * item.qty).toFixed(2)} €</span>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Totals (with optional coupon) */}
+                  <div className="space-y-1 mb-3 pb-3 border-b text-xs">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Sous-total</span>
+                      <span>{formatEUR(order.subtotal)}</span>
+                    </div>
+                    {order.couponCode && order.discountAmount > 0 && (
+                      <div className="flex justify-between text-green-700">
+                        <span className="flex items-center gap-1">
+                          <TicketPercent className="h-3 w-3" /> Coupon <code className="font-mono">{order.couponCode}</code>
+                        </span>
+                        <span>−{order.discountAmount.toFixed(2)} €</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Livraison ({order.shippingMethod})</span>
+                      <span>{order.shippingCost === 0 ? 'Gratuite' : formatEUR(order.shippingCost)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold pt-1">
+                      <span>Total</span>
+                      <span>{formatEUR(order.total)}</span>
+                    </div>
                   </div>
 
                   {/* Invoices */}
@@ -3227,6 +3256,357 @@ function PaymentsTab() {
           Sauvegarder les clés API
         </Button>
       </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET 8 — COUPONS DE RÉDUCTION
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface Coupon {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  type: string       // 'percent' | 'fixed'
+  value: number
+  minAmount: number
+  startsAt: string | null
+  expiresAt: string | null
+  maxUses: number | null
+  usedCount: number
+  maxUsesPerClient: number | null
+  active: boolean
+  createdAt: string
+}
+
+const EMPTY_FORM = {
+  code: '',
+  name: '',
+  description: '',
+  type: 'percent',
+  value: '',
+  minAmount: '',
+  startsAt: '',
+  expiresAt: '',
+  maxUses: '',
+  maxUsesPerClient: '',
+  active: true,
+}
+
+function CouponsTab() {
+  const [coupons, setCoupons] = useState<Coupon[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState({ ...EMPTY_FORM })
+  const [saving, setSaving] = useState(false)
+
+  const fetchCoupons = useCallback(() => {
+    fetch('/api/boutique/admin/coupons')
+      .then(r => r.json())
+      .then(data => setCoupons(data.coupons || []))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { fetchCoupons() }, [fetchCoupons])
+
+  const resetForm = () => {
+    setForm({ ...EMPTY_FORM })
+    setEditingId(null)
+    setShowForm(false)
+  }
+
+  const startEdit = (c: Coupon) => {
+    setForm({
+      code: c.code,
+      name: c.name,
+      description: c.description || '',
+      type: c.type,
+      value: String(c.value),
+      minAmount: c.minAmount ? String(c.minAmount) : '',
+      startsAt: c.startsAt ? c.startsAt.slice(0, 10) : '',
+      expiresAt: c.expiresAt ? c.expiresAt.slice(0, 10) : '',
+      maxUses: c.maxUses != null ? String(c.maxUses) : '',
+      maxUsesPerClient: c.maxUsesPerClient != null ? String(c.maxUsesPerClient) : '',
+      active: c.active,
+    })
+    setEditingId(c.id)
+    setShowForm(true)
+  }
+
+  const save = async () => {
+    if (!form.code || !form.name) {
+      toast.error('Code et nom requis')
+      return
+    }
+    const valueNum = parseFloat(form.value)
+    if (isNaN(valueNum) || valueNum <= 0) {
+      toast.error('Valeur de réduction invalide')
+      return
+    }
+    if (form.type === 'percent' && valueNum > 100) {
+      toast.error('Le pourcentage ne peut pas dépasser 100%')
+      return
+    }
+
+    setSaving(true)
+    const payload = {
+      code: form.code.trim().toUpperCase(),
+      name: form.name.trim(),
+      description: form.description.trim(),
+      type: form.type,
+      value: valueNum,
+      minAmount: form.minAmount ? parseFloat(form.minAmount) : 0,
+      startsAt: form.startsAt || null,
+      expiresAt: form.expiresAt || null,
+      maxUses: form.maxUses ? parseInt(form.maxUses) : null,
+      maxUsesPerClient: form.maxUsesPerClient ? parseInt(form.maxUsesPerClient) : null,
+      active: form.active,
+    }
+
+    try {
+      const url = editingId
+        ? `/api/boutique/admin/coupons/${editingId}`
+        : '/api/boutique/admin/coupons'
+      const method = editingId ? 'PATCH' : 'POST'
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Erreur')
+        return
+      }
+      toast.success(editingId ? 'Coupon mis à jour' : 'Coupon créé')
+      resetForm()
+      fetchCoupons()
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleActive = async (c: Coupon) => {
+    const res = await fetch(`/api/boutique/admin/coupons/${c.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !c.active }),
+    })
+    if (res.ok) {
+      toast.success(c.active ? 'Coupon désactivé' : 'Coupon activé')
+      fetchCoupons()
+    } else {
+      toast.error('Erreur')
+    }
+  }
+
+  const remove = async (c: Coupon) => {
+    if (!confirm(`Supprimer le coupon "${c.code}" ?`)) return
+    const res = await fetch(`/api/boutique/admin/coupons/${c.id}`, { method: 'DELETE' })
+    if (res.ok) {
+      toast.success('Coupon supprimé')
+      fetchCoupons()
+    } else {
+      toast.error('Erreur')
+    }
+  }
+
+  const isExpired = (c: Coupon) => c.expiresAt && new Date(c.expiresAt) < new Date()
+  const isUpcoming = (c: Coupon) => c.startsAt && new Date(c.startsAt) > new Date()
+  const isExhausted = (c: Coupon) => c.maxUses != null && c.usedCount >= c.maxUses
+
+  if (loading) return <Skeleton className="h-32" />
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-3 text-xs text-amber-800 dark:text-amber-200">
+        🎟️ <strong>Coupons de réduction :</strong> créez des codes (% ou montant fixe) que vos clients saisissent sur la page de paiement. Vous pouvez limiter dans le temps, par montant minimum de panier, et par nombre d'utilisations.
+      </div>
+
+      {/* Coupons list */}
+      {coupons.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">
+          Aucun coupon pour le moment. Cliquez sur « Nouveau coupon » pour en créer un.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {coupons.map(c => {
+            const expired = isExpired(c)
+            const upcoming = isUpcoming(c)
+            const exhausted = isExhausted(c)
+            return (
+              <div key={c.id} className="border rounded-md p-3 bg-card">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary shrink-0">
+                    <TicketPercent className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-sm">{c.name}</p>
+                      <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">{c.code}</code>
+                      <Badge variant="outline" className="text-[10px]">
+                        {c.type === 'percent' ? `-${c.value}%` : `-${c.value.toFixed(2)}€`}
+                      </Badge>
+                      {!c.active && <Badge variant="secondary" className="text-[10px]">Désactivé</Badge>}
+                      {expired && <Badge className="bg-red-600 hover:bg-red-600 text-[10px]">Expiré</Badge>}
+                      {upcoming && <Badge className="bg-blue-600 hover:bg-blue-600 text-[10px]">À venir</Badge>}
+                      {exhausted && <Badge className="bg-orange-600 hover:bg-orange-600 text-[10px]">Épuisé</Badge>}
+                    </div>
+                    {c.description && (
+                      <p className="text-xs text-muted-foreground mt-1">{c.description}</p>
+                    )}
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-[11px] text-muted-foreground">
+                      {c.minAmount > 0 && <span>Min. panier : <strong>{c.minAmount.toFixed(2)} €</strong></span>}
+                      {c.startsAt && <span>Du : {formatDate(c.startsAt)}</span>}
+                      {c.expiresAt && <span>Au : {formatDate(c.expiresAt)}</span>}
+                      <span>Utilisé : <strong>{c.usedCount}</strong>{c.maxUses != null ? ` / ${c.maxUses}` : ''}</span>
+                      {c.maxUsesPerClient != null && <span>Max/client : {c.maxUsesPerClient}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button size="sm" variant="outline" onClick={() => toggleActive(c)}>
+                      {c.active ? 'Désactiver' : 'Activer'}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => startEdit(c)}>
+                      <Edit className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(c)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Form */}
+      {showForm ? (
+        <div className="border rounded-md p-4 space-y-3 bg-muted/30">
+          <p className="text-sm font-semibold">
+            {editingId ? 'Modifier le coupon' : 'Nouveau coupon'}
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Code coupon *</Label>
+              <Input
+                value={form.code}
+                onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                placeholder="SUMMER25"
+                className="font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground">Sera saisi par le client (en majuscules).</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Nom interne *</Label>
+              <Input
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="Promo été 2026"
+              />
+            </div>
+            <div className="space-y-1 col-span-2">
+              <Label className="text-xs">Description (optionnel)</Label>
+              <Input
+                value={form.description}
+                onChange={e => setForm({ ...form, description: e.target.value })}
+                placeholder="Remise pour les ventes estivales"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Type de remise</Label>
+              <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="percent">Pourcentage (%)</SelectItem>
+                  <SelectItem value="fixed">Montant fixe (€)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">
+                Valeur {form.type === 'percent' ? '(%)' : '(€)'} *
+              </Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.value}
+                onChange={e => setForm({ ...form, value: e.target.value })}
+                placeholder={form.type === 'percent' ? '25' : '10'}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Montant min. panier (€)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.minAmount}
+                onChange={e => setForm({ ...form, minAmount: e.target.value })}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Utilisations max (global)</Label>
+              <Input
+                type="number"
+                min="0"
+                value={form.maxUses}
+                onChange={e => setForm({ ...form, maxUses: e.target.value })}
+                placeholder="illimité"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Date de début</Label>
+              <Input
+                type="date"
+                value={form.startsAt}
+                onChange={e => setForm({ ...form, startsAt: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Date d'expiration</Label>
+              <Input
+                type="date"
+                value={form.expiresAt}
+                onChange={e => setForm({ ...form, expiresAt: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1 col-span-2">
+              <Label className="text-xs">Utilisations max par client</Label>
+              <Input
+                type="number"
+                min="0"
+                value={form.maxUsesPerClient}
+                onChange={e => setForm({ ...form, maxUsesPerClient: e.target.value })}
+                placeholder="illimité"
+              />
+            </div>
+            <div className="col-span-2 flex items-center gap-2 pt-1">
+              <Switch checked={form.active} onCheckedChange={v => setForm({ ...form, active: v })} />
+              <Label className="text-xs cursor-pointer">Coupon actif (visible par les clients)</Label>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-1">
+            <Button variant="outline" size="sm" onClick={resetForm}>Annuler</Button>
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {editingId ? 'Mettre à jour' : 'Créer le coupon'}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => { resetForm(); setShowForm(true) }}>
+          <Plus className="h-4 w-4 mr-1" /> Nouveau coupon
+        </Button>
+      )}
     </div>
   )
 }

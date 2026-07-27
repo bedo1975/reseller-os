@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Lock, ShoppingBag, ChevronRight, AlertCircle, MapPin } from 'lucide-react'
+import { Lock, ShoppingBag, ChevronRight, AlertCircle, MapPin, TicketPercent, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 import dynamic from 'next/dynamic'
@@ -77,6 +77,19 @@ export default function CheckoutPage() {
   const [shippingMethod, setShippingMethod] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('')
   const [selectedRelay, setSelectedRelay] = useState<RelayPoint | null>(null)
+
+  // Coupon state
+  const [couponInput, setCouponInput] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    id: string
+    code: string
+    name: string
+    type: string
+    value: number
+    discountAmount: number
+  } | null>(null)
+  const [couponError, setCouponError] = useState<string | null>(null)
+  const [couponLoading, setCouponLoading] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -149,12 +162,79 @@ export default function CheckoutPage() {
   }, [router])
 
   const subtotal = cart.reduce((s, i) => s + (i.price || 0) * i.qty, 0)
+  const discountAmount = appliedCoupon?.discountAmount || 0
+  const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount)
   const rawShipping = shippingOptions.find(s => s.code === shippingMethod)?.price || 0
-  // Apply free shipping if enabled and subtotal >= threshold
+  // Apply free shipping if enabled and subtotal (after discount) >= threshold
   const freeShipEnabled = settings.freeShippingEnabled === true
   const freeShipThreshold = settings.freeShippingThreshold || 50
-  const shipping = (freeShipEnabled && subtotal >= freeShipThreshold) ? 0 : rawShipping
-  const total = subtotal + shipping
+  const shipping = (freeShipEnabled && subtotalAfterDiscount >= freeShipThreshold) ? 0 : rawShipping
+  const total = subtotalAfterDiscount + shipping
+
+  // Apply coupon: call validate endpoint
+  const applyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase()
+    if (!code) {
+      toast.error('Saisissez un code coupon')
+      return
+    }
+    setCouponLoading(true)
+    setCouponError(null)
+    try {
+      const res = await fetch('/api/boutique/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, subtotal }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.valid) {
+        setAppliedCoupon(null)
+        setCouponError(data.error || 'Coupon invalide')
+        return
+      }
+      setAppliedCoupon({
+        id: data.coupon.id,
+        code: data.coupon.code,
+        name: data.coupon.name,
+        type: data.coupon.type,
+        value: data.coupon.value,
+        discountAmount: data.discountAmount,
+      })
+      setCouponInput('')
+      toast.success(`Coupon ${data.coupon.code} appliqué : -${data.discountAmount.toFixed(2)} €`)
+    } catch {
+      setCouponError('Erreur réseau')
+    } finally {
+      setCouponLoading(false)
+    }
+  }
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null)
+    setCouponError(null)
+  }
+
+  // Re-validate coupon when subtotal changes (items added/removed from cart)
+  useEffect(() => {
+    if (!appliedCoupon) return
+    // Silent re-validation to recompute discount based on new subtotal
+    fetch('/api/boutique/coupons/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: appliedCoupon.code, subtotal }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.valid) {
+          setAppliedCoupon(prev => prev ? { ...prev, discountAmount: data.discountAmount } : null)
+        } else {
+          setAppliedCoupon(null)
+          setCouponError(data.error || 'Coupon devenu invalide')
+        }
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtotal])
 
   // Note: shipping prices are pre-calculated for all methods when they are loaded (see useEffect above).
   // No need to recalculate when switching methods — the price is already correct.
@@ -205,6 +285,8 @@ export default function CheckoutPage() {
           shippingCost: shipping, // send the calculated shipping cost from frontend
           paymentMethodCode: paymentMethod,
           notes: form.notes,
+          couponCode: appliedCoupon?.code || undefined,
+          discountAmount: discountAmount,
           relayId: isRelayShipping && selectedRelay ? selectedRelay.id : undefined,
           relayName: isRelayShipping && selectedRelay ? selectedRelay.name : undefined,
           relayAddress: isRelayShipping && selectedRelay ? JSON.stringify({
@@ -443,11 +525,77 @@ export default function CheckoutPage() {
               ))}
             </div>
 
+            {/* Coupon input */}
+            <div className="border-t border-gray-200 pt-4 mb-3">
+              {appliedCoupon ? (
+                <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-md px-3 py-2">
+                  <TicketPercent className="h-4 w-4 text-green-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-green-800">
+                      Coupon <code className="font-mono">{appliedCoupon.code}</code> appliqué
+                    </p>
+                    <p className="text-[11px] text-green-700">
+                      {appliedCoupon.type === 'percent'
+                        ? `-${appliedCoupon.value}% (${appliedCoupon.name})`
+                        : `-${appliedCoupon.value.toFixed(2)} € (${appliedCoupon.name})`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeCoupon}
+                    className="text-green-700 hover:text-green-900"
+                    aria-label="Retirer le coupon"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <Label className="text-xs text-gray-600 flex items-center gap-1.5 mb-1.5">
+                    <TicketPercent className="h-3.5 w-3.5" />
+                    Code promo
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={couponInput}
+                      onChange={e => { setCouponInput(e.target.value.toUpperCase()); setCouponError(null) }}
+                      placeholder="SUMMER25"
+                      className="font-mono text-sm h-9"
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon() } }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={applyCoupon}
+                      disabled={couponLoading || !couponInput.trim()}
+                      className="h-9"
+                    >
+                      {couponLoading ? '...' : 'Appliquer'}
+                    </Button>
+                  </div>
+                  {couponError && (
+                    <p className="text-[11px] text-red-600 mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" /> {couponError}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
             <div className="border-t border-gray-200 pt-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">Sous-total</span>
                 <span className="font-medium">{subtotal.toFixed(2)} €</span>
               </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-green-700">
+                  <span className="flex items-center gap-1">
+                    <TicketPercent className="h-3.5 w-3.5" />
+                    Remise {appliedCoupon?.code}
+                  </span>
+                  <span className="font-medium">−{discountAmount.toFixed(2)} €</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-600">Livraison</span>
                 <span className="font-medium">{shipping === 0 ? 'Gratuite' : `${shipping.toFixed(2)} €`}</span>
