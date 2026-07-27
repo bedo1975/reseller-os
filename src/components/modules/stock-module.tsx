@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Plus, Search, MapPin, Barcode, Edit, Trash2, Package, ChevronLeft, ChevronRight,
   Eye, AlertCircle, Camera, Upload, RefreshCw, Sparkles, ScanEye, QrCode, Link2, Download,
+  Tag, Euro,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -1054,14 +1055,14 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{item ? 'Modifier l\'article' : 'Nouvel article'}</DialogTitle>
           <DialogDescription>
             {item ? `SKU: ${item.sku}` : 'Renseignez les informations d\'identification et de stockage.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="space-y-5 py-2">
           {/* Photos */}
           <div>
             <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wide flex items-center gap-2">
@@ -1095,7 +1096,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
               )}
             </label>
             {photos.length > 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3">
+              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 mt-3">
                 {photos.map((url, index) => (
                   <div key={index} className="relative group aspect-square rounded-lg overflow-hidden bg-muted border">
                     <img src={photoUrl(url)} alt={`Photo ${index + 1}`} className="w-full h-full object-cover" />
@@ -1160,10 +1161,12 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
           </div>
 
           {/* Identification */}
-          <div>
-            <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Identification</h4>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5 col-span-2">
+          <div className="border rounded-lg p-3 bg-muted/20">
+            <h4 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+              <Package className="h-4 w-4" /> Identification
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1.5 md:col-span-3">
                 <Label className="text-xs">Titre / Nom du produit</Label>
                 <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="ex: T-shirt Nike Sportswear blanc" />
               </div>
@@ -1176,6 +1179,15 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="Ralph Lauren" />
               </div>
               <div className="space-y-1.5">
+                <Label className="text-xs">État</Label>
+                <Select value={form.condition} onValueChange={v => setForm({ ...form, condition: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {conditions.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
                 <Label className="text-xs">Catégorie</Label>
                 <Select value={form.category} onValueChange={v => setForm({ ...form, category: v, subcategory: '' })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1184,7 +1196,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                   </SelectContent>
                 </Select>
               </div>
-              {subcategories.length > 0 && (
+              {subcategories.length > 0 ? (
                 <div className="space-y-1.5">
                   <Label className="text-xs">Sous-catégorie</Label>
                   <Select
@@ -1198,29 +1210,36 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                     </SelectContent>
                   </Select>
                 </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Taille</Label>
+                  <Select
+                    value={form.size || '__none__'}
+                    onValueChange={v => setForm({ ...form, size: v === '__none__' ? '' : v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">—</SelectItem>
+                      {sizes.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
-              <div className="space-y-1.5">
-                <Label className="text-xs">État</Label>
-                <Select value={form.condition} onValueChange={v => setForm({ ...form, condition: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {conditions.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Taille</Label>
-                <Select
-                  value={form.size || '__none__'}
-                  onValueChange={v => setForm({ ...form, size: v === '__none__' ? '' : v })}
-                >
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">—</SelectItem>
-                    {sizes.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {subcategories.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Taille</Label>
+                  <Select
+                    value={form.size || '__none__'}
+                    onValueChange={v => setForm({ ...form, size: v === '__none__' ? '' : v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">—</SelectItem>
+                      {sizes.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label className="text-xs">Couleur</Label>
                 <Select
@@ -1238,9 +1257,11 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
           </div>
 
           {/* Achat */}
-          <div>
-            <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Achat</h4>
-            <div className="grid grid-cols-2 gap-3">
+          <div className="border rounded-lg p-3 bg-muted/20">
+            <h4 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+              <Euro className="h-4 w-4" /> Achat
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Coût d'achat (€)</Label>
                 <Input type="number" step="0.01" value={form.purchaseCost} onChange={e => setForm({ ...form, purchaseCost: e.target.value })} placeholder="12.00" />
@@ -1250,6 +1271,20 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 <Input type="date" value={form.purchaseDate} onChange={e => setForm({ ...form, purchaseDate: e.target.value })} />
               </div>
               <div className="space-y-1.5">
+                <Label className="text-xs">Mode de paiement</Label>
+                <Select value={form.purchasePaymentMethod || '__none__'} onValueChange={v => setForm({ ...form, purchasePaymentMethod: v === '__none__' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">—</SelectItem>
+                    <SelectItem value="especes">Espèces</SelectItem>
+                    <SelectItem value="carte_bancaire">Carte bancaire</SelectItem>
+                    <SelectItem value="virement">Virement</SelectItem>
+                    <SelectItem value="cheque">Chèque</SelectItem>
+                    <SelectItem value="paypal">PayPal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5 md:col-span-1">
                 <Label className="text-xs">Fournisseur</Label>
                 <Select value={form.supplierId} onValueChange={v => setForm({ ...form, supplierId: v })}>
                   <SelectTrigger><SelectValue placeholder="Aucun" /></SelectTrigger>
@@ -1257,6 +1292,10 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                     {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">N° facture fournisseur</Label>
+                <Input value={form.purchaseInvoiceNumber || ''} onChange={e => setForm({ ...form, purchaseInvoiceNumber: e.target.value })} placeholder="FAC-2026-001" className="font-mono text-sm" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Référence lot</Label>
@@ -1277,32 +1316,14 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 <Input value={form.lotCurrent} onChange={e => setForm({ ...form, lotCurrent: e.target.value })} placeholder="Lot en cours" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">N° facture fournisseur</Label>
-                <Input value={form.purchaseInvoiceNumber || ''} onChange={e => setForm({ ...form, purchaseInvoiceNumber: e.target.value })} placeholder="FAC-2026-001" className="font-mono text-sm" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Mode de paiement</Label>
-                <Select value={form.purchasePaymentMethod || '__none__'} onValueChange={v => setForm({ ...form, purchasePaymentMethod: v === '__none__' ? '' : v })}>
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">—</SelectItem>
-                    <SelectItem value="especes">Espèces</SelectItem>
-                    <SelectItem value="carte_bancaire">Carte bancaire</SelectItem>
-                    <SelectItem value="virement">Virement</SelectItem>
-                    <SelectItem value="cheque">Chèque</SelectItem>
-                    <SelectItem value="paypal">PayPal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
           </div>
 
-          {/* Stockage */}
-          <div>
-            <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Stockage & Logistique</h4>
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+          {/* Stockage & Logistique */}
+          <div className="border rounded-lg p-3 bg-muted/20">
+            <h4 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+              <MapPin className="h-4 w-4" /> Stockage & Logistique
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Entrepôt</Label>
                 <Input value={form.warehouse} onChange={e => setForm({ ...form, warehouse: e.target.value })} placeholder="Principal" />
@@ -1336,9 +1357,11 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
           </div>
 
           {/* Publication */}
-          <div>
-            <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Publication</h4>
-            <div className="grid grid-cols-3 gap-3">
+          <div className="border rounded-lg p-3 bg-muted/20">
+            <h4 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+              <Tag className="h-4 w-4" /> Publication
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Statut</Label>
                 <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
@@ -1349,15 +1372,34 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Plateforme(s) de vente</Label>
-                <div className="border rounded-md p-2 space-y-1.5 max-h-32 overflow-y-auto">
+                <Label className="text-xs">Prix conseillé (€)</Label>
+                <Input type="number" step="0.01" value={form.suggestedPrice} onChange={e => setForm({ ...form, suggestedPrice: e.target.value })} placeholder="29.99" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Prix promo (€) {form.saleActive && <span className="text-green-600 font-semibold">— Actif</span>}</Label>
+                <div className="flex gap-2 items-center">
+                  <Input type="number" step="0.01" value={form.salePrice} onChange={e => setForm({ ...form, salePrice: e.target.value })} placeholder="19.99" disabled={!form.saleActive} className="flex-1" />
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={form.saleActive}
+                      onChange={e => setForm({ ...form, saleActive: e.target.checked })}
+                      className="rounded"
+                    />
+                    Promo
+                  </label>
+                </div>
+              </div>
+              <div className="space-y-1.5 md:col-span-3">
+                <Label className="text-xs">Plateforme(s) de publication</Label>
+                <div className="border rounded-md p-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
                   {PLATFORMS.map(p => {
                     const platList: string[] = (() => {
                       try { return JSON.parse(form.platforms || '[]') } catch { return [] }
                     })()
                     const checked = platList.includes(p.id)
                     return (
-                      <label key={p.id} className="flex items-center gap-2 cursor-pointer text-xs hover:bg-muted/40 px-1.5 py-0.5 rounded">
+                      <label key={p.id} className="flex items-center gap-1.5 cursor-pointer text-xs hover:bg-muted/60 px-2 py-1 rounded border border-transparent hover:border-border">
                         <input
                           type="checkbox"
                           checked={checked}
@@ -1380,92 +1422,67 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                   })}
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Sélectionnez les plateformes où l'article est publié. Au moment de la vente, seule la plateforme de vente effective sera conservée.
+                  Sélectionnez les plateformes où l'article est publié. Au moment de la vente, seule la plateforme effective sera conservée.
                 </p>
               </div>
-              {/* Plateforme de vente effective (uniquement si VENDU) */}
               {form.status === 'VENDU' && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Plateforme de vente</Label>
+                <div className="space-y-1.5 md:col-span-3">
+                  <Label className="text-xs">Plateforme de vente effective</Label>
                   <Select
                     value={form.platform || '__none__'}
                     onValueChange={v => setForm({ ...form, platform: v === '__none__' ? '' : v })}
                   >
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectTrigger className="max-w-md"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">—</SelectItem>
                       {PLATFORMS.map(p => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    Indiquez sur quelle plateforme l'article a été effectivement vendu.
-                  </p>
                 </div>
               )}
-              <div className="space-y-1.5">
-                <Label className="text-xs">Prix conseillé (€)</Label>
-                <Input type="number" step="0.01" value={form.suggestedPrice} onChange={e => setForm({ ...form, suggestedPrice: e.target.value })} placeholder="29.99" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Prix promo (€) {form.saleActive && <span className="text-green-600 font-semibold">— Actif</span>}</Label>
-                <div className="flex gap-2 items-center">
-                  <Input type="number" step="0.01" value={form.salePrice} onChange={e => setForm({ ...form, salePrice: e.target.value })} placeholder="19.99" disabled={!form.saleActive} className="flex-1" />
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap">
-                    <input
-                      type="checkbox"
-                      checked={form.saleActive}
-                      onChange={e => setForm({ ...form, saleActive: e.target.checked })}
-                      className="rounded"
-                    />
-                    Promo
-                  </label>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 md:col-span-3">
                 <Label className="text-xs">Plateforme de vente (attribut)</Label>
                 <Select value={form.salePlatform || '__none__'} onValueChange={v => setForm({ ...form, salePlatform: v === '__none__' ? '' : v })}>
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectTrigger className="max-w-md"><SelectValue placeholder="—" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">—</SelectItem>
                     {getByTypeLocal('platform').map(p => <SelectItem key={p.id} value={p.code}>{p.value}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="space-y-1.5 mt-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Description</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                  onClick={generateDescription}
-                  disabled={generating || !form.brand}
-                  title={form.brand ? 'Générer une description avec l\'IA' : 'Renseignez la marque d\'abord'}
-                >
-                  {generating ? (
-                    <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Génération…</>
-                  ) : (
-                    <><Sparkles className="h-3 w-3 mr-1" /> Générer avec l'IA</>
-                  )}
-                </Button>
+              <div className="space-y-1.5 md:col-span-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Description</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                    onClick={generateDescription}
+                    disabled={generating || !form.brand}
+                    title={form.brand ? 'Générer une description avec l\'IA' : 'Renseignez la marque d\'abord'}
+                  >
+                    {generating ? (
+                      <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Génération…</>
+                    ) : (
+                      <><Sparkles className="h-3 w-3 mr-1" /> Générer avec l'IA</>
+                    )}
+                  </Button>
+                </div>
+                <Textarea
+                  value={form.description}
+                  onChange={e => setForm({ ...form, description: e.target.value })}
+                  placeholder="Description de l'article — cliquez sur « Générer avec l'IA » pour une description automatique optimisée…"
+                  rows={4}
+                  className="resize-y"
+                />
+                {generating && (
+                  <p className="text-[11px] text-emerald-600 flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    L'IA rédige une description basée sur la marque, catégorie, taille, couleur et état…
+                  </p>
+                )}
               </div>
-              <Textarea
-                value={form.description}
-                onChange={e => setForm({ ...form, description: e.target.value })}
-                placeholder="Description de l'article — cliquez sur « Générer avec l'IA » pour une description automatique optimisée…"
-                rows={4}
-                className="resize-y"
-              />
-              {generating && (
-                <p className="text-[11px] text-emerald-600 flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" />
-                  L'IA rédige une description basée sur la marque, catégorie, taille, couleur et état…
-                </p>
-              )}
             </div>
           </div>
         </div>
