@@ -516,7 +516,36 @@ model BoutiqueSettings {
   gdprBannerMessage        String   @default("Nous utilisons des cookies pour améliorer votre expérience, analyser le trafic et sécuriser les paiements. Vous pouvez accepter ou refuser les cookies non essentiels.")
   gdprPrivacyPolicyUrl     String?  // URL de la page politique de confidentialité
   gdprCookiesJson          String   @default("[]")  // JSON: [{ id, name, description, required, enabled }]
+  // ── Module Partage (Share with friends) ──
+  shareEnabled             Boolean  @default(true)        // afficher le bouton Partager sur les pages produit
+  shareColor               String   @default("#007bff")   // couleur d'accent (header, bouton)
+  shareCollectEmails       Boolean  @default(true)        // collecter les emails des amis dans un tableau admin
+  shareSubject             String   @default("Un ami vous recommande cet article")  // sujet de l'email
+  shareMessage             String   @default("Bonjour,\n\nJ'ai trouvé cet article sur {SITE_NAME} et j'ai pensé qu'il pourrait vous plaire.\n\nDécouvrez-le ici : {URL}")  // corps de l'email
+  shareButtonText          String   @default("Partager cet article")  // texte du bouton principal
   updatedAt       DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PARTAGE — Emails collectés via le module "Share with friends"
+// ═══════════════════════════════════════════════════════════════════════
+model ShareReferral {
+  id            String   @id @default(cuid())
+  // Email de l'ami qui a reçu la recommandation
+  friendEmail   String
+  // Email de l'expéditeur (optionnel, saisi par le visiteur)
+  senderEmail   String?
+  senderName    String?
+  // Produit partagé (snapshot)
+  productSku    String
+  productBrand  String
+  productTitle  String?
+  // Date d'envoi
+  sentAt        DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([friendEmail])
+  @@index([productSku])
 }
 
 // Mode de livraison (CRUD admin)

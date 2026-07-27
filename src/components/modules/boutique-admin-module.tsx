@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent,
+  TicketPercent, Share2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,7 +28,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { formatEUR, formatDate } from '@/lib/constants'
 
-type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons'
+type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share'
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'orders', label: 'Commandes', icon: Package },
@@ -39,6 +39,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'payments', label: 'Paiements', icon: Euro },
   { id: 'categories', label: 'Catégories', icon: Layers },
   { id: 'coupons', label: 'Coupons', icon: TicketPercent },
+  { id: 'share', label: 'Partage', icon: Share2 },
 ]
 
 export function BoutiqueAdminModule() {
@@ -87,6 +88,7 @@ export function BoutiqueAdminModule() {
       {tab === 'payments' && <PaymentsTab />}
       {tab === 'categories' && <CategoriesTab />}
       {tab === 'coupons' && <CouponsTab />}
+      {tab === 'share' && <ShareTab />}
     </div>
   )
 }
@@ -3606,6 +3608,300 @@ function CouponsTab() {
         <Button variant="outline" size="sm" onClick={() => { resetForm(); setShowForm(true) }}>
           <Plus className="h-4 w-4 mr-1" /> Nouveau coupon
         </Button>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET 9 — PARTAGE (Share with friends)
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface ShareReferral {
+  id: string
+  friendEmail: string
+  senderEmail: string | null
+  senderName: string | null
+  productSku: string
+  productBrand: string
+  productTitle: string | null
+  sentAt: string
+  createdAt: string
+}
+
+function ShareTab() {
+  const [referrals, setReferrals] = useState<ShareReferral[]>([])
+  const [stats, setStats] = useState({ total: 0, uniqueEmails: 0 })
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [settings, setSettings] = useState({
+    shareEnabled: true,
+    shareColor: '#007bff',
+    shareCollectEmails: true,
+    shareSubject: 'Un ami vous recommande cet article',
+    shareMessage: 'Bonjour,\n\nJ\'ai trouvé cet article sur {SITE_NAME} et j\'ai pensé qu\'il pourrait vous plaire.\n\nDécouvrez-le ici : {URL}',
+    shareButtonText: 'Partager cet article',
+  })
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+
+  const fetchReferrals = useCallback(() => {
+    setLoading(true)
+    const url = `/api/boutique/admin/share/emails${search ? `?search=${encodeURIComponent(search)}` : ''}`
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        setReferrals(data.referrals || [])
+        setStats(data.stats || { total: 0, uniqueEmails: 0 })
+      })
+      .finally(() => setLoading(false))
+  }, [search])
+
+  const fetchSettings = useCallback(() => {
+    fetch('/api/boutique/admin/settings')
+      .then(r => r.json())
+      .then(data => {
+        setSettings({
+          shareEnabled: data.shareEnabled !== false,
+          shareColor: data.shareColor || '#007bff',
+          shareCollectEmails: data.shareCollectEmails !== false,
+          shareSubject: data.shareSubject || 'Un ami vous recommande cet article',
+          shareMessage: data.shareMessage || 'Bonjour,\n\nJ\'ai trouvé cet article sur {SITE_NAME} et j\'ai pensé qu\'il pourrait vous plaire.\n\nDécouvrez-le ici : {URL}',
+          shareButtonText: data.shareButtonText || 'Partager cet article',
+        })
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => { fetchReferrals(); fetchSettings() }, [fetchReferrals, fetchSettings])
+
+  const removeReferral = async (id: string) => {
+    if (!confirm('Supprimer cet email collecté ?')) return
+    const res = await fetch(`/api/boutique/admin/share/emails?id=${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      toast.success('Supprimé')
+      fetchReferrals()
+    } else {
+      toast.error('Erreur')
+    }
+  }
+
+  const exportCsv = () => {
+    const csv = ['friendEmail,senderName,senderEmail,productSku,productBrand,createdAt']
+    for (const r of referrals) {
+      csv.push([
+        r.friendEmail,
+        `"${(r.senderName || '').replace(/"/g, '""')}"`,
+        r.senderEmail || '',
+        r.productSku,
+        `"${r.productBrand.replace(/"/g, '""')}"`,
+        new Date(r.createdAt).toISOString(),
+      ].join(','))
+    }
+    const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `emails-partage-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`${referrals.length} emails exportés`)
+  }
+
+  const saveSettings = async () => {
+    setSavingSettings(true)
+    try {
+      const res = await fetch('/api/boutique/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      })
+      if (!res.ok) { toast.error('Erreur'); return }
+      toast.success('Paramètres sauvegardés')
+      setShowSettings(false)
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSavingSettings(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200">
+        🎁 <strong>Module Partage :</strong> vos clients peuvent recommander un article à un ami depuis la page produit.
+        Les emails des amis sont collectés ici si l'option est activée.
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase">Partages envoyés</p>
+            <p className="text-2xl font-bold mt-1">{stats.total}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase">Emails uniques collectés</p>
+            <p className="text-2xl font-bold mt-1">{stats.uniqueEmails}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Settings + export buttons */}
+      <div className="flex gap-2 flex-wrap">
+        <Button variant="outline" size="sm" onClick={() => setShowSettings(!showSettings)}>
+          <Share2 className="h-4 w-4 mr-1" /> {showSettings ? 'Fermer' : 'Paramètres du module'}
+        </Button>
+        <Button variant="outline" size="sm" onClick={exportCsv} disabled={referrals.length === 0}>
+          <FileText className="h-4 w-4 mr-1" /> Exporter CSV
+        </Button>
+        <Button variant="outline" size="sm" onClick={fetchReferrals}>
+          <RefreshCw className="h-4 w-4 mr-1" /> Actualiser
+        </Button>
+      </div>
+
+      {/* Settings panel */}
+      {showSettings && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Share2 className="h-4 w-4" /> Paramètres du partage
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={settings.shareEnabled}
+                onCheckedChange={v => setSettings({ ...settings, shareEnabled: v })}
+              />
+              <Label className="text-sm cursor-pointer">Activer le module de partage (bouton sur la page produit)</Label>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={settings.shareCollectEmails}
+                onCheckedChange={v => setSettings({ ...settings, shareCollectEmails: v })}
+              />
+              <Label className="text-sm cursor-pointer">
+                Collecter les emails des amis dans ce tableau (désactivé = aucune collecte, juste envoi de l'email)
+              </Label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Couleur d'accent (header + bouton)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="color"
+                    value={settings.shareColor}
+                    onChange={e => setSettings({ ...settings, shareColor: e.target.value })}
+                    className="w-16 h-9 p-1 cursor-pointer"
+                  />
+                  <Input
+                    value={settings.shareColor}
+                    onChange={e => setSettings({ ...settings, shareColor: e.target.value })}
+                    placeholder="#007bff"
+                    className="flex-1 font-mono text-xs"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Texte du bouton</Label>
+                <Input
+                  value={settings.shareButtonText}
+                  onChange={e => setSettings({ ...settings, shareButtonText: e.target.value })}
+                  placeholder="Partager cet article"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Sujet de l'email</Label>
+              <Input
+                value={settings.shareSubject}
+                onChange={e => setSettings({ ...settings, shareSubject: e.target.value })}
+              />
+              <p className="text-[10px] text-muted-foreground">Variables disponibles : {'{SITE_NAME}, {URL}, {BRAND}, {TITLE}'}</p>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Message de l'email</Label>
+              <Textarea
+                value={settings.shareMessage}
+                onChange={e => setSettings({ ...settings, shareMessage: e.target.value })}
+                rows={5}
+                className="font-mono text-xs"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Variables : {'{SITE_NAME}, {URL}, {BRAND}, {TITLE}'}. Le lien vers l'article est automatiquement ajouté.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => { setShowSettings(false); fetchSettings() }}>Annuler</Button>
+              <Button size="sm" onClick={saveSettings} disabled={savingSettings}>
+                {savingSettings && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                Sauvegarder
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Search */}
+      <Input
+        placeholder="Rechercher par email, marque, SKU..."
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') fetchReferrals() }}
+        className="max-w-md"
+      />
+
+      {/* Referrals table */}
+      {loading ? (
+        <Skeleton className="h-32" />
+      ) : referrals.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-8 text-center">
+          Aucun email collecté pour le moment. Les emails apparaîtront ici quand des visiteurs utiliseront le bouton "Partager" sur la boutique.
+        </p>
+      ) : (
+        <div className="border rounded-md overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/50">
+              <tr className="text-left text-[10px] text-muted-foreground uppercase border-b">
+                <th className="px-3 py-2 font-medium">Email ami</th>
+                <th className="px-3 py-2 font-medium">Expéditeur</th>
+                <th className="px-3 py-2 font-medium">Produit</th>
+                <th className="px-3 py-2 font-medium">Date</th>
+                <th className="px-3 py-2 font-medium text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {referrals.map(r => (
+                <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <td className="px-3 py-2 font-mono text-[11px]">{r.friendEmail}</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {r.senderName ? (
+                      <span>{r.senderName}{r.senderEmail ? <span className="block text-[10px]">{r.senderEmail}</span> : null}</span>
+                    ) : '—'}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className="font-medium">{r.productBrand}</span>
+                    <span className="block text-[10px] text-muted-foreground font-mono">{r.productSku}</span>
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">{formatDate(r.createdAt)}</td>
+                  <td className="px-3 py-2 text-right">
+                    <Button size="sm" variant="ghost" className="text-red-600 h-7 w-7 p-0" onClick={() => removeReferral(r.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )

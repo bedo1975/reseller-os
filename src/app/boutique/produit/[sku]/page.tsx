@@ -8,8 +8,9 @@ import { useFetch } from '@/hooks/use-fetch'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle } from 'lucide-react'
+import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { ShareModal } from '@/components/boutique/share-modal'
 
 const CONDITION_LABELS: Record<string, string> = {
   'neuf': 'Neuf avec étiquette',
@@ -54,6 +55,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
   const [activePhoto, setActivePhoto] = useState(0)
   const [zoomed, setZoomed] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
 
   const product = data?.product
 
@@ -283,7 +285,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
               </span>
             </div>
           ) : (
-            <div className="flex gap-3 mb-6">
+            <div className="flex gap-3 mb-3">
               <Button
                 onClick={addToCart}
                 disabled={adding}
@@ -296,6 +298,24 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
                 className="flex-1 h-12 bg-[#007bff] hover:bg-[#0056b3]"
               >
                 Acheter maintenant
+              </Button>
+            </div>
+          )}
+
+          {/* Share with friends button */}
+          {settings.shareEnabled !== false && (
+            <div className="mb-6">
+              <Button
+                onClick={() => setShareOpen(true)}
+                variant="outline"
+                className="w-full h-10 border-2 gap-2"
+                style={{
+                  borderColor: settings.shareColor || '#007bff',
+                  color: settings.shareColor || '#007bff',
+                }}
+              >
+                <Share2 className="h-4 w-4" />
+                {settings.shareButtonText || 'Partager cet article'}
               </Button>
             </div>
           )}
@@ -317,6 +337,26 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           </div>
         </div>
       </div>
+
+      {/* Share modal */}
+      {product && (
+        <ShareModal
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          product={{
+            sku: product.sku,
+            brand: product.brand,
+            title: product.title,
+            mainPhoto: product.mainPhoto,
+            price: product.price,
+          }}
+          settings={{
+            shareColor: settings.shareColor || '#007bff',
+            shareButtonText: settings.shareButtonText || 'Partager cet article',
+            shareCollectEmails: settings.shareCollectEmails !== false,
+          }}
+        />
+      )}
     </div>
   )
 }

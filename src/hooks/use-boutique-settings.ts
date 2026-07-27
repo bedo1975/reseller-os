@@ -73,6 +73,13 @@ export interface BoutiqueSettings {
   gdprBannerMessage: string
   gdprPrivacyPolicyUrl: string | null
   gdprCookiesJson: string
+  // Partage (Share with friends)
+  shareEnabled: boolean
+  shareColor: string
+  shareCollectEmails: boolean
+  shareSubject: string
+  shareMessage: string
+  shareButtonText: string
 }
 
 const DEFAULTS: BoutiqueSettings = {
@@ -136,6 +143,12 @@ const DEFAULTS: BoutiqueSettings = {
   gdprBannerMessage: 'Nous utilisons des cookies pour améliorer votre expérience, analyser le trafic et sécuriser les paiements. Vous pouvez accepter ou refuser les cookies non essentiels.',
   gdprPrivacyPolicyUrl: null,
   gdprCookiesJson: '[]',
+  shareEnabled: true,
+  shareColor: '#007bff',
+  shareCollectEmails: true,
+  shareSubject: 'Un ami vous recommande cet article',
+  shareMessage: 'Bonjour,\n\nJ\'ai trouvé cet article sur {SITE_NAME} et j\'ai pensé qu\'il pourrait vous plaire.\n\nDécouvrez-le ici : {URL}',
+  shareButtonText: 'Partager cet article',
 }
 
 let cache: BoutiqueSettings | null = null

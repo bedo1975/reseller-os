@@ -46,6 +46,7 @@ export async function PUT(req: NextRequest) {
       chronopostAccountNumber, chronopostApiKey,
       seoTitle, seoDescription,
       gdprEnabled, gdprBannerTitle, gdprBannerMessage, gdprPrivacyPolicyUrl, gdprCookiesJson,
+      shareEnabled, shareColor, shareCollectEmails, shareSubject, shareMessage, shareButtonText,
     } = body
 
     const data: any = {}
@@ -125,6 +126,13 @@ export async function PUT(req: NextRequest) {
     if (typeof gdprBannerMessage === 'string') data.gdprBannerMessage = gdprBannerMessage
     if (typeof gdprPrivacyPolicyUrl === 'string') data.gdprPrivacyPolicyUrl = gdprPrivacyPolicyUrl || null
     if (typeof gdprCookiesJson === 'string') data.gdprCookiesJson = gdprCookiesJson
+    // Partage (Share with friends)
+    if (typeof shareEnabled === 'boolean') data.shareEnabled = shareEnabled
+    if (typeof shareColor === 'string') data.shareColor = shareColor
+    if (typeof shareCollectEmails === 'boolean') data.shareCollectEmails = shareCollectEmails
+    if (typeof shareSubject === 'string') data.shareSubject = shareSubject
+    if (typeof shareMessage === 'string') data.shareMessage = shareMessage
+    if (typeof shareButtonText === 'string') data.shareButtonText = shareButtonText
 
     const settings = await db.boutiqueSettings.upsert({
       where: { id: 'default' },
