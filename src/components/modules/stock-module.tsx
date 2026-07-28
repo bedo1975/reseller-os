@@ -1055,7 +1055,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="sm:!max-w-4xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{item ? 'Modifier l\'article' : 'Nouvel article'}</DialogTitle>
           <DialogDescription>
@@ -1596,7 +1596,7 @@ function StockDetail({ open, onOpenChange, item }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:!max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {item.brand}
