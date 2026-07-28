@@ -24,7 +24,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Plus, Trash2, Star, Edit, Tag, Layers, Ruler, Palette, AlertCircle, Truck, ExternalLink, Users, Settings as SettingsIcon,
-  FileText, Database, Download, Upload, HardDrive, ShieldAlert, RefreshCw, FileDown, Sparkles, Key, ExternalLink as LinkIcon, CheckCircle2, Percent, Bell, Clock, Calendar, Store, Package, Mail, BookOpen, ChevronDown,
+  FileText, Database, Download, Upload, HardDrive, ShieldAlert, RefreshCw, FileDown, Sparkles, Key, ExternalLink as LinkIcon, CheckCircle2, Percent, Bell, Clock, Calendar, Store, Package, Mail, BookOpen, ChevronDown, Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
