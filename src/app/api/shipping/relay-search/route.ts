@@ -4,14 +4,12 @@ import { NextRequest, NextResponse } from 'next/server'
 // Body: { postalCode: string, city?: string, carrier?: string }
 // Returns: { relays: RelayPoint[] }
 //
-// Uses Nominatim (free OpenStreetMap geocoding) to get the real lat/lng of the
-// given postal code + city, then queries Overpass API (OpenStreetMap) to find
-// REAL shops near that location (tabacs, pressings, supérettes, post offices, etc.).
+// Uses Nominatim (OpenStreetMap geocoding) to get real lat/lng, then queries
+// Overpass API to find REAL shops near that location.
 //
-// This gives real shop names and addresses — much better than mock data.
-// The official Mondial Relay / Chronopost APIs are behind Cloudflare and cannot
-// be called from a server. To use the real carrier APIs, configure credentials
-// in Boutique Admin → Livraison (Mondial Relay enseigne + key, Chronopost account).
+// Carrier-specific APIs (Mondial Relay, Chronopost, Colissimo) are all behind
+// Cloudflare and cannot be called from a server. To use them, configure official
+// API credentials in Boutique Admin → Livraison.
 
 interface RelayPoint {
   id: string
@@ -24,6 +22,13 @@ interface RelayPoint {
   distance: number
   hours: string
 }
+
+// Multiple Overpass servers for failover (main server is often overloaded)
+const OVERPASS_SERVERS = [
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.openstreetmap.fr/api/interpreter',
+]
 
 // Geocode a postal code + city using Nominatim (free, no API key)
 async function geocode(postalCode: string, city?: string): Promise<{ lat: number; lng: number; cityName: string } | null> {
@@ -80,7 +85,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 
 // Calculate haversine distance between two points (in km)
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371 // Earth radius in km
+  const R = 6371
   const dLat = (lat2 - lat1) * Math.PI / 180
   const dLng = (lng2 - lng1) * Math.PI / 180
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -93,8 +98,6 @@ function haversine(lat1: number, lng1: number, lat2: number, lng2: number): numb
 // Format OSM opening_hours string to a human-readable format
 function formatHours(osmHours: string | undefined): string {
   if (!osmHours) return 'Horaires non communiqués'
-  // OSM opening_hours format can be complex (e.g. "Mo-Fr 09:00-19:00; Sa 09:00-12:00")
-  // Try to simplify common patterns
   let formatted = osmHours
     .replace(/Mo/g, 'Lun')
     .replace(/Tu/g, 'Mar')
@@ -105,7 +108,6 @@ function formatHours(osmHours: string | undefined): string {
     .replace(/Su/g, 'Dim')
     .replace(/;/g, ' · ')
     .replace(/-/g, ' - ')
-  // Truncate if too long
   if (formatted.length > 80) {
     formatted = formatted.substring(0, 77) + '...'
   }
@@ -113,96 +115,105 @@ function formatHours(osmHours: string | undefined): string {
 }
 
 // Query Overpass API for real shops near the given coordinates
+// Tries multiple servers for failover
 async function searchRealShops(
   lat: number,
   lng: number,
   postalCode: string,
   carrier: string,
 ): Promise<RelayPoint[]> {
-  // Search radius in meters (5km)
-  const radius = 5000
+  const radius = 8000 // 8km search radius
 
-  // Shop types to search for — these are the types of businesses that typically
-  // host relay points (Mondial Relay, Chronopost Pickup, etc.)
-  const shopTypes = [
-    'node["shop"="tobacco"]',         // Tabacs
-    'node["shop"="newsagent"]',        // Maisons de la presse
-    'node["shop"="convenience"]',      // Supérettes / Proxi
-    'node["shop"="laundry"]',          // Pressings
-    'node["amenity"="post_office"]',   // Bureaux de poste
-    'node["shop"="bakery"]',           // Boulangeries
-    'node["shop"="supermarket"]',      // Supermarchés
-    'node["shop"="alcohol"]',          // Cavistes
+  // Shop types that typically host relay points
+  const shopQueries = [
+    `node["shop"="tobacco"](around:${radius},${lat},${lng})`,
+    `node["shop"="newsagent"](around:${radius},${lat},${lng})`,
+    `node["shop"="convenience"](around:${radius},${lat},${lng})`,
+    `node["shop"="laundry"](around:${radius},${lat},${lng})`,
+    `node["amenity"="post_office"](around:${radius},${lat},${lng})`,
+    `node["shop"="supermarket"](around:${radius},${lat},${lng})`,
+    `node["shop"="alcohol"](around:${radius},${lat},${lng})`,
+    `node["amenity"="fuel"](around:${radius},${lat},${lng})`, // gas stations often have relay points
   ]
 
-  // Build Overpass QL query
-  const around = `(around:${radius},${lat},${lng})`
-  const queries = shopTypes.map(t => `${t}${around};`).join('')
-  const overpassQuery = `[out:json][timeout:15];(${queries});out body 30;`
+  const overpassQuery = `[out:json][timeout:20];(${shopQueries.join(';')};);out body 40;`
 
-  const relays: RelayPoint[] = []
   const idPrefix = carrier === 'chronopost' ? 'CHR' : 'MR'
-  const carrierLabel = carrier === 'chronopost' ? 'Chronopost Pickup' : 'Mondial Relay'
 
-  try {
-    const res = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Junashop/1.0',
-      },
-      body: `data=${encodeURIComponent(overpassQuery)}`,
-    })
-
-    if (!res.ok) {
-      throw new Error(`Overpass API returned ${res.status}`)
-    }
-
-    const data = await res.json()
-    const elements = data?.elements || []
-
-    for (const el of elements) {
-      if (el.type !== 'node') continue
-      const tags = el.tags || {}
-      const name = tags.name || tags.brand || ''
-      if (!name) continue // Skip unnamed POIs
-
-      // Build address
-      const housenumber = tags['addr:housenumber'] || ''
-      const street = tags['addr:street'] || ''
-      const addressParts = [housenumber, street].filter(Boolean).join(' ')
-      if (!addressParts) continue // Skip POIs without address
-
-      const elPostalCode = tags['addr:postcode'] || postalCode
-      const elCity = tags['addr:city'] || ''
-      const elLat = el.lat
-      const elLng = el.lon
-
-      // Calculate distance from search center
-      const distance = haversine(lat, lng, elLat, elLng)
-
-      relays.push({
-        id: `${idPrefix}-${el.id}`,
-        name: `${name}`,
-        address: addressParts,
-        postalCode: elPostalCode,
-        city: elCity || await reverseGeocode(elLat, elLng),
-        lat: elLat,
-        lng: elLng,
-        distance: parseFloat(distance.toFixed(2)),
-        hours: formatHours(tags.opening_hours),
+  for (const serverUrl of OVERPASS_SERVERS) {
+    try {
+      const res = await fetch(serverUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Junashop/1.0',
+        },
+        body: `data=${encodeURIComponent(overpassQuery)}`,
+        signal: AbortSignal.timeout(15000),
       })
+
+      if (!res.ok) {
+        console.warn(`[relay-search] ${serverUrl} returned ${res.status}`)
+        continue
+      }
+
+      const data = await res.json()
+      const elements = data?.elements || []
+
+      const relays: RelayPoint[] = []
+      const seenNames = new Set<string>() // dedup by name
+
+      for (const el of elements) {
+        if (el.type !== 'node') continue
+        const tags = el.tags || {}
+        const name = tags.name || tags.brand || ''
+        if (!name || name === '?') continue
+
+        // Skip if already seen (dedup)
+        const nameKey = name.toLowerCase().trim()
+        if (seenNames.has(nameKey)) continue
+        seenNames.add(nameKey)
+
+        // Build address — allow empty street but require at least postalCode or city
+        const housenumber = tags['addr:housenumber'] || ''
+        const street = tags['addr:street'] || ''
+        const addressParts = [housenumber, street].filter(Boolean).join(' ')
+
+        const elPostalCode = tags['addr:postcode'] || postalCode
+        const elCity = tags['addr:city'] || ''
+        const elLat = el.lat
+        const elLng = el.lon
+
+        const distance = haversine(lat, lng, elLat, elLng)
+
+        relays.push({
+          id: `${idPrefix}-${el.id}`,
+          name,
+          address: addressParts || 'Adresse non précisée',
+          postalCode: elPostalCode,
+          city: elCity,
+          lat: elLat,
+          lng: elLng,
+          distance: parseFloat(distance.toFixed(2)),
+          hours: formatHours(tags.opening_hours),
+        })
+      }
+
+      if (relays.length > 0) {
+        // Sort by distance and limit to 15
+        relays.sort((a, b) => a.distance - b.distance)
+        return relays.slice(0, 15)
+      }
+    } catch (e) {
+      console.warn(`[relay-search] ${serverUrl} failed:`, e instanceof Error ? e.message : e)
+      continue
     }
-  } catch (e) {
-    console.error('[relay-search] Overpass error:', e)
   }
 
-  // Sort by distance and limit to 15 results
-  relays.sort((a, b) => a.distance - b.distance)
-  return relays.slice(0, 15)
+  return [] // all servers failed
 }
 
-// Fallback: generate mock relay points (only if Overpass fails)
+// Fallback: generate mock relay points (only if Overpass fails completely)
 const FALLBACK_NAMES = [
   'Tabac Presse', 'Bureau de Poste', 'Carrefour Express', 'Relais Tabac du Marché',
   'Point Relais Proxi', 'Magasin Presse Tabac', 'Commerçant Point Relais',
@@ -270,7 +281,7 @@ export async function POST(req: NextRequest) {
     const searchLng = geo?.lng || 1.8883
     const searchCity = geo?.cityName || city || `Commune ${postalCode}`
 
-    // Try to find REAL shops via Overpass API
+    // Try to find REAL shops via Overpass API (multiple servers for failover)
     const realRelays = await searchRealShops(searchLat, searchLng, postalCode, carrierCode)
 
     if (realRelays.length > 0) {
