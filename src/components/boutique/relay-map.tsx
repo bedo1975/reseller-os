@@ -71,30 +71,60 @@ export function RelayMap({ postalCode, city, carrier, onSelect, selectedRelayId 
 
   useEffect(() => {
     if (!postalCode || postalCode.length < 4) return
-    setLoading(true)
-    setError(null)
-    setNoResults(false)
-    fetch('/api/shipping/relay-search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postalCode, city, carrier }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.relays && data.relays.length > 0) {
-          setRelays(data.relays)
-          setSource(data.source || '')
-          setNoResults(false)
-        } else if (data.relays && data.relays.length === 0) {
-          setRelays([])
-          setNoResults(true)
-          setSource(data.source || '')
-        } else {
-          setError(data.error || data.message || 'Erreur')
-        }
+
+    // Abort controller to cancel the previous request if a new one starts
+    // (prevents race conditions when the user types fast)
+    const abortController = new AbortController()
+
+    // Debounce: wait 500ms before fetching to avoid spamming the API
+    // while the user is typing the city name
+    const debounceTimer = setTimeout(() => {
+      setLoading(true)
+      setError(null)
+      // Don't reset noResults immediately — keep showing previous results
+      // while the new search is loading (avoids flicker)
+
+      fetch('/api/shipping/relay-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postalCode, city, carrier }),
+        signal: abortController.signal,
       })
-      .catch(() => setError('Erreur réseau'))
-      .finally(() => setLoading(false))
+        .then(r => r.json())
+        .then(data => {
+          if (data.relays && data.relays.length > 0) {
+            setRelays(data.relays)
+            setSource(data.source || '')
+            setNoResults(false)
+            setError(null)
+          } else if (data.relays && data.relays.length === 0) {
+            setRelays([])
+            setNoResults(true)
+            setSource(data.source || '')
+          } else {
+            // Error from API — but don't clear existing results if we have them
+            // Only show the error if we had no results before
+            setError(data.error || data.message || 'Erreur')
+          }
+        })
+        .catch((err) => {
+          // Ignore abort errors (they're expected when a new request starts)
+          if (err.name !== 'AbortError') {
+            setError('Erreur réseau')
+          }
+        })
+        .finally(() => {
+          if (!abortController.signal.aborted) {
+            setLoading(false)
+          }
+        })
+    }, 500) // 500ms debounce
+
+    // Cleanup: cancel the debounce timer and the fetch if deps change
+    return () => {
+      clearTimeout(debounceTimer)
+      abortController.abort()
+    }
   }, [postalCode, city, carrier])
 
   const selectedRelay = relays.find(r => r.id === selectedRelayId)
