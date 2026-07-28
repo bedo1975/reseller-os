@@ -34,6 +34,7 @@ import {
 import { cn } from '@/lib/utils'
 import { photoUrl } from '@/lib/photo-url'
 import { useConfirm } from '@/components/shared/confirm-provider'
+import { BarcodeScannerModal, QuickQuantityModal } from '@/components/stock/barcode-scanner'
 
 const PAGE_SIZE = 10
 
@@ -96,6 +97,41 @@ export function StockModule() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'single' | 'bulk'; item?: StockItem } | null>(null)
+  // Scanner code-barres
+  const [showScanner, setShowScanner] = useState(false)
+  const [quickQtyItem, setQuickQtyItem] = useState<any>(null)
+  const [prefillBarcode, setPrefillBarcode] = useState<string | null>(null)
+
+  // Quand le scanner trouve un code-barres inconnu → ouvrir le formulaire d'ajout avec le code pré-rempli
+  const handleBarcodeNotFound = (barcode: string) => {
+    setShowScanner(false)
+    setEditingItem(null)
+    setPrefillBarcode(barcode)
+    setShowForm(true)
+  }
+
+  // Quand le scanner trouve un article → ouvrir la modal "quantité à ajouter"
+  const handleBarcodeFound = (item: any) => {
+    setShowScanner(false)
+    setQuickQtyItem(item)
+  }
+
+  // Quand l'utilisateur valide la quantité à ajouter → PATCH l'article
+  const handleQuickQtyConfirm = async (item: any, qtyToAdd: number) => {
+    const res = await fetch(`/api/stock/${item.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        quantity: (item.quantity || 0) + qtyToAdd,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || 'Erreur lors de la mise à jour')
+    }
+    toast.success(`${qtyToAdd} unité(s) ajoutée(s) — nouveau stock : ${(item.quantity || 0) + qtyToAdd}`)
+    refresh()
+  }
 
   const brands = useMemo(() => {
     if (!items) return []
@@ -427,9 +463,16 @@ export function StockModule() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button onClick={() => { setEditingItem(null); setShowForm(true) }}>
                 <Plus className="h-4 w-4 mr-2" /> Nouvel article
+              </Button>
+              <Button
+                variant="outline"
+                className="border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                onClick={() => setShowScanner(true)}
+              >
+                <Barcode className="h-4 w-4 mr-2" /> Scanner code-barres
               </Button>
               <Button variant="outline" onClick={() => setShowPurchaseForm(true)}>
                 <Plus className="h-4 w-4 mr-2" /> Achat hors stock
@@ -688,14 +731,31 @@ export function StockModule() {
       {/* Form Dialog */}
       <StockForm
         open={showForm}
-        onOpenChange={setShowForm}
+        onOpenChange={(o) => { setShowForm(o); if (!o) setPrefillBarcode(null) }}
         item={editingItem}
         suppliers={suppliers || []}
         categories={categories}
         conditions={conditions}
         sizes={getByType('size')}
         colors={getByType('color')}
-        onSaved={() => { setShowForm(false); refresh() }}
+        onSaved={() => { setShowForm(false); setPrefillBarcode(null); refresh() }}
+        prefillBarcode={prefillBarcode}
+      />
+
+      {/* Scanner code-barres */}
+      <BarcodeScannerModal
+        open={showScanner}
+        onOpenChange={setShowScanner}
+        onFound={handleBarcodeFound}
+        onNotFound={handleBarcodeNotFound}
+      />
+
+      {/* Modal quantité à ajouter (quand code-barres trouvé) */}
+      <QuickQuantityModal
+        open={!!quickQtyItem}
+        onOpenChange={(o) => { if (!o) setQuickQtyItem(null) }}
+        item={quickQtyItem}
+        onConfirm={handleQuickQtyConfirm}
       />
 
       {/* View Dialog */}
@@ -777,7 +837,7 @@ export function StockModule() {
 // Form (identique à la version précédente)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function StockForm({ open, onOpenChange, item, suppliers, categories, conditions, sizes, colors, onSaved }: {
+function StockForm({ open, onOpenChange, item, suppliers, categories, conditions, sizes, colors, onSaved, prefillBarcode }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   item: StockItem | null
@@ -787,6 +847,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
   sizes: { id: string; code: string; value: string; isDefault: boolean }[]
   colors: { id: string; code: string; value: string; isDefault: boolean }[]
   onSaved: () => void
+  prefillBarcode?: string | null
 }) {
   const confirm = useConfirm()
   const [saving, setSaving] = useState(false)
@@ -817,6 +878,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     warehouse: '', rack: '', shelf: '', bin: '', weight: '', quantity: '1',
     description: '', suggestedPrice: '', salePrice: '', saleActive: false,
     platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
+    barcode: '',
   })
 
   useMemo(() => {
@@ -842,6 +904,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         platform: item.platform || '',
         salePlatform: (item as { salePlatform?: string }).salePlatform || '',
         status: item.status,
+        barcode: item.barcode || '',
       })
       try { setPhotos(JSON.parse(item.photos) || []) } catch { setPhotos([]) }
     } else if (open) {
@@ -852,10 +915,11 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         warehouse: '', rack: '', shelf: '', bin: '', weight: '', quantity: '1',
         description: '', suggestedPrice: '', salePrice: '', saleActive: false,
         platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
+        barcode: prefillBarcode || '',
       })
       setPhotos([])
     }
-  }, [item, open])
+  }, [item, open, prefillBarcode])
 
   const subcategories = getBoutiqueSubcategories(form.category)
 
@@ -1173,6 +1237,18 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
               <div className="space-y-1.5">
                 <Label className="text-xs">SKU *</Label>
                 <Input value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="RL-POLO-00125" className="font-mono text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1">
+                  <Barcode className="h-3 w-3" /> Code-barres
+                </Label>
+                <Input
+                  value={form.barcode}
+                  onChange={e => setForm({ ...form, barcode: e.target.value })}
+                  placeholder="3401234567890"
+                  className="font-mono text-sm"
+                  inputMode="numeric"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Marque *</Label>
