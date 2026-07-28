@@ -6,14 +6,9 @@ import { NextRequest, NextResponse } from 'next/server'
 //
 // Uses suivi-de-colis.org which embeds REAL carrier-specific relay data
 // (Mondial Relay, Chronopost, Colissimo, UPS, DHL) in its HTML pages.
-// The site is NOT behind Cloudflare and can be scraped from a server.
 //
-// URL pattern: https://suivi-de-colis.org/{carrier}/{department}/{city-slug}
-// - carrier: "mondial-relay" | "chronopost" | "colissimo" | "ups" | "dhl"
-// - department: lowercase name (e.g. "gard") — obtained via Nominatim reverse geocoding
-// - city-slug: lowercase city name with hyphens (e.g. "junas")
-//
-// Fallback: OpenStreetMap Overpass API (generic shops, not carrier-specific)
+// URL pattern: https://suivi-de-colis.org/{carrier}/{department-slug}/{city-slug}
+// The department is deduced from the postal code (first 2 digits = department number).
 
 interface RelayPoint {
   id: string
@@ -27,7 +22,6 @@ interface RelayPoint {
   hours: string
 }
 
-// Map our carrier codes to suivi-de-colis.org URL slugs
 const CARRIER_SLUGS: Record<string, string> = {
   mondial_relay: 'mondial-relay',
   chronopost: 'chronopost',
@@ -36,47 +30,85 @@ const CARRIER_SLUGS: Record<string, string> = {
   dhl: 'dhl',
 }
 
-// Geocode a postal code + city using Nominatim
-// Returns: { lat, lng, cityName, departmentSlug, citySlug }
-async function geocode(postalCode: string, city?: string): Promise<{
-  lat: number
-  lng: number
-  cityName: string
-  departmentSlug: string
-  citySlug: string
-} | null> {
+// ── Table de mapping : numéro de département → slug nom ──
+// Déduit depuis les 2 premiers chiffres du code postal
+const DEPARTMENT_SLUGS: Record<string, string> = {
+  '01': 'ain', '02': 'aisne', '03': 'allier', '04': 'alpes-de-haute-provence',
+  '05': 'hautes-alpes', '06': 'alpes-maritimes', '07': 'ardeche', '08': 'ardennes',
+  '09': 'ariege', '10': 'aube', '11': 'aude', '12': 'aveyron',
+  '13': 'bouches-du-rhone', '14': 'calvados', '15': 'cantal', '16': 'charente',
+  '17': 'charente-maritime', '18': 'cher', '19': 'correze',
+  '2A': 'corse-du-sud', '2B': 'haute-corse',
+  '21': 'cote-d-or', '22': 'cotes-d-armor', '23': 'creuse', '24': 'dordogne',
+  '25': 'doubs', '26': 'drome', '27': 'eure', '28': 'eure-et-loir',
+  '29': 'finistere', '30': 'gard', '31': 'haute-garonne', '32': 'gers',
+  '33': 'gironde', '34': 'herault', '35': 'ille-et-vilaine', '36': 'indre',
+  '37': 'indre-et-loire', '38': 'isere', '39': 'jura', '40': 'landes',
+  '41': 'loir-et-cher', '42': 'loire', '43': 'haute-loire', '44': 'loire-atlantique',
+  '45': 'loiret', '46': 'lot', '47': 'lot-et-garonne', '48': 'lozere',
+  '49': 'maine-et-loire', '50': 'manche', '51': 'marne', '52': 'haute-marne',
+  '53': 'mayenne', '54': 'meurthe-et-moselle', '55': 'meuse', '56': 'morbihan',
+  '57': 'moselle', '58': 'nievre', '59': 'nord', '60': 'oise',
+  '61': 'orne', '62': 'pas-de-calais', '63': 'puy-de-dome', '64': 'pyrenees-atlantiques',
+  '65': 'hautes-pyrenees', '66': 'pyrenees-orientales', '67': 'bas-rhin', '68': 'haut-rhin',
+  '69': 'rhone', '70': 'haute-saone', '71': 'saone-et-loire', '72': 'sarthe',
+  '73': 'savoie', '74': 'haute-savoie', '75': 'paris', '76': 'seine-maritime',
+  '77': 'seine-et-marne', '78': 'yvelines', '79': 'deux-sevres', '80': 'somme',
+  '81': 'tarn', '82': 'tarn-et-garonne', '83': 'var', '84': 'vaucluse',
+  '85': 'vendee', '86': 'vienne', '87': 'haute-vienne', '88': 'vosges',
+  '89': 'yonne', '90': 'territoire-de-belfort', '91': 'essonne', '92': 'hauts-de-seine',
+  '93': 'seine-saint-denis', '94': 'val-de-marne', '95': 'val-d-oise',
+  '971': 'guadeloupe', '972': 'martinique', '973': 'guyane', '974': 'la-reunion', '976': 'mayotte',
+}
+
+// Déduit le slug du département depuis le code postal
+function getDepartmentSlug(postalCode: string): string | null {
+  const cp = postalCode.trim()
+  if (cp.length < 5) return null
+
+  // Cas spécial : Corse (20000-20999 = 2A, 20600-20999 parfois 2B)
+  // Pour simplifier, on utilise "corse-du-sud" pour 20000-20199 et "haute-corse" pour le reste
+  if (cp.startsWith('20')) {
+    const num = parseInt(cp)
+    if (num >= 20000 && num < 20190) return 'corse-du-sud'
+    return 'haute-corse'
+  }
+
+  // DOM : 971-976 (les 3 premiers chiffres)
+  if (cp.startsWith('971')) return 'guadeloupe'
+  if (cp.startsWith('972')) return 'martinique'
+  if (cp.startsWith('973')) return 'guyane'
+  if (cp.startsWith('974')) return 'la-reunion'
+  if (cp.startsWith('976')) return 'mayotte'
+
+  // Métropole : les 2 premiers chiffres
+  const deptCode = cp.substring(0, 2)
+  return DEPARTMENT_SLUGS[deptCode] || null
+}
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+// Geocode a postal code + city using Nominatim (for lat/lng only)
+async function geocode(postalCode: string, city?: string): Promise<{ lat: number; lng: number; cityName: string } | null> {
   const query = city
     ? `${encodeURIComponent(city + ' ' + postalCode)}, France`
     : `${postalCode}, France`
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}&countrycodes=fr&limit=1&addressdetails=1`
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}&countrycodes=fr&limit=1`
 
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Junashop/1.0' },
-    })
+    const res = await fetch(url, { headers: { 'User-Agent': 'Junashop/1.0' } })
     const data = await res.json()
     if (data && data.length > 0) {
-      const lat = parseFloat(data[0].lat)
-      const lng = parseFloat(data[0].lon)
       const addr = data[0].address || {}
-
-      // Try to get the city name
-      let cityName = city || addr.village || addr.town || addr.city || addr.municipality || ''
-
-      // Try to get the department name (Nominatim gives county = department in France)
-      const department = addr.county || addr.state_district || ''
-      // Slugify: lowercase, remove accents, replace spaces/special chars with hyphens
-      const slugify = (s: string) => s
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '') // remove accents
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-
-      const departmentSlug = slugify(department)
-      const citySlug = slugify(cityName)
-
-      return { lat, lng, cityName, departmentSlug, citySlug }
+      const cityName = city || addr.village || addr.town || addr.city || addr.municipality || ''
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), cityName }
     }
   } catch (e) {
     console.error('[relay-search] geocode error:', e)
@@ -84,14 +116,12 @@ async function geocode(postalCode: string, city?: string): Promise<{
   return null
 }
 
-// Calculate haversine distance (km)
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371
   const dLat = (lat2 - lat1) * Math.PI / 180
   const dLng = (lng2 - lng1) * Math.PI / 180
   const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng / 2) ** 2
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
@@ -106,13 +136,24 @@ async function searchSuiviDeColis(
   const carrierSlug = CARRIER_SLUGS[carrier]
   if (!carrierSlug) return []
 
-  const geo = await geocode(postalCode, city)
-  if (!geo || !geo.departmentSlug || !geo.citySlug) {
+  const deptSlug = getDepartmentSlug(postalCode)
+  if (!deptSlug) {
+    console.warn(`[relay-search] could not determine department for postal code ${postalCode}`)
     return []
   }
 
-  // Build URL: https://suivi-de-colis.org/{carrier}/{department}/{city}
-  const url = `https://suivi-de-colis.org/${carrierSlug}/${geo.departmentSlug}/${geo.citySlug}`
+  // Get the city name — use the one from the form, or geocode
+  let cityName = city || ''
+  if (!cityName) {
+    const geo = await geocode(postalCode)
+    cityName = geo?.cityName || ''
+  }
+  if (!cityName) return []
+
+  const citySlug = slugify(cityName)
+  if (!citySlug) return []
+
+  const url = `https://suivi-de-colis.org/${carrierSlug}/${deptSlug}/${citySlug}`
 
   try {
     const res = await fetch(url, {
@@ -130,17 +171,12 @@ async function searchSuiviDeColis(
     }
 
     const html = await res.text()
-
-    // Extract JSON objects containing "latitude" from the HTML
-    // The site embeds relay data as JSON objects in script tags
     const relays: RelayPoint[] = []
     const seenIds = new Set<string>()
     const latMatches = [...html.matchAll(/"latitude"\s*:\s*"([\d.]+)"/g)]
 
     for (const match of latMatches) {
-      const latStr = match[1]
       const start = match.index!
-      // Find the enclosing JSON object by scanning backwards for '{'
       let braceCount = 0
       let objStart = start
       for (let i = start; i >= Math.max(0, start - 3000); i--) {
@@ -150,7 +186,6 @@ async function searchSuiviDeColis(
           braceCount--
         }
       }
-      // Find the closing '}'
       braceCount = 0
       let objEnd = start
       for (let i = objStart; i < Math.min(html.length, objStart + 3000); i++) {
@@ -161,36 +196,29 @@ async function searchSuiviDeColis(
         }
       }
 
-      const jsonStr = html.slice(objStart, objEnd)
       try {
-        const obj = JSON.parse(jsonStr)
+        const obj = JSON.parse(html.slice(objStart, objEnd))
         if (!obj.label || !obj.latitude) continue
 
-        const id = obj.code || obj.slug || `${carrier}-${obj.label}-${obj.code_postal}`
+        const id = obj.code || obj.slug || `${carrier}-${obj.label}`
         if (seenIds.has(id)) continue
         seenIds.add(id)
 
         const rLat = parseFloat(obj.latitude)
         const rLng = parseFloat(obj.longitude)
-        const distance = haversine(searchLat, searchLng, rLat, rLng)
-
         relays.push({
           id: `${carrier}-${id}`,
           name: obj.label,
           address: obj.adresse || 'Adresse non précisée',
           postalCode: obj.code_postal || postalCode,
           city: obj.commune || '',
-          lat: rLat,
-          lng: rLng,
-          distance: parseFloat(distance.toFixed(2)),
+          lat: rLat, lng: rLng,
+          distance: parseFloat(haversine(searchLat, searchLng, rLat, rLng).toFixed(2)),
           hours: obj.depot_hours || 'Horaires non communiqués',
         })
-      } catch {
-        // JSON parse failed, skip
-      }
+      } catch {}
     }
 
-    // Sort by distance
     relays.sort((a, b) => a.distance - b.distance)
     return relays
   } catch (e) {
@@ -199,7 +227,7 @@ async function searchSuiviDeColis(
   }
 }
 
-// Fallback: OpenStreetMap Overpass API (generic shops, not carrier-specific)
+// Fallback: OpenStreetMap Overpass API
 const OVERPASS_SERVERS = [
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter',
@@ -314,8 +342,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ relays: osmRelays, source: 'openstreetmap' })
     }
 
-    // 3. Last resort: empty
-    return NextResponse.json({ relays: [], source: 'none' })
+    // 3. Last resort: empty with a message
+    return NextResponse.json({
+      relays: [],
+      source: 'none',
+      message: `Aucun point relais trouvé pour le code postal ${postalCode}. Essayez une ville voisine.`,
+    })
   } catch (error) {
     console.error('POST /api/shipping/relay-search error:', error)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

@@ -66,11 +66,14 @@ export function RelayMap({ postalCode, city, carrier, onSelect, selectedRelayId 
   const [relays, setRelays] = useState<RelayPoint[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [noResults, setNoResults] = useState(false)
+  const [source, setSource] = useState<string>('')
 
   useEffect(() => {
     if (!postalCode || postalCode.length < 4) return
     setLoading(true)
     setError(null)
+    setNoResults(false)
     fetch('/api/shipping/relay-search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -78,10 +81,16 @@ export function RelayMap({ postalCode, city, carrier, onSelect, selectedRelayId 
     })
       .then(r => r.json())
       .then(data => {
-        if (data.relays) {
+        if (data.relays && data.relays.length > 0) {
           setRelays(data.relays)
+          setSource(data.source || '')
+          setNoResults(false)
+        } else if (data.relays && data.relays.length === 0) {
+          setRelays([])
+          setNoResults(true)
+          setSource(data.source || '')
         } else {
-          setError(data.error || 'Erreur')
+          setError(data.error || data.message || 'Erreur')
         }
       })
       .catch(() => setError('Erreur réseau'))
@@ -155,6 +164,17 @@ export function RelayMap({ postalCode, city, carrier, onSelect, selectedRelayId 
               </Marker>
             ))}
           </MapContainer>
+        ) : noResults ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 p-6">
+            <div className="text-center max-w-sm">
+              <MapPin className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-600 font-medium mb-1">Aucun point relais trouvé</p>
+              <p className="text-xs text-gray-400">
+                Aucun point relais {source === 'suivi-de-colis.org' ? 'officiel' : ''} trouvé pour le code postal {postalCode}.
+                Essayez avec une ville voisine ou un autre code postal.
+              </p>
+            </div>
+          </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
             <p className="text-sm text-gray-400">Saisissez un code postal pour voir les points relais</p>
