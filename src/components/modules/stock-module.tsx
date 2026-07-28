@@ -29,7 +29,7 @@ import { toast } from 'sonner'
 import {
   formatEUR, formatDate, PUBLICATION_STATUSES,
   getPubStatusColor, getPubStatusLabel,
-  getPlatformLabel, getPlatformColor, PLATFORMS,
+  getPlatformColor,
 } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { photoUrl } from '@/lib/photo-url'
@@ -594,7 +594,7 @@ export function StockModule() {
                             if (item.platform) {
                               return (
                                 <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block', getPlatformColor(item.platform))}>
-                                  {getPlatformLabel(item.platform)}
+                                  {getLabel('platform', item.platform)}
                                 </span>
                               )
                             }
@@ -606,7 +606,7 @@ export function StockModule() {
                                 <div className="flex flex-wrap gap-1">
                                   {platList.map(p => (
                                     <span key={p} className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full inline-block', getPlatformColor(p))}>
-                                      {getPlatformLabel(p)}
+                                      {getLabel('platform', p)}
                                     </span>
                                   ))}
                                 </div>
@@ -1393,13 +1393,13 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
               <div className="space-y-1.5 md:col-span-3">
                 <Label className="text-xs">Plateforme(s) de publication</Label>
                 <div className="border rounded-md p-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
-                  {PLATFORMS.map(p => {
+                  {getByTypeLocal('platform').map(p => {
                     const platList: string[] = (() => {
                       try { return JSON.parse(form.platforms || '[]') } catch { return [] }
                     })()
-                    const checked = platList.includes(p.id)
+                    const checked = platList.includes(p.code)
                     return (
-                      <label key={p.id} className="flex items-center gap-1.5 cursor-pointer text-xs hover:bg-muted/60 px-2 py-1 rounded border border-transparent hover:border-border">
+                      <label key={p.code} className="flex items-center gap-1.5 cursor-pointer text-xs hover:bg-muted/60 px-2 py-1 rounded border border-transparent hover:border-border">
                         <input
                           type="checkbox"
                           checked={checked}
@@ -1408,14 +1408,14 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                               try { return JSON.parse(form.platforms || '[]') } catch { return [] }
                             })()
                             const next = e.target.checked
-                              ? [...current, p.id]
-                              : current.filter(x => x !== p.id)
+                              ? [...current, p.code]
+                              : current.filter(x => x !== p.code)
                             setForm({ ...form, platforms: JSON.stringify(next) })
                           }}
                           className="h-3.5 w-3.5 rounded border-border"
                         />
-                        <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', p.color)}>
-                          {p.label}
+                        <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', getPlatformColor(p.code))}>
+                          {p.value}
                         </span>
                       </label>
                     )
@@ -1423,6 +1423,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   Sélectionnez les plateformes où l'article est publié. Au moment de la vente, seule la plateforme effective sera conservée.
+                  <a href="/settings" target="_blank" className="text-blue-600 hover:underline ml-1">Gérer la liste dans Paramètres → Attributs</a>
                 </p>
               </div>
               {form.status === 'VENDU' && (
@@ -1435,7 +1436,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                     <SelectTrigger className="max-w-md"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">—</SelectItem>
-                      {PLATFORMS.map(p => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+                      {getByTypeLocal('platform').map(p => <SelectItem key={p.code} value={p.code}>{p.value}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1640,7 +1641,7 @@ function StockDetail({ open, onOpenChange, item }: {
             )}
             {item.platform && (
               <span className={cn('text-xs font-semibold px-2 py-1 rounded-full', getPlatformColor(item.platform))}>
-                {getPlatformLabel(item.platform)} (vente)
+                {getLabel('platform', item.platform)} (vente)
               </span>
             )}
             {(() => {
@@ -1649,7 +1650,7 @@ function StockDetail({ open, onOpenChange, item }: {
               })()
               return platList.filter(p => p !== item.platform).map(p => (
                 <span key={p} className={cn('text-xs font-semibold px-2 py-1 rounded-full', getPlatformColor(p))}>
-                  {getPlatformLabel(p)}
+                  {getLabel('platform', p)}
                 </span>
               ))
             })()}
