@@ -46,10 +46,12 @@ export async function POST(req: NextRequest) {
     const fees = parseFloat(platformFees) || 0
     const fixedFees = parseFloat(platformFixedFees) || 0
     const totalFees = fees + fixedFees
-    // Profit = prix de vente - coût d'achat - frais port TRANSPORTEUR (réels) - frais plateforme
-    // NB : shippingCost (payé par client) n'est PAS soustrait — c'est un revenu net pour le revendeur
-    const profit = price - item.purchaseCost - carrierShipping - totalFees
-    const margin = price > 0 ? (profit / price) * 100 : 0
+    // CA = prix de vente + frais de port facturés au client
+    // Profit (avant URSSAF et autres dépenses, calculés au niveau fiscalité agrégée)
+    //   = CA - coût d'achat - frais plateforme - frais port réels transporteur
+    const ca = price + shipping
+    const profit = ca - item.purchaseCost - totalFees - carrierShipping
+    const margin = ca > 0 ? (profit / ca) * 100 : 0
 
     const sale = await db.sale.create({
       data: {

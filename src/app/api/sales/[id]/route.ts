@@ -35,21 +35,26 @@ export async function PATCH(
     if ('platformFixedFees' in updateData) updateData.platformFixedFees = parseFloat(updateData.platformFixedFees as string) || 0
 
     // Recalculer profit & marge si les montants changent
-    const priceChanged = 'salePrice' in updateData || 'carrierShippingCost' in updateData ||
+    // NB : shippingCost (frais port client) influe aussi sur le CA → recalcul nécessaire
+    const priceChanged = 'salePrice' in updateData || 'shippingCost' in updateData ||
+                         'carrierShippingCost' in updateData ||
                          'platformFees' in updateData || 'platformFixedFees' in updateData
 
     if (priceChanged) {
       const current = await db.sale.findUnique({ where: { id }, include: { stockItem: true } })
       if (current) {
         const price = 'salePrice' in updateData ? parseFloat(updateData.salePrice as string) : current.salePrice
+        const shipping = 'shippingCost' in updateData ? parseFloat(updateData.shippingCost as string) : current.shippingCost
         const carrierShipping = 'carrierShippingCost' in updateData ? parseFloat(updateData.carrierShippingCost as string) : current.carrierShippingCost
         const fees = 'platformFees' in updateData ? parseFloat(updateData.platformFees as string) : current.platformFees
         const fixedFees = 'platformFixedFees' in updateData ? parseFloat(updateData.platformFixedFees as string) : (current.platformFixedFees || 0)
         const totalFees = (fees || 0) + (fixedFees || 0)
-        // Profit = prix de vente - coût d'achat - frais port TRANSPORTEUR (réels) - frais plateforme
-        const profit = price - current.stockItem.purchaseCost - carrierShipping - totalFees
+        // CA = prix de vente + frais port facturés au client
+        // Profit = CA - coût d'achat - frais plateforme - frais port réels transporteur
+        const ca = price + (shipping || 0)
+        const profit = ca - current.stockItem.purchaseCost - totalFees - (carrierShipping || 0)
         updateData.profit = parseFloat(profit.toFixed(2))
-        updateData.margin = parseFloat(((profit / price) * 100).toFixed(1))
+        updateData.margin = parseFloat(((ca > 0 ? (profit / ca) * 100 : 0)).toFixed(1))
       }
     }
 

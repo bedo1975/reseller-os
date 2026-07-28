@@ -134,12 +134,12 @@ function SyntheseTab({ year }: { year: number }) {
     return filtered.filter(e => new Date(e.date).getMonth() + 1 === parseInt(month))
   }, [expenses, year, month])
 
-  const totalCA = yearSales.reduce((s, x) => s + x.salePrice, 0)
+  const totalCA = yearSales.reduce((s, x) => s + x.salePrice + (x.shippingCost || 0), 0)
   const totalPurchases = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost, 0)
   const totalPlatformFees = yearSales.reduce((s, x) => s + (x.platformFees || 0) + (x.platformFixedFees || 0), 0)
-  // Frais de port FACTURÉS au client (revenu net, pas une charge — ne doit pas être déduit du CA)
+  // Frais de port FACTURÉS au client (inclus dans le CA — c'est un revenu)
   const totalShippingBilled = yearSales.reduce((s, x) => s + x.shippingCost, 0)
-  // Frais de port RÉELS payés au transporteur (charge réelle — déductible du CA)
+  // Frais de port RÉELS payés au transporteur (charge déductible)
   const totalCarrierShipping = yearSales.reduce((s, x) => s + (x.carrierShippingCost || 0), 0)
   const totalOtherExpenses = yearExpenses.reduce((s, e) => s + e.amount, 0)
   const taxRate = taxSettings?.taxRate || 0
@@ -148,12 +148,12 @@ function SyntheseTab({ year }: { year: number }) {
 
   const exportCSV = () => {
     const rows: string[][] = []
-    rows.push(['Type', 'Date', 'Plateforme', 'Article', 'Description', 'CA', 'Coût', 'Frais plateforme', 'Frais port client', 'Frais port transporteur', 'Profit', 'Marge %'])
+    rows.push(['Type', 'Date', 'Plateforme', 'Article', 'Description', 'CA (prix+port client)', 'Coût', 'Frais plateforme', 'Frais port client', 'Frais port transporteur', 'Profit', 'Marge %'])
     yearSales.forEach(s => {
       rows.push([
         'Vente', formatDate(s.saleDate), s.platform, s.stockItem.sku,
         `${s.stockItem.brand} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim(),
-        s.salePrice.toFixed(2), s.stockItem.purchaseCost.toFixed(2),
+        (s.salePrice + (s.shippingCost || 0)).toFixed(2), s.stockItem.purchaseCost.toFixed(2),
         ((s.platformFees || 0) + (s.platformFixedFees || 0)).toFixed(2),
         s.shippingCost.toFixed(2), (s.carrierShippingCost || 0).toFixed(2),
         s.profit.toFixed(2), s.margin.toString(),
@@ -183,7 +183,7 @@ function SyntheseTab({ year }: { year: number }) {
       rows.push([
         'Vente', formatDate(s.saleDate), s.platform, s.stockItem.sku,
         `${s.stockItem.brand} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim(),
-        s.salePrice.toFixed(2), s.stockItem.purchaseCost.toFixed(2),
+        (s.salePrice + (s.shippingCost || 0)).toFixed(2), s.stockItem.purchaseCost.toFixed(2),
         ((s.platformFees || 0) + (s.platformFixedFees || 0)).toFixed(2),
         s.shippingCost.toFixed(2), (s.carrierShippingCost || 0).toFixed(2),
         s.profit.toFixed(2), s.margin.toString(),
@@ -251,7 +251,7 @@ function SyntheseTab({ year }: { year: number }) {
               <td>${formatDate(s.saleDate)}</td>
               <td>${s.platform}</td>
               <td>${s.stockItem.brand} (${s.stockItem.sku})</td>
-              <td>${formatEUR(s.salePrice)}</td>
+              <td>${formatEUR(s.salePrice + (s.shippingCost || 0))}</td>
               <td>${formatEUR(s.stockItem.purchaseCost)}</td>
               <td>${formatEUR((s.platformFees || 0) + (s.carrierShippingCost || 0) + (s.platformFixedFees || 0))}</td>
               <td class="profit">${formatEUR(s.profit)}</td>
@@ -428,10 +428,10 @@ function SyntheseTab({ year }: { year: number }) {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <SummaryCard label="Chiffre d'affaires" value={totalCA} />
+          <SummaryCard label="Chiffre d'affaires" value={totalCA} hint="Inclut prix article + frais port client" />
           <SummaryCard label="Achats" value={totalPurchases} />
           <SummaryCard label="Frais plateforme" value={totalPlatformFees} />
-          <SummaryCard label="Frais port facturés (client)" value={totalShippingBilled} hint="Revenu net — non déduit du CA" />
+          <SummaryCard label="dont Frais port client" value={totalShippingBilled} hint="Inclus dans le CA (revenu)" />
           <SummaryCard label="Frais port réels (transporteur)" value={totalCarrierShipping} hint="Charge déductible du CA" />
           <SummaryCard label="Autres dépenses" value={totalOtherExpenses} />
           <SummaryCard label={`Cotisations URSSAF (${taxRate}%)`} value={parseFloat(urssafCotisation.toFixed(2))} />

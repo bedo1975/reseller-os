@@ -128,10 +128,12 @@ export async function POST(req: NextRequest) {
       const purchaseCost = stockItem.purchaseCost || 0
       const itemShipping = shippingCost / items.length
       // Pour les ventes boutique, le carrierShippingCost réel est inconnu au moment de la commande
-      // (le revendeur paie le transporteur plus tard). On l'initialise à 0 — l'admin l'ajustera dans le module Ventes.
-      // Profit = prix de vente - coût d'achat (frais port client = revenu net, pas de soustraction)
-      const profit = salePrice - purchaseCost
-      const margin = purchaseCost > 0 ? (profit / purchaseCost) * 100 : (salePrice > 0 ? (profit / salePrice) * 100 : 0)
+      // (le revendeur paie le transporteur plus tard). On l'initialise à 0 — l'admin l'ajustera.
+      // CA = prix article + frais port facturés client (itemShipping)
+      // Profit (avant URSSAF/autres dépenses, calculés en fiscalité) = CA - coût achat - frais port transporteur
+      const ca = salePrice + itemShipping
+      const profit = ca - purchaseCost  // carrierShippingCost = 0 au moment de la commande
+      const margin = ca > 0 ? (profit / ca) * 100 : 0
 
       // Generate invoice number
       const counter = (invoiceSettings?.invoiceCounter || 0) + invoiceNumbers.length + 1

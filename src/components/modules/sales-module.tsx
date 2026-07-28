@@ -378,7 +378,11 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
     : (form.salePrice ? parseFloat(form.salePrice) * (parseFloat(autoPercent) || 0) / 100 : 0)
 
   const projectedProfit = (selectedItem && form.salePrice)
-    ? parseFloat(form.salePrice) - selectedItem.purchaseCost - (parseFloat(form.carrierShippingCost || '0') || 0) - feesEuro - (parseFloat(autoFixed) || 0)
+    ? (parseFloat(form.salePrice) + (parseFloat(form.shippingCost || '0') || 0))  // CA
+      - selectedItem.purchaseCost
+      - feesEuro
+      - (parseFloat(autoFixed) || 0)
+      - (parseFloat(form.carrierShippingCost || '0') || 0)
     : 0
 
   const submit = async () => {
