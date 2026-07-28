@@ -127,7 +127,10 @@ export async function POST(req: NextRequest) {
       subtotal += salePrice * qty
       const purchaseCost = stockItem.purchaseCost || 0
       const itemShipping = shippingCost / items.length
-      const profit = salePrice - purchaseCost - itemShipping
+      // Pour les ventes boutique, le carrierShippingCost réel est inconnu au moment de la commande
+      // (le revendeur paie le transporteur plus tard). On l'initialise à 0 — l'admin l'ajustera dans le module Ventes.
+      // Profit = prix de vente - coût d'achat (frais port client = revenu net, pas de soustraction)
+      const profit = salePrice - purchaseCost
       const margin = purchaseCost > 0 ? (profit / purchaseCost) * 100 : (salePrice > 0 ? (profit / salePrice) * 100 : 0)
 
       // Generate invoice number
@@ -142,6 +145,7 @@ export async function POST(req: NextRequest) {
           saleDate: new Date(),
           salePrice,
           shippingCost: itemShipping,
+          carrierShippingCost: 0,  // inconnu au moment de la commande — admin l'ajustera
           platformFees: 0,
           platformFixedFees: 0,
           platform: 'boutique',

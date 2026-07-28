@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       stockItemId, saleDate, platform, paymentMethod, customerName, customerContact,
-      salePrice, shippingCost, platformFees, platformFixedFees,
+      salePrice, shippingCost, carrierShippingCost, platformFees, platformFixedFees,
       carrier, trackingNumber, parcelStatus, notes,
     } = body
 
@@ -42,10 +42,13 @@ export async function POST(req: NextRequest) {
 
     const price = parseFloat(salePrice)
     const shipping = parseFloat(shippingCost) || 0
+    const carrierShipping = parseFloat(carrierShippingCost) || 0
     const fees = parseFloat(platformFees) || 0
     const fixedFees = parseFloat(platformFixedFees) || 0
     const totalFees = fees + fixedFees
-    const profit = price - item.purchaseCost - shipping - totalFees
+    // Profit = prix de vente - coût d'achat - frais port TRANSPORTEUR (réels) - frais plateforme
+    // NB : shippingCost (payé par client) n'est PAS soustrait — c'est un revenu net pour le revendeur
+    const profit = price - item.purchaseCost - carrierShipping - totalFees
     const margin = price > 0 ? (profit / price) * 100 : 0
 
     const sale = await db.sale.create({
@@ -58,6 +61,7 @@ export async function POST(req: NextRequest) {
         customerContact,
         salePrice: price,
         shippingCost: shipping,
+        carrierShippingCost: carrierShipping,
         platformFees: fees,
         platformFixedFees: fixedFees,
         profit: parseFloat(profit.toFixed(2)),

@@ -213,7 +213,8 @@ model Sale {
   customerName  String?
   customerContact String?
   salePrice     Float
-  shippingCost  Float    @default(0)
+  shippingCost  Float    @default(0)        // frais de port payés par le CLIENT (ce qui est facturé)
+  carrierShippingCost Float @default(0)     // frais de port réels payés au TRANSPORTEUR (ce que le revendeur paie réellement)
   platformFees  Float    @default(0)        // frais variables (% du prix de vente)
   platformFixedFees Float @default(0)       // frais fixes (ex. 0,70€ Vinted)
   profit        Float

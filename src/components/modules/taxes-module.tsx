@@ -137,7 +137,10 @@ function SyntheseTab({ year }: { year: number }) {
   const totalCA = yearSales.reduce((s, x) => s + x.salePrice, 0)
   const totalPurchases = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost, 0)
   const totalPlatformFees = yearSales.reduce((s, x) => s + (x.platformFees || 0) + (x.platformFixedFees || 0), 0)
-  const totalShipping = yearSales.reduce((s, x) => s + x.shippingCost, 0)
+  // Frais de port FACTURÉS au client (revenu net, pas une charge — ne doit pas être déduit du CA)
+  const totalShippingBilled = yearSales.reduce((s, x) => s + x.shippingCost, 0)
+  // Frais de port RÉELS payés au transporteur (charge réelle — déductible du CA)
+  const totalCarrierShipping = yearSales.reduce((s, x) => s + (x.carrierShippingCost || 0), 0)
   const totalOtherExpenses = yearExpenses.reduce((s, e) => s + e.amount, 0)
   const taxRate = taxSettings?.taxRate || 0
   const urssafCotisation = totalCA * taxRate / 100
@@ -145,21 +148,22 @@ function SyntheseTab({ year }: { year: number }) {
 
   const exportCSV = () => {
     const rows: string[][] = []
-    rows.push(['Type', 'Date', 'Plateforme', 'Article', 'Description', 'CA', 'Coût', 'Frais plateforme', 'Frais port', 'Profit', 'Marge %'])
+    rows.push(['Type', 'Date', 'Plateforme', 'Article', 'Description', 'CA', 'Coût', 'Frais plateforme', 'Frais port client', 'Frais port transporteur', 'Profit', 'Marge %'])
     yearSales.forEach(s => {
       rows.push([
         'Vente', formatDate(s.saleDate), s.platform, s.stockItem.sku,
         `${s.stockItem.brand} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim(),
         s.salePrice.toFixed(2), s.stockItem.purchaseCost.toFixed(2),
         ((s.platformFees || 0) + (s.platformFixedFees || 0)).toFixed(2),
-        s.shippingCost.toFixed(2), s.profit.toFixed(2), s.margin.toString(),
+        s.shippingCost.toFixed(2), (s.carrierShippingCost || 0).toFixed(2),
+        s.profit.toFixed(2), s.margin.toString(),
       ])
     })
     yearExpenses.forEach(e => {
-      rows.push(['Dépense', formatDate(e.date), '', '', e.label, '', '', '', '', (-e.amount).toFixed(2), ''])
+      rows.push(['Dépense', formatDate(e.date), '', '', e.label, '', '', '', '', '', '', (-e.amount).toFixed(2), ''])
     })
     rows.push([])
-    rows.push(['TOTAUX', '', '', '', '', totalCA.toFixed(2), totalPurchases.toFixed(2), totalPlatformFees.toFixed(2), totalShipping.toFixed(2), totalProfit.toFixed(2), ''])
+    rows.push(['TOTAUX', '', '', '', '', totalCA.toFixed(2), totalPurchases.toFixed(2), totalPlatformFees.toFixed(2), totalShippingBilled.toFixed(2), totalCarrierShipping.toFixed(2), totalProfit.toFixed(2), ''])
 
     const csv = rows.map(r => r.map(c => `"${(c || '').replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
@@ -174,18 +178,19 @@ function SyntheseTab({ year }: { year: number }) {
 
   const exportExcel = () => {
     const rows: string[][] = []
-    rows.push(['Type', 'Date', 'Plateforme', 'SKU', 'Description', 'CA (€)', 'Coût (€)', 'Frais plateforme (€)', 'Frais port (€)', 'Profit (€)', 'Marge (%)'])
+    rows.push(['Type', 'Date', 'Plateforme', 'SKU', 'Description', 'CA (€)', 'Coût (€)', 'Frais plateforme (€)', 'Frais port client (€)', 'Frais port transporteur (€)', 'Profit (€)', 'Marge (%)'])
     yearSales.forEach(s => {
       rows.push([
         'Vente', formatDate(s.saleDate), s.platform, s.stockItem.sku,
         `${s.stockItem.brand} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim(),
         s.salePrice.toFixed(2), s.stockItem.purchaseCost.toFixed(2),
         ((s.platformFees || 0) + (s.platformFixedFees || 0)).toFixed(2),
-        s.shippingCost.toFixed(2), s.profit.toFixed(2), s.margin.toString(),
+        s.shippingCost.toFixed(2), (s.carrierShippingCost || 0).toFixed(2),
+        s.profit.toFixed(2), s.margin.toString(),
       ])
     })
     yearExpenses.forEach(e => {
-      rows.push(['Dépense', formatDate(e.date), '', '', e.label, '', '', '', '', (-e.amount).toFixed(2), ''])
+      rows.push(['Dépense', formatDate(e.date), '', '', e.label, '', '', '', '', '', '', (-e.amount).toFixed(2), ''])
     })
     const tsv = rows.map(r => r.join('\t')).join('\n')
     const blob = new Blob(['\ufeff' + tsv], { type: 'application/vnd.ms-excel;charset=utf-8' })
@@ -231,7 +236,8 @@ function SyntheseTab({ year }: { year: number }) {
           <div><div class="label">CA</div><div class="value">${formatEUR(totalCA)}</div></div>
           <div><div class="label">Achats</div><div class="value">${formatEUR(totalPurchases)}</div></div>
           <div><div class="label">Frais plateforme</div><div class="value">${formatEUR(totalPlatformFees)}</div></div>
-          <div><div class="label">Frais port</div><div class="value">${formatEUR(totalShipping)}</div></div>
+          <div><div class="label">Frais port client</div><div class="value">${formatEUR(totalShippingBilled)}</div></div>
+          <div><div class="label">Frais port transporteur</div><div class="value">${formatEUR(totalCarrierShipping)}</div></div>
           <div><div class="label">Autres dépenses</div><div class="value">${formatEUR(totalOtherExpenses)}</div></div>
           <div><div class="label">Bénéfice net</div><div class="value profit">${formatEUR(totalProfit)}</div></div>
           <div><div class="label">Marge</div><div class="value">${totalCA > 0 ? ((totalProfit / totalCA) * 100).toFixed(1) : 0}%</div></div>
@@ -247,7 +253,7 @@ function SyntheseTab({ year }: { year: number }) {
               <td>${s.stockItem.brand} (${s.stockItem.sku})</td>
               <td>${formatEUR(s.salePrice)}</td>
               <td>${formatEUR(s.stockItem.purchaseCost)}</td>
-              <td>${formatEUR((s.platformFees || 0) + (s.shippingCost || 0) + (s.platformFixedFees || 0))}</td>
+              <td>${formatEUR((s.platformFees || 0) + (s.carrierShippingCost || 0) + (s.platformFixedFees || 0))}</td>
               <td class="profit">${formatEUR(s.profit)}</td>
             </tr>
           `).join('')}
@@ -255,7 +261,7 @@ function SyntheseTab({ year }: { year: number }) {
             <td colspan="3">TOTAUX</td>
             <td>${formatEUR(totalCA)}</td>
             <td>${formatEUR(totalPurchases)}</td>
-            <td>${formatEUR(totalPlatformFees + totalShipping)}</td>
+            <td>${formatEUR(totalPlatformFees + totalCarrierShipping)}</td>
             <td class="profit">${formatEUR(yearSales.reduce((s, x) => s + x.profit, 0))}</td>
           </tr>
         </tbody></table>
@@ -418,14 +424,15 @@ function SyntheseTab({ year }: { year: number }) {
       {/* Summary cards */}
       {loading ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <SummaryCard label="Chiffre d'affaires" value={totalCA} />
           <SummaryCard label="Achats" value={totalPurchases} />
           <SummaryCard label="Frais plateforme" value={totalPlatformFees} />
-          <SummaryCard label="Frais de port" value={totalShipping} />
+          <SummaryCard label="Frais port facturés (client)" value={totalShippingBilled} hint="Revenu net — non déduit du CA" />
+          <SummaryCard label="Frais port réels (transporteur)" value={totalCarrierShipping} hint="Charge déductible du CA" />
           <SummaryCard label="Autres dépenses" value={totalOtherExpenses} />
           <SummaryCard label={`Cotisations URSSAF (${taxRate}%)`} value={parseFloat(urssafCotisation.toFixed(2))} />
           <SummaryCard label="Bénéfice net" value={totalProfit} highlight />
@@ -616,7 +623,7 @@ function SyntheseTab({ year }: { year: number }) {
   )
 }
 
-function SummaryCard({ label, value, highlight, suffix }: { label: string; value: number; highlight?: boolean; suffix?: string }) {
+function SummaryCard({ label, value, highlight, suffix, hint }: { label: string; value: number; highlight?: boolean; suffix?: string; hint?: string }) {
   const isCount = label.toLowerCase().includes('nb') || label.toLowerCase().includes('ventes')
   return (
     <Card className={highlight ? 'border-emerald-200 dark:border-emerald-900' : ''}>
@@ -625,6 +632,7 @@ function SummaryCard({ label, value, highlight, suffix }: { label: string; value
         <p className={`text-xl font-bold mt-1 ${highlight ? 'text-emerald-600' : ''}`}>
           {isCount ? value : formatEUR(value)}{suffix}
         </p>
+        {hint && <p className="text-[10px] text-muted-foreground mt-1 leading-tight">{hint}</p>}
       </CardContent>
     </Card>
   )
