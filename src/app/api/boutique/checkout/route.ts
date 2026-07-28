@@ -112,6 +112,45 @@ export async function POST(req: NextRequest) {
     // Generate order ID
     const orderId = `CMD-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
 
+    // ── Calcul du poids total + coût réel transporteur (carrierShippingCost) ──
+    // Le carrierShippingCost est ce que le revendeur paie réellement au transporteur.
+    // Il est calculé à partir des CarrierPricingRule (Settings → Transporteurs → Gérer les tranches)
+    // en fonction du carrierCode du ShippingMethod choisi par le client.
+    const carrierCode = shippingMethod?.carrierCode || null
+    let totalOrderWeight = 0
+    for (const item of items) {
+      const stockItem = await db.stockItem.findFirst({
+        where: { sku: item.sku },
+        select: { weight: true },
+      })
+      const itemWeight = stockItem?.weight || 0
+      totalOrderWeight += itemWeight * (Math.max(1, parseInt(item.qty) || 1))
+    }
+    // Default: items without weight = 500g each
+    if (totalOrderWeight === 0 && items.length > 0) {
+      totalOrderWeight = items.reduce((s: number, i: any) => s + 500 * (i.qty || 1), 0)
+    }
+
+    let carrierShippingCost = 0
+    if (carrierCode) {
+      const carrierRules = await db.carrierPricingRule.findMany({
+        where: { carrierCode, active: true },
+        orderBy: { weightMin: 'asc' },
+      })
+      if (carrierRules.length > 0) {
+        const matchingRule = carrierRules.find(r => totalOrderWeight >= r.weightMin && totalOrderWeight <= r.weightMax)
+        if (matchingRule) {
+          carrierShippingCost = matchingRule.price
+        } else {
+          // If weight > max weight, use the highest tier
+          const highest = carrierRules[carrierRules.length - 1]
+          if (totalOrderWeight > highest.weightMax) {
+            carrierShippingCost = highest.price
+          }
+        }
+      }
+    }
+
     const invoiceNumbers: string[] = []
     let subtotal = 0
     const orderItems: any[] = []
@@ -127,12 +166,13 @@ export async function POST(req: NextRequest) {
       subtotal += salePrice * qty
       const purchaseCost = stockItem.purchaseCost || 0
       const itemShipping = shippingCost / items.length
-      // Pour les ventes boutique, le carrierShippingCost réel est inconnu au moment de la commande
-      // (le revendeur paie le transporteur plus tard). On l'initialise à 0 — l'admin l'ajustera.
+      // Coût réel transporteur au prorata de cet article (carrierShippingCost total / nb articles)
+      const itemCarrierShipping = carrierShippingCost / items.length
       // CA = prix article + frais port facturés client (itemShipping)
-      // Profit (avant URSSAF/autres dépenses, calculés en fiscalité) = CA - coût achat - frais port transporteur
+      // Profit (avant URSSAF/autres dépenses, calculés en fiscalité)
+      //   = CA - coût achat - frais port réels transporteur
       const ca = salePrice + itemShipping
-      const profit = ca - purchaseCost  // carrierShippingCost = 0 au moment de la commande
+      const profit = ca - purchaseCost - itemCarrierShipping
       const margin = ca > 0 ? (profit / ca) * 100 : 0
 
       // Generate invoice number
@@ -147,7 +187,7 @@ export async function POST(req: NextRequest) {
           saleDate: new Date(),
           salePrice,
           shippingCost: itemShipping,
-          carrierShippingCost: 0,  // inconnu au moment de la commande — admin l'ajustera
+          carrierShippingCost: parseFloat(itemCarrierShipping.toFixed(2)),  // coût réel transporteur (prorata)
           platformFees: 0,
           platformFixedFees: 0,
           platform: 'boutique',

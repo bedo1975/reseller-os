@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useSettings, type AttributeType } from '@/hooks/use-settings'
 import { useFetch } from '@/hooks/use-fetch'
@@ -39,6 +39,10 @@ interface Attribute {
   code: string
   sortOrder: number
   isDefault: boolean
+  trackingUrl?: string | null
+  parentCode?: string | null
+  fixedFees?: number
+  percentFees?: number
 }
 
 interface TabDef {
@@ -162,6 +166,271 @@ export function SettingsModule() {
         <AttributesSection />
       )}
     </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CARRIER PRICING — Affiche le nombre de tranches + bouton "Gérer"
+// ═══════════════════════════════════════════════════════════════════════
+
+interface CarrierPricingRule {
+  id: string
+  carrierCode: string
+  label: string
+  weightMin: number
+  weightMax: number
+  price: number
+  active: boolean
+}
+
+function CarrierPricingBadge({ carrierCode }: { carrierCode: string }) {
+  const [count, setCount] = useState<number | null>(null)
+  const [open, setOpen] = useState(false)
+
+  const refresh = () => {
+    fetch('/api/carrier-pricing')
+      .then(r => r.json())
+      .then(rules => {
+        const arr = Array.isArray(rules) ? rules : []
+        setCount(arr.filter((r: CarrierPricingRule) => r.carrierCode === carrierCode).length)
+      })
+      .catch(() => setCount(0))
+  }
+
+  useEffect(() => { refresh() }, [carrierCode])
+
+  return (
+    <div className="flex items-center justify-end gap-2">
+      {count === null ? (
+        <Skeleton className="h-5 w-12" />
+      ) : count === 0 ? (
+        <Badge variant="secondary" className="text-[10px]">0 tranche</Badge>
+      ) : (
+        <Badge className="text-[10px] bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 hover:bg-sky-100">
+          {count} tranche{count > 1 ? 's' : ''}
+        </Badge>
+      )}
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 text-xs"
+        onClick={() => { setOpen(true); refresh() }}
+      >
+        Gérer
+      </Button>
+      <CarrierPricingEditor
+        open={open}
+        onOpenChange={setOpen}
+        carrierCode={carrierCode}
+        onChanged={refresh}
+      />
+    </div>
+  )
+}
+
+function CarrierPricingEditor({
+  open, onOpenChange, carrierCode, onChanged,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  carrierCode: string
+  onChanged: () => void
+}) {
+  const [rules, setRules] = useState<CarrierPricingRule[]>([])
+  const [loading, setLoading] = useState(false)
+  const [editing, setEditing] = useState<CarrierPricingRule | null>(null)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ label: '', weightMin: '', weightMax: '', price: '', active: true })
+  const [saving, setSaving] = useState(false)
+
+  const fetchRules = useCallback(() => {
+    setLoading(true)
+    fetch('/api/carrier-pricing')
+      .then(r => r.json())
+      .then(data => {
+        const arr = Array.isArray(data) ? data : []
+        setRules(arr.filter((r: CarrierPricingRule) => r.carrierCode === carrierCode))
+      })
+      .finally(() => setLoading(false))
+  }, [carrierCode])
+
+  useEffect(() => {
+    if (open) fetchRules()
+  }, [open, fetchRules])
+
+  const reset = () => {
+    setForm({ label: '', weightMin: '', weightMax: '', price: '', active: true })
+    setEditing(null)
+    setShowForm(false)
+  }
+
+  const startEdit = (r: CarrierPricingRule) => {
+    setForm({
+      label: r.label,
+      weightMin: String(r.weightMin),
+      weightMax: String(r.weightMax),
+      price: String(r.price),
+      active: r.active,
+    })
+    setEditing(r)
+    setShowForm(true)
+  }
+
+  const submit = async () => {
+    if (!form.label) {
+      toast.error('Libellé requis')
+      return
+    }
+    setSaving(true)
+    try {
+      const url = editing ? `/api/carrier-pricing/${editing.id}` : '/api/carrier-pricing'
+      const method = editing ? 'PATCH' : 'POST'
+      const body = editing
+        ? { label: form.label, weightMin: form.weightMin, weightMax: form.weightMax, price: form.price, active: form.active }
+        : { carrierCode, label: form.label, weightMin: form.weightMin, weightMax: form.weightMax, price: form.price, active: form.active }
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Erreur')
+      }
+      toast.success(editing ? 'Tranche modifiée' : 'Tranche ajoutée')
+      reset()
+      fetchRules()
+      onChanged()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async (id: string) => {
+    if (!confirm('Supprimer cette tranche ?')) return
+    await fetch(`/api/carrier-pricing/${id}`, { method: 'DELETE' })
+    toast.success('Supprimée')
+    fetchRules()
+    onChanged()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o) }}>
+      <DialogContent className="sm:!max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Truck className="h-4 w-4" />
+            Tarifs par tranche de poids — <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{carrierCode}</code>
+          </DialogTitle>
+          <DialogDescription>
+            Configurez les tarifs réels facturés par ce transporteur. Utilisé pour calculer le coût réel (charge déductible du CA) lors d&apos;une vente.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2">
+          {/* List */}
+          {loading ? (
+            <Skeleton className="h-20" />
+          ) : rules.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              Aucune tranche configurée. Cliquez sur « Ajouter une tranche » pour commencer.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead>Libellé</TableHead>
+                  <TableHead className="text-right">Poids min (g)</TableHead>
+                  <TableHead className="text-right">Poids max (g)</TableHead>
+                  <TableHead className="text-right">Tarif (€)</TableHead>
+                  <TableHead className="text-center">Actif</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rules.map(r => (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-medium text-sm">{r.label}</TableCell>
+                    <TableCell className="text-right text-xs font-mono">{r.weightMin}</TableCell>
+                    <TableCell className="text-right text-xs font-mono">{r.weightMax}</TableCell>
+                    <TableCell className="text-right text-xs font-mono font-semibold">{Number(r.price).toFixed(2)} €</TableCell>
+                    <TableCell className="text-center">
+                      {r.active ? (
+                        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[10px]">Oui</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-[10px]">Non</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => startEdit(r)}>
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-rose-600" onClick={() => remove(r.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+
+          {/* Form */}
+          {showForm ? (
+            <div className="border rounded-md p-3 space-y-3 bg-muted/30">
+              <p className="text-sm font-semibold">{editing ? 'Modifier la tranche' : 'Nouvelle tranche'}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-xs">Libellé *</Label>
+                  <Input value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="0-500g" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Poids min (g) *</Label>
+                  <Input type="number" min="0" value={form.weightMin} onChange={e => setForm({ ...form, weightMin: e.target.value })} placeholder="0" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Poids max (g) *</Label>
+                  <Input type="number" min="0" value={form.weightMax} onChange={e => setForm({ ...form, weightMax: e.target.value })} placeholder="500" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Tarif réel (€) *</Label>
+                  <Input type="number" step="0.01" min="0" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="3.20" />
+                </div>
+                <div className="flex items-center gap-2 pt-5">
+                  <input
+                    type="checkbox"
+                    id="rule-active"
+                    checked={form.active}
+                    onChange={e => setForm({ ...form, active: e.target.checked })}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  <Label htmlFor="rule-active" className="text-xs cursor-pointer">Active</Label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={reset}>Annuler</Button>
+                <Button size="sm" onClick={submit} disabled={saving}>
+                  {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                  {editing ? 'Modifier' : 'Ajouter'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => { reset(); setShowForm(true) }}>
+              <Plus className="h-4 w-4 mr-1" /> Ajouter une tranche
+            </Button>
+          )}
+
+          <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200">
+            💡 <strong>Utilisation :</strong> lors d&apos;une commande boutique, le coût réel du transporteur est calculé automatiquement en fonction du poids total du colis et de la tranche correspondante. Ce montant est stocké sur la vente comme <strong>charge déductible du CA</strong> dans le module Fiscalité.
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -290,7 +559,10 @@ function AttributesSection() {
                   <TableHead>Code interne</TableHead>
                   <TableHead>Libellé affiché</TableHead>
                   {activeTab === 'subcategory' && <TableHead>Catégorie parente</TableHead>}
+                  {activeTab === 'platform' && <TableHead className="text-right">Frais fixes</TableHead>}
+                  {activeTab === 'platform' && <TableHead className="text-right">Frais %</TableHead>}
                   {activeTab === 'carrier' && <TableHead>URL de suivi</TableHead>}
+                  {activeTab === 'carrier' && <TableHead className="text-right">Tranches poids</TableHead>}
                   <TableHead className="text-center">Défaut</TableHead>
                   {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
@@ -314,6 +586,20 @@ function AttributesSection() {
                         )}
                       </TableCell>
                     )}
+                    {activeTab === 'platform' && (
+                      <TableCell className="text-right text-xs font-mono">
+                        {(attr.fixedFees ?? 0) > 0
+                          ? `${Number(attr.fixedFees).toFixed(2)} €`
+                          : <span className="text-muted-foreground italic">—</span>}
+                      </TableCell>
+                    )}
+                    {activeTab === 'platform' && (
+                      <TableCell className="text-right text-xs font-mono">
+                        {(attr.percentFees ?? 0) > 0
+                          ? `${Number(attr.percentFees).toFixed(2)} %`
+                          : <span className="text-muted-foreground italic">—</span>}
+                      </TableCell>
+                    )}
                     {activeTab === 'carrier' && (
                       <TableCell className="max-w-[280px]">
                         {attr.trackingUrl ? (
@@ -334,6 +620,11 @@ function AttributesSection() {
                         ) : (
                           <span className="text-xs text-muted-foreground italic">Non configurée</span>
                         )}
+                      </TableCell>
+                    )}
+                    {activeTab === 'carrier' && (
+                      <TableCell className="text-right">
+                        <CarrierPricingBadge carrierCode={attr.code} />
                       </TableCell>
                     )}
                     <TableCell className="text-center">
@@ -441,6 +732,8 @@ function AttributeForm({ open, onOpenChange, attribute, tab, onSaved }: {
     trackingUrl: '',
     parentCode: '',
     isDefault: false,
+    fixedFees: '0',
+    percentFees: '0',
   })
 
   // Get categories for parentCode select (subcategories only)
@@ -455,6 +748,8 @@ function AttributeForm({ open, onOpenChange, attribute, tab, onSaved }: {
       trackingUrl: attribute.trackingUrl || '',
       parentCode: attribute.parentCode || '',
       isDefault: attribute.isDefault,
+      fixedFees: String(attribute.fixedFees ?? 0),
+      percentFees: String(attribute.percentFees ?? 0),
     })
   }
   if (open && !attribute && (form.value !== '' || form.code !== '') && !saving) {
@@ -463,7 +758,7 @@ function AttributeForm({ open, onOpenChange, attribute, tab, onSaved }: {
   }
 
   const reset = () => {
-    setForm({ value: '', code: '', trackingUrl: '', parentCode: '', isDefault: false })
+    setForm({ value: '', code: '', trackingUrl: '', parentCode: '', isDefault: false, fixedFees: '0', percentFees: '0' })
   }
 
   const submit = async () => {
@@ -475,9 +770,13 @@ function AttributeForm({ open, onOpenChange, attribute, tab, onSaved }: {
     try {
       const url = '/api/settings'
       const method = attribute ? 'PATCH' : 'POST'
+      // Include fixedFees/percentFees only for platform type
+      const platformFees = tab.type === 'platform'
+        ? { fixedFees: parseFloat(form.fixedFees) || 0, percentFees: parseFloat(form.percentFees) || 0 }
+        : {}
       const body = attribute
-        ? { id: attribute.id, value: form.value, code: form.code, isDefault: form.isDefault, trackingUrl: form.trackingUrl, parentCode: form.parentCode || null }
-        : { type: tab.type, value: form.value, code: form.code, isDefault: form.isDefault, trackingUrl: form.trackingUrl, parentCode: form.parentCode || null }
+        ? { id: attribute.id, value: form.value, code: form.code, isDefault: form.isDefault, trackingUrl: form.trackingUrl, parentCode: form.parentCode || null, ...platformFees }
+        : { type: tab.type, value: form.value, code: form.code, isDefault: form.isDefault, trackingUrl: form.trackingUrl, parentCode: form.parentCode || null, ...platformFees }
 
       const res = await fetch(url, {
         method,
@@ -555,6 +854,39 @@ function AttributeForm({ open, onOpenChange, attribute, tab, onSaved }: {
               <p className="text-[11px] text-muted-foreground">
                 La sous-catégorie sera liée à cette catégorie parente.
               </p>
+            </div>
+          )}
+          {tab.type === 'platform' && (
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Frais fixes (€)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.fixedFees}
+                  onChange={e => setForm({ ...form, fixedFees: e.target.value })}
+                  placeholder="0.70"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Frais facturés par la marketplace à chaque vente (ex: 0,70€ Vinted).
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Frais variables (%)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={form.percentFees}
+                  onChange={e => setForm({ ...form, percentFees: e.target.value })}
+                  placeholder="5"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Pourcentage prélevé sur le prix de vente (ex: 5% Vinted).
+                </p>
+              </div>
             </div>
           )}
           {tab.type === 'carrier' && (

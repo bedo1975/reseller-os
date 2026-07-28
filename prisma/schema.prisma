@@ -272,6 +272,9 @@ model Attribute {
   code        String   // code interne (ex. "vetements", "neuf", "L", "Bleu marine")
   trackingUrl String?  // URL de suivi pour transporteurs
   parentCode  String?  // pour sous-catégories: code de la catégorie parente
+  // Pour les plateformes de vente : frais facturés par la marketplace
+  fixedFees   Float    @default(0)   // frais fixes (ex: 0.70€ Vinted)
+  percentFees Float    @default(0)   // frais variables en % (ex: 5% Vinted)
   sortOrder   Int      @default(0)
   isDefault   Boolean  @default(false)
   createdAt   DateTime @default(now())
@@ -279,6 +282,24 @@ model Attribute {
 
   @@unique([type, code])
   @@index([type, parentCode])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CARRIER PRICING — Tarifs réels des transporteurs par tranche de poids
+// ═══════════════════════════════════════════════════════════════════════
+model CarrierPricingRule {
+  id            String   @id @default(cuid())
+  carrierCode   String   // code du transporteur (ex: "mondial_relay", "chronopost", "colissimo") — lié à Attribute(type='carrier')
+  label         String   // libellé de la tranche (ex: "0-500g", "500g-1kg")
+  weightMin     Float    // poids min en grammes (inclus)
+  weightMax     Float    // poids max en grammes (inclus)
+  price         Float    // tarif réel payé au transporteur (€)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([carrierCode])
+  @@index([active])
 }
 
 // ─────────────────────────────────────────────

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useFetch } from '@/hooks/use-fetch'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,7 @@ import {
 } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { useConfirm } from '@/components/shared/confirm-provider'
+import { useSettings } from '@/hooks/use-settings'
 import type { StockItem } from './stock-module'
 
 interface Sale {
@@ -59,6 +60,8 @@ const PLATFORM_DEFAULT_FEES: Record<string, { percent: number; fixed: number }> 
 
 export function SalesModule() {
   const confirm = useConfirm()
+  const { getByType } = useSettings()
+  const platforms = getByType('platform')
   const { data: sales, loading, refresh } = useFetch<Sale[]>('/api/sales')
   const { data: stockItems } = useFetch<StockItem[]>('/api/stock')
   const [search, setSearch] = useState('')
@@ -167,7 +170,7 @@ export function SalesModule() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Toutes plateformes</SelectItem>
-                {PLATFORMS.map(p => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+                {platforms.map(p => <SelectItem key={p.code} value={p.code}>{p.value}</SelectItem>)}
               </SelectContent>
             </Select>
             <Button
@@ -318,10 +321,14 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
   onSaved: () => void
 }) {
   const [saving, setSaving] = useState(false)
+  const { getByType } = useSettings()
+  const platforms = getByType('platform')
+  // Plateforme par défaut = première plateforme des settings, ou 'vinted' en fallback
+  const defaultPlatformCode = platforms[0]?.code || 'vinted'
   const [form, setForm] = useState({
     stockItemId: '',
     saleDate: new Date().toISOString().split('T')[0],
-    platform: 'vinted',
+    platform: defaultPlatformCode,
     customerName: '',
     customerContact: '',
     salePrice: '',
@@ -334,6 +341,21 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
     parcelStatus: 'A_PREPARER',
     notes: '',
   })
+
+  // Auto-remplir les frais depuis les settings quand la plateforme change (en mode création)
+  // On utilise un effet pour détecter le changement de plateforme et pré-remplir si les champs sont vides
+  useEffect(() => {
+    if (editingSale) return // Pas d'auto-fill en édition
+    const platformAttr = platforms.find(p => p.code === form.platform)
+    if (platformAttr) {
+      setForm(prev => ({
+        ...prev,
+        platformFeesPercent: String(platformAttr.percentFees ?? 0),
+        platformFixedFees: String(platformAttr.fixedFees ?? 0),
+      }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.platform])
 
   // Sync form quand on ouvre en mode édition
   const lastEditingId = useRef<string | null>(null)
@@ -367,8 +389,12 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
   const selectedItem = availableItems.find(i => i.id === form.stockItemId) ||
     (editingSale ? editingSale.stockItem : null)
 
-  // En mode création : auto-remplir les frais selon la plateforme
-  const platformDefault = PLATFORM_DEFAULT_FEES[form.platform] || { percent: 0, fixed: 0 }
+  // En mode création : récupérer les frais depuis les settings (déjà auto-remplis via useEffect)
+  // En fallback, utiliser PLATFORM_DEFAULT_FEES (hard-coded)
+  const platformAttr = platforms.find(p => p.code === form.platform)
+  const platformDefault = platformAttr
+    ? { percent: platformAttr.percentFees ?? 0, fixed: platformAttr.fixedFees ?? 0 }
+    : (PLATFORM_DEFAULT_FEES[form.platform] || { percent: 0, fixed: 0 })
   const autoPercent = form.platformFeesPercent || String(platformDefault.percent)
   const autoFixed = form.platformFixedFees || String(platformDefault.fixed)
 
@@ -528,9 +554,20 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
               <Select value={form.platform} onValueChange={v => setForm({ ...form, platform: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {PLATFORMS.map(p => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+                  {platforms.map(p => <SelectItem key={p.code} value={p.code}>{p.value}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {(() => {
+                const platformAttr = platforms.find(p => p.code === form.platform)
+                if (!platformAttr) return null
+                const hasFees = (platformAttr.percentFees ?? 0) > 0 || (platformAttr.fixedFees ?? 0) > 0
+                if (!hasFees) return null
+                return (
+                  <p className="text-[10px] text-muted-foreground">
+                    Frais configurés : {platformAttr.percentFees ?? 0}% + {Number(platformAttr.fixedFees ?? 0).toFixed(2)}€ fixe
+                  </p>
+                )
+              })()}
             </div>
           </div>
 

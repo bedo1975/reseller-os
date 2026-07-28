@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   try {
     await requireAdmin()
     const body = await req.json()
-    const { type, value, code, isDefault, trackingUrl, parentCode } = body
+    const { type, value, code, isDefault, trackingUrl, parentCode, fixedFees, percentFees } = body
 
     if (!type || !value || !code) {
       return NextResponse.json({ error: 'Type, valeur et code requis' }, { status: 400 })
@@ -45,6 +45,8 @@ export async function POST(req: NextRequest) {
         isDefault: !!isDefault,
         trackingUrl: trackingUrl || null,
         parentCode: parentCode || null,
+        fixedFees: parseFloat(fixedFees) || 0,
+        percentFees: parseFloat(percentFees) || 0,
         sortOrder,
       },
     })
@@ -66,7 +68,7 @@ export async function PATCH(req: NextRequest) {
   try {
     await requireAdmin()
     const body = await req.json()
-    const { id, value, code, isDefault, sortOrder, trackingUrl, parentCode } = body
+    const { id, value, code, isDefault, sortOrder, trackingUrl, parentCode, fixedFees, percentFees } = body
 
     if (!id) {
       return NextResponse.json({ error: 'ID requis' }, { status: 400 })
@@ -93,6 +95,8 @@ export async function PATCH(req: NextRequest) {
         ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
         ...(trackingUrl !== undefined && { trackingUrl: trackingUrl || null }),
         ...(parentCode !== undefined && { parentCode: parentCode || null }),
+        ...(fixedFees !== undefined && { fixedFees: parseFloat(fixedFees) || 0 }),
+        ...(percentFees !== undefined && { percentFees: parseFloat(percentFees) || 0 }),
       },
     })
 
