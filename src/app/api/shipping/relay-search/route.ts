@@ -97,21 +97,41 @@ function slugify(s: string): string {
 
 // Geocode a postal code + city using Nominatim (for lat/lng only)
 async function geocode(postalCode: string, city?: string): Promise<{ lat: number; lng: number; cityName: string } | null> {
-  const query = city
-    ? `${encodeURIComponent(city + ' ' + postalCode)}, France`
-    : `${postalCode}, France`
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}&countrycodes=fr&limit=1`
+  // Strategy: try multiple queries to get the most precise location
+  // 1. city + postal code (most precise if city is provided and correct)
+  // 2. postal code only (fallback — gives the center of the postal code area)
+  const queries = city
+    ? [
+        `${encodeURIComponent(city + ' ' + postalCode)}, France`,
+        `${postalCode}, France`,
+      ]
+    : [`${postalCode}, France`]
 
-  try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Junashop/1.0' } })
-    const data = await res.json()
-    if (data && data.length > 0) {
-      const addr = data[0].address || {}
-      const cityName = city || addr.village || addr.town || addr.city || addr.municipality || ''
-      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), cityName }
+  for (const query of queries) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}&countrycodes=fr&limit=1`
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': 'Junashop/1.0' } })
+      const data = await res.json()
+      if (data && data.length > 0) {
+        const addr = data[0].address || {}
+        const cityName = city || addr.village || addr.town || addr.city || addr.municipality || ''
+        const lat = parseFloat(data[0].lat)
+        const lng = parseFloat(data[0].lon)
+        // Sanity check: coordinates should be in metropolitan France (or DOM)
+        // Mainland: lat 41-51, lng -5 to 10
+        // DOM: various (Guadeloupe ~16/-61, Reunion ~-21/55, etc.)
+        const isMainland = lat >= 41 && lat <= 51 && lng >= -5 && lng <= 10
+        const isDOM = (lat >= 14 && lat <= 18 && lng >= -62 && lng <= -60) || // Guadeloupe/Martinique
+                      (lat >= 2 && lat <= 6 && lng >= -54 && lng <= -51) ||     // Guyane
+                      (lat >= -22 && lat <= -20 && lng >= 55 && lng <= 56) ||   // Reunion
+                      (lat >= -13 && lat <= -12 && lng >= 45 && lng <= 46)      // Mayotte
+        if (isMainland || isDOM) {
+          return { lat, lng, cityName }
+        }
+      }
+    } catch (e) {
+      console.error('[relay-search] geocode error:', e)
     }
-  } catch (e) {
-    console.error('[relay-search] geocode error:', e)
   }
   return null
 }
@@ -324,8 +344,9 @@ export async function POST(req: NextRequest) {
 
     // Get coordinates for distance calculation
     const geo = await geocode(postalCode, city)
-    const searchLat = geo?.lat || 46.6034
-    const searchLng = geo?.lng || 1.8883
+    let searchLat = geo?.lat || 46.6034
+    let searchLng = geo?.lng || 1.8883
+    const geocodeSuccess = !!geo
 
     // 1. Try suivi-de-colis.org (REAL carrier-specific relay points)
     const carrierRelays = await searchSuiviDeColis(
@@ -333,13 +354,46 @@ export async function POST(req: NextRequest) {
     )
 
     if (carrierRelays.length > 0) {
-      return NextResponse.json({ relays: carrierRelays, source: 'suivi-de-colis.org' })
+      // If geocoding failed or seems wrong, recalculate distances using
+      // the centroid of the found relay points (much more reliable)
+      if (!geocodeSuccess) {
+        const avgLat = carrierRelays.reduce((s, r) => s + r.lat, 0) / carrierRelays.length
+        const avgLng = carrierRelays.reduce((s, r) => s + r.lng, 0) / carrierRelays.length
+        searchLat = avgLat
+        searchLng = avgLng
+        for (const r of carrierRelays) {
+          r.distance = parseFloat(haversine(searchLat, searchLng, r.lat, r.lng).toFixed(2))
+        }
+        carrierRelays.sort((a, b) => a.distance - b.distance)
+      }
+
+      return NextResponse.json({
+        relays: carrierRelays,
+        source: 'suivi-de-colis.org',
+        searchLocation: { lat: searchLat, lng: searchLng, city: geo?.cityName || city || '' },
+      })
     }
 
     // 2. Fallback: OpenStreetMap (generic shops, not carrier-specific)
     const osmRelays = await searchOpenStreetMap(searchLat, searchLng, postalCode, carrierCode)
     if (osmRelays.length > 0) {
-      return NextResponse.json({ relays: osmRelays, source: 'openstreetmap' })
+      // Recalculate distances if geocoding failed
+      if (!geocodeSuccess) {
+        const avgLat = osmRelays.reduce((s, r) => s + r.lat, 0) / osmRelays.length
+        const avgLng = osmRelays.reduce((s, r) => s + r.lng, 0) / osmRelays.length
+        searchLat = avgLat
+        searchLng = avgLng
+        for (const r of osmRelays) {
+          r.distance = parseFloat(haversine(searchLat, searchLng, r.lat, r.lng).toFixed(2))
+        }
+        osmRelays.sort((a, b) => a.distance - b.distance)
+      }
+
+      return NextResponse.json({
+        relays: osmRelays,
+        source: 'openstreetmap',
+        searchLocation: { lat: searchLat, lng: searchLng, city: geo?.cityName || city || '' },
+      })
     }
 
     // 3. Last resort: empty with a message
@@ -347,6 +401,7 @@ export async function POST(req: NextRequest) {
       relays: [],
       source: 'none',
       message: `Aucun point relais trouvé pour le code postal ${postalCode}. Essayez une ville voisine.`,
+      searchLocation: geocodeSuccess ? { lat: searchLat, lng: searchLng, city: geo?.cityName || city || '' } : null,
     })
   } catch (error) {
     console.error('POST /api/shipping/relay-search error:', error)
