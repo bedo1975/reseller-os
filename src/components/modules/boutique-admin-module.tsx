@@ -2974,6 +2974,7 @@ function PaymentsTab() {
   }>>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editingMethod, setEditingMethod] = useState<typeof methods[0] | null>(null)
   const [form, setForm] = useState({
     code: '', label: '', description: '', icon: '💳', provider: 'demo',
     feesFixed: '0', feesPercent: '0',
@@ -3057,6 +3058,46 @@ function PaymentsTab() {
     fetchMethods()
   }
 
+  const startEdit = (m: typeof methods[0]) => {
+    setEditingMethod(m)
+    setForm({
+      code: m.code,
+      label: m.label,
+      description: m.description || '',
+      icon: m.icon || '💳',
+      provider: m.provider,
+      feesFixed: String(m.feesFixed || 0),
+      feesPercent: String(m.feesPercent || 0),
+    })
+  }
+
+  const saveEdit = async () => {
+    if (!editingMethod) return
+    if (!form.label) {
+      toast.error('Libellé requis')
+      return
+    }
+    const res = await fetch(`/api/boutique/admin/payments/${editingMethod.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        label: form.label,
+        description: form.description,
+        icon: form.icon,
+        provider: form.provider,
+        feesFixed: form.feesFixed,
+        feesPercent: form.feesPercent,
+      }),
+    })
+    if (res.ok) {
+      toast.success('Mode de paiement modifié')
+      setEditingMethod(null)
+      fetchMethods()
+    } else {
+      toast.error('Erreur')
+    }
+  }
+
   const remove = async (id: string) => {
     if (!confirm('Supprimer ce mode de paiement ?')) return
     await fetch(`/api/boutique/admin/payments/${id}`, { method: 'DELETE' })
@@ -3113,6 +3154,9 @@ function PaymentsTab() {
               <Badge variant={m.active ? 'default' : 'secondary'}>
                 {m.active ? 'Actif' : 'Inactif'}
               </Badge>
+              <Button size="sm" variant="outline" onClick={() => startEdit(m)}>
+                <Edit className="h-3.5 w-3.5 mr-1" /> Éditer
+              </Button>
               <Button size="sm" variant="outline" onClick={() => toggleActive(m)}>
                 {m.active ? 'Désactiver' : 'Activer'}
               </Button>
@@ -3123,6 +3167,65 @@ function PaymentsTab() {
           ))}
         </div>
       )}
+
+      {/* Edit payment method dialog */}
+      <Dialog open={!!editingMethod} onOpenChange={(o) => !o && setEditingMethod(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Modifier le mode de paiement</DialogTitle>
+            <DialogDescription>
+              Code : <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">{editingMethod?.code}</code> (non modifiable)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Libellé</Label>
+              <Input value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="Carte bancaire (Stripe)" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Icône (emoji)</Label>
+                <Input value={form.icon} onChange={e => setForm({ ...form, icon: e.target.value })} placeholder="💳" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Type</Label>
+                <Select value={form.provider} onValueChange={v => setForm({ ...form, provider: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PROVIDERS.map(p => (
+                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Description</Label>
+              <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Paiement sécurisé par carte bancaire" />
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+              <div className="space-y-1">
+                <Label className="text-xs">Frais fixes (€)</Label>
+                <Input type="number" step="0.01" min="0" value={form.feesFixed} onChange={e => setForm({ ...form, feesFixed: e.target.value })} placeholder="0.00" />
+                <p className="text-[10px] text-muted-foreground">Ex: Stripe = 0.25€ par transaction</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Frais variables (%)</Label>
+                <Input type="number" step="0.01" min="0" max="100" value={form.feesPercent} onChange={e => setForm({ ...form, feesPercent: e.target.value })} placeholder="0.00" />
+                <p className="text-[10px] text-muted-foreground">Ex: Stripe = 1.40% (CB européenne)</p>
+              </div>
+            </div>
+            <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-2.5 text-[11px] text-blue-800 dark:text-blue-200">
+              💡 <strong>Exemple Stripe France :</strong> 0.25€ fixe + 1.40% variable.
+              Pour une commande de 55€ : frais = 0.25 + (55 × 1.40 / 100) = <strong>1.02€</strong> déduits du CA.
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditingMethod(null)}>Annuler</Button>
+            <Button onClick={saveEdit}>Sauvegarder</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add payment method form */}
       {showForm ? (
