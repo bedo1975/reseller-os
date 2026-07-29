@@ -215,6 +215,7 @@ model Sale {
   salePrice     Float
   shippingCost  Float    @default(0)        // frais de port payés par le CLIENT (ce qui est facturé)
   carrierShippingCost Float @default(0)     // frais de port réels payés au TRANSPORTEUR (ce que le revendeur paie réellement)
+  paymentFees   Float    @default(0)        // frais bancaires (Stripe, PayPal...) = feesFixed + (CA × feesPercent)
   platformFees  Float    @default(0)        // frais variables (% du prix de vente)
   platformFixedFees Float @default(0)       // frais fixes (ex. 0,70€ Vinted)
   profit        Float
@@ -685,6 +686,10 @@ model PaymentMethod {
   icon        String?             // emoji ou nom d'icône
   // Type: demo (simulation), stripe (vraie intégration), paypal, manual
   provider     String   @default("demo")
+  // Frais de paiement facturés par le processeur (Stripe, PayPal, etc.)
+  // Utilisés pour calculer les frais bancaires sur chaque vente
+  feesFixed    Float    @default(0)   // frais fixes par transaction (€)
+  feesPercent  Float    @default(0)   // frais variables (% du montant total)
   // Pour stripe/paypal: clés API stockées séparément (BoutiqueSettings)
   active      Boolean  @default(true)
   order       Int      @default(0)

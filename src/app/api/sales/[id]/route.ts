@@ -19,7 +19,7 @@ export async function PATCH(
 
     const allowed = [
       'saleDate', 'platform', 'customerName', 'customerContact',
-      'salePrice', 'shippingCost', 'carrierShippingCost', 'platformFees', 'platformFixedFees',
+      'salePrice', 'shippingCost', 'carrierShippingCost', 'paymentFees', 'platformFees', 'platformFixedFees',
       'carrier', 'trackingNumber', 'parcelStatus', 'notes',
     ]
     const updateData: Record<string, unknown> = {}
@@ -31,13 +31,13 @@ export async function PATCH(
     if ('salePrice' in updateData) updateData.salePrice = parseFloat(updateData.salePrice as string)
     if ('shippingCost' in updateData) updateData.shippingCost = parseFloat(updateData.shippingCost as string) || 0
     if ('carrierShippingCost' in updateData) updateData.carrierShippingCost = parseFloat(updateData.carrierShippingCost as string) || 0
+    if ('paymentFees' in updateData) updateData.paymentFees = parseFloat(updateData.paymentFees as string) || 0
     if ('platformFees' in updateData) updateData.platformFees = parseFloat(updateData.platformFees as string) || 0
     if ('platformFixedFees' in updateData) updateData.platformFixedFees = parseFloat(updateData.platformFixedFees as string) || 0
 
     // Recalculer profit & marge si les montants changent
-    // NB : shippingCost (frais port client) influe aussi sur le CA → recalcul nécessaire
     const priceChanged = 'salePrice' in updateData || 'shippingCost' in updateData ||
-                         'carrierShippingCost' in updateData ||
+                         'carrierShippingCost' in updateData || 'paymentFees' in updateData ||
                          'platformFees' in updateData || 'platformFixedFees' in updateData
 
     if (priceChanged) {
@@ -46,13 +46,14 @@ export async function PATCH(
         const price = 'salePrice' in updateData ? parseFloat(updateData.salePrice as string) : current.salePrice
         const shipping = 'shippingCost' in updateData ? parseFloat(updateData.shippingCost as string) : current.shippingCost
         const carrierShipping = 'carrierShippingCost' in updateData ? parseFloat(updateData.carrierShippingCost as string) : current.carrierShippingCost
+        const payFees = 'paymentFees' in updateData ? parseFloat(updateData.paymentFees as string) : (current.paymentFees || 0)
         const fees = 'platformFees' in updateData ? parseFloat(updateData.platformFees as string) : current.platformFees
         const fixedFees = 'platformFixedFees' in updateData ? parseFloat(updateData.platformFixedFees as string) : (current.platformFixedFees || 0)
         const totalFees = (fees || 0) + (fixedFees || 0)
-        // CA = prix de vente + frais port facturés au client
-        // Profit = CA - coût d'achat - frais plateforme - frais port réels transporteur
+        // CA brut = prix de vente + frais port client
+        // Profit = CA brut - frais bancaires - coût achat - frais plateforme - frais port transporteur
         const ca = price + (shipping || 0)
-        const profit = ca - current.stockItem.purchaseCost - totalFees - (carrierShipping || 0)
+        const profit = ca - (payFees || 0) - current.stockItem.purchaseCost - totalFees - (carrierShipping || 0)
         updateData.profit = parseFloat(profit.toFixed(2))
         updateData.margin = parseFloat(((ca > 0 ? (profit / ca) * 100 : 0)).toFixed(1))
       }

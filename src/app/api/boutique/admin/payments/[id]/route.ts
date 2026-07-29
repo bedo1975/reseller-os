@@ -19,6 +19,8 @@ export async function PATCH(
     if (typeof body.provider === 'string') data.provider = body.provider
     if (typeof body.active === 'boolean') data.active = body.active
     if (typeof body.order === 'number') data.order = body.order
+    if (body.feesFixed !== undefined) data.feesFixed = parseFloat(body.feesFixed) || 0
+    if (body.feesPercent !== undefined) data.feesPercent = parseFloat(body.feesPercent) || 0
 
     const method = await db.paymentMethod.update({ where: { id }, data })
     return NextResponse.json(method)

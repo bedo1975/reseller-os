@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   try {
     await requireAdmin()
     const body = await req.json()
-    const { code, label, description, icon, provider, active, order } = body
+    const { code, label, description, icon, provider, feesFixed, feesPercent, active, order } = body
 
     if (!code || !label) {
       return NextResponse.json({ error: 'Code et libellé requis' }, { status: 400 })
@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
         description: description?.trim() || null,
         icon: icon?.trim() || null,
         provider: provider || 'demo',
+        feesFixed: parseFloat(feesFixed) || 0,
+        feesPercent: parseFloat(feesPercent) || 0,
         active: active !== false,
         order: parseInt(order) || 0,
       },

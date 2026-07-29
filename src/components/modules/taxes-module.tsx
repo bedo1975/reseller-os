@@ -141,9 +141,12 @@ function SyntheseTab({ year }: { year: number }) {
   const totalShippingBilled = yearSales.reduce((s, x) => s + x.shippingCost, 0)
   // Frais de port RÉELS payés au transporteur (charge déductible)
   const totalCarrierShipping = yearSales.reduce((s, x) => s + (x.carrierShippingCost || 0), 0)
+  // Frais bancaires (Stripe, PayPal...) — déduits du CA (charge déductible, déjà dans le profit par vente)
+  const totalPaymentFees = yearSales.reduce((s, x) => s + (x.paymentFees || 0), 0)
   const totalOtherExpenses = yearExpenses.reduce((s, e) => s + e.amount, 0)
   const taxRate = taxSettings?.taxRate || 0
   const urssafCotisation = totalCA * taxRate / 100
+  // Le profit par vente inclut déjà la déduction des frais bancaires et frais port transporteur
   const totalProfit = yearSales.reduce((s, x) => s + x.profit, 0) - totalOtherExpenses - urssafCotisation
 
   const exportCSV = () => {
@@ -433,6 +436,7 @@ function SyntheseTab({ year }: { year: number }) {
           <SummaryCard label="Frais plateforme" value={totalPlatformFees} />
           <SummaryCard label="dont Frais port client" value={totalShippingBilled} hint="Inclus dans le CA (revenu)" />
           <SummaryCard label="Frais port réels (transporteur)" value={totalCarrierShipping} hint="Charge déductible du CA" />
+          <SummaryCard label="Frais bancaires (Stripe/PayPal)" value={totalPaymentFees} hint="Charge déductible du CA" />
           <SummaryCard label="Autres dépenses" value={totalOtherExpenses} />
           <SummaryCard label={`Cotisations URSSAF (${taxRate}%)`} value={parseFloat(urssafCotisation.toFixed(2))} />
           <SummaryCard label="Bénéfice net" value={totalProfit} highlight />

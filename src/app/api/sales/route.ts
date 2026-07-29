@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       stockItemId, saleDate, platform, paymentMethod, customerName, customerContact,
-      salePrice, shippingCost, carrierShippingCost, platformFees, platformFixedFees,
+      salePrice, shippingCost, carrierShippingCost, paymentFees, platformFees, platformFixedFees,
       carrier, trackingNumber, parcelStatus, notes,
     } = body
 
@@ -43,14 +43,15 @@ export async function POST(req: NextRequest) {
     const price = parseFloat(salePrice)
     const shipping = parseFloat(shippingCost) || 0
     const carrierShipping = parseFloat(carrierShippingCost) || 0
+    const payFees = parseFloat(paymentFees) || 0  // frais bancaires (déjà calculés par le frontend ou l'API checkout)
     const fees = parseFloat(platformFees) || 0
     const fixedFees = parseFloat(platformFixedFees) || 0
     const totalFees = fees + fixedFees
-    // CA = prix de vente + frais de port facturés au client
-    // Profit (avant URSSAF et autres dépenses, calculés au niveau fiscalité agrégée)
-    //   = CA - coût d'achat - frais plateforme - frais port réels transporteur
+    // CA brut = prix de vente + frais de port facturés au client
+    // Les frais bancaires (paymentFees) sont déduits du CA (charge déductible)
+    // Profit = CA brut - frais bancaires - coût d'achat - frais plateforme - frais port transporteur
     const ca = price + shipping
-    const profit = ca - item.purchaseCost - totalFees - carrierShipping
+    const profit = ca - payFees - item.purchaseCost - totalFees - carrierShipping
     const margin = ca > 0 ? (profit / ca) * 100 : 0
 
     const sale = await db.sale.create({
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
         salePrice: price,
         shippingCost: shipping,
         carrierShippingCost: carrierShipping,
+        paymentFees: payFees,
         platformFees: fees,
         platformFixedFees: fixedFees,
         profit: parseFloat(profit.toFixed(2)),

@@ -2969,12 +2969,14 @@ function CategoriesTab() {
 function PaymentsTab() {
   const [methods, setMethods] = useState<Array<{
     id: string; code: string; label: string; description: string | null;
-    icon: string | null; provider: string; active: boolean; order: number
+    icon: string | null; provider: string; active: boolean; order: number;
+    feesFixed: number; feesPercent: number;
   }>>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
     code: '', label: '', description: '', icon: '💳', provider: 'demo',
+    feesFixed: '0', feesPercent: '0',
   })
 
   // API keys state (stored in BoutiqueSettings, not PaymentMethod)
@@ -3021,7 +3023,7 @@ function PaymentsTab() {
     })
     if (res.ok) {
       toast.success('Mode de paiement ajouté')
-      setForm({ code: '', label: '', description: '', icon: '💳', provider: 'demo' })
+      setForm({ code: '', label: '', description: '', icon: '💳', provider: 'demo', feesFixed: '0', feesPercent: '0' })
       setShowForm(false)
       fetchMethods()
     } else {
@@ -3099,6 +3101,14 @@ function PaymentsTab() {
                   {PROVIDERS.find(p => p.value === m.provider)?.label || m.provider}
                   {m.description && ` · ${m.description}`}
                 </p>
+                {(m.feesFixed > 0 || m.feesPercent > 0) && (
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                    💰 Frais bancaires : {m.feesFixed > 0 && `${Number(m.feesFixed).toFixed(2)}€ fixe`}
+                    {m.feesFixed > 0 && m.feesPercent > 0 && ' + '}
+                    {m.feesPercent > 0 && `${Number(m.feesPercent).toFixed(2)}%`}
+                    {' '}→ déduits du CA sur chaque vente
+                  </p>
+                )}
               </div>
               <Badge variant={m.active ? 'default' : 'secondary'}>
                 {m.active ? 'Actif' : 'Inactif'}
@@ -3145,6 +3155,16 @@ function PaymentsTab() {
             <div className="space-y-1 col-span-2">
               <Label className="text-xs">Description</Label>
               <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Paiement sécurisé par carte bancaire" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Frais fixes (€)</Label>
+              <Input type="number" step="0.01" min="0" value={form.feesFixed} onChange={e => setForm({ ...form, feesFixed: e.target.value })} placeholder="0.00" />
+              <p className="text-[10px] text-muted-foreground">Ex: Stripe = 0.00€ (frais fixe par transaction)</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Frais variables (%)</Label>
+              <Input type="number" step="0.01" min="0" max="100" value={form.feesPercent} onChange={e => setForm({ ...form, feesPercent: e.target.value })} placeholder="0.00" />
+              <p className="text-[10px] text-muted-foreground">Ex: Stripe = 1.40% + 0.25€ (CB européenne)</p>
             </div>
           </div>
           <div className="flex gap-2 justify-end">

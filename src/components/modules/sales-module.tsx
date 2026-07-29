@@ -40,6 +40,7 @@ interface Sale {
   salePrice: number
   shippingCost: number
   carrierShippingCost?: number
+  paymentFees?: number
   platformFees: number
   platformFixedFees?: number
   profit: number
@@ -334,6 +335,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
     salePrice: '',
     shippingCost: '4.95',
     carrierShippingCost: '',
+    paymentFees: '',
     platformFeesPercent: '',
     platformFixedFees: '',
     carrier: 'mondial_relay',
@@ -372,6 +374,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
       salePrice: String(editingSale.salePrice),
       shippingCost: String(editingSale.shippingCost),
       carrierShippingCost: String(editingSale.carrierShippingCost || 0),
+      paymentFees: String(editingSale.paymentFees || 0),
       platformFeesPercent: '',  // En édition, on conserve le montant € existant
       platformFixedFees: String(editingSale.platformFixedFees || 0),
       carrier: editingSale.carrier || 'mondial_relay',
@@ -404,7 +407,8 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
     : (form.salePrice ? parseFloat(form.salePrice) * (parseFloat(autoPercent) || 0) / 100 : 0)
 
   const projectedProfit = (selectedItem && form.salePrice)
-    ? (parseFloat(form.salePrice) + (parseFloat(form.shippingCost || '0') || 0))  // CA
+    ? (parseFloat(form.salePrice) + (parseFloat(form.shippingCost || '0') || 0))  // CA brut
+      - (parseFloat(form.paymentFees || '0') || 0)  // frais bancaires (déduits du CA)
       - selectedItem.purchaseCost
       - feesEuro
       - (parseFloat(autoFixed) || 0)
@@ -427,6 +431,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
         salePrice: form.salePrice,
         shippingCost: form.shippingCost,
         carrierShippingCost: form.carrierShippingCost || '0',
+        paymentFees: form.paymentFees || '0',
         // En édition : envoyer le montant € existant. En création : calculer depuis le %
         platformFees: editingSale ? String(editingSale.platformFees) : String(feesEuro.toFixed(2)),
         platformFixedFees: autoFixed,
@@ -523,6 +528,11 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
               <Label className="text-xs">Frais port réels transporteur (€)</Label>
               <Input type="number" step="0.01" value={form.carrierShippingCost} onChange={e => setForm({ ...form, carrierShippingCost: e.target.value })} placeholder="0.00" />
               <p className="text-[10px] text-muted-foreground">Charge réelle déduite du CA</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Frais bancaires (€)</Label>
+              <Input type="number" step="0.01" value={form.paymentFees} onChange={e => setForm({ ...form, paymentFees: e.target.value })} placeholder="0.00" />
+              <p className="text-[10px] text-muted-foreground">Stripe/PayPal — déduit du CA</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Frais plateforme %</Label>

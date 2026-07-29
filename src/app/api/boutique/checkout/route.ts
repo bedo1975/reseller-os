@@ -100,12 +100,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Get payment method (for label)
+    // Get payment method (for label + fees config)
     let paymentMethodLabel = paymentMethodCode || 'demo'
+    let paymentMethodConfig: { feesFixed: number; feesPercent: number } | null = null
     try {
       if (paymentMethodCode) {
         const pm = await db.paymentMethod.findUnique({ where: { code: paymentMethodCode } })
-        if (pm) paymentMethodLabel = pm.label
+        if (pm) {
+          paymentMethodLabel = pm.label
+          paymentMethodConfig = { feesFixed: pm.feesFixed || 0, feesPercent: pm.feesPercent || 0 }
+        }
       }
     } catch {}
 
@@ -168,11 +172,21 @@ export async function POST(req: NextRequest) {
       const itemShipping = shippingCost / items.length
       // Coût réel transporteur au prorata de cet article (carrierShippingCost total / nb articles)
       const itemCarrierShipping = carrierShippingCost / items.length
-      // CA = prix article + frais port facturés client (itemShipping)
-      // Profit (avant URSSAF/autres dépenses, calculés en fiscalité)
-      //   = CA - coût achat - frais port réels transporteur
+
+      // Calcul des frais bancaires (Stripe, PayPal...) au prorata de cet article
+      // paymentFees = feesFixed (prorata) + (CA item × feesPercent / 100)
+      let itemPaymentFees = 0
+      if (paymentMethodConfig) {
+        const itemCa = salePrice + itemShipping
+        const itemFeesFixed = paymentMethodConfig.feesFixed / items.length
+        const itemFeesPercent = itemCa * (paymentMethodConfig.feesPercent / 100)
+        itemPaymentFees = itemFeesFixed + itemFeesPercent
+      }
+
+      // CA brut = prix article + frais port facturés client
+      // Profit = CA brut - frais bancaires - coût achat - frais port réels transporteur
       const ca = salePrice + itemShipping
-      const profit = ca - purchaseCost - itemCarrierShipping
+      const profit = ca - itemPaymentFees - purchaseCost - itemCarrierShipping
       const margin = ca > 0 ? (profit / ca) * 100 : 0
 
       // Generate invoice number
@@ -187,7 +201,8 @@ export async function POST(req: NextRequest) {
           saleDate: new Date(),
           salePrice,
           shippingCost: itemShipping,
-          carrierShippingCost: parseFloat(itemCarrierShipping.toFixed(2)),  // coût réel transporteur (prorata)
+          carrierShippingCost: parseFloat(itemCarrierShipping.toFixed(2)),
+          paymentFees: parseFloat(itemPaymentFees.toFixed(2)),  // frais bancaires (déduits du CA)
           platformFees: 0,
           platformFixedFees: 0,
           platform: 'boutique',
