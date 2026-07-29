@@ -28,11 +28,11 @@ interface StockItemLite {
 interface BarcodeScannerModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onFound: (item: StockItemLite) => void      // code-barres trouvé en DB
-  onNotFound: (barcode: string) => void       // code-barres scanné mais inconnu → ouvrir formulaire ajout
+  onFound: (item: StockItemLite) => void
+  onNotFound: (barcode: string) => void
 }
 
-const SCAN_TIMEOUT_MS = 30000 // arrêt auto après 30s sans scan
+const SCAN_TIMEOUT_MS = 30000
 
 export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }: BarcodeScannerModalProps) {
   const [mode, setMode] = useState<'camera' | 'manual'>('camera')
@@ -40,114 +40,18 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
   const [manualCode, setManualCode] = useState('')
   const [lookingUp, setLookingUp] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [closing, setClosing] = useState(false)
   const scannerRef = useRef<any>(null)
-  // Use a ref instead of an id — React manages the OUTER div, but the INNER
-  // scanner div is created/destroyed by our code (not React). This prevents
-  // the "removeChild" error because React never tries to unmount the
-  // scanner's injected <video>/<canvas> elements.
   const mountRef = useRef<HTMLDivElement>(null)
-  const stopTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isOpenRef = useRef(open)
 
-  // Reset on open + cleanup on close
+  // Keep isOpenRef in sync
   useEffect(() => {
-    if (open) {
-      setMode('camera')
-      setManualCode('')
-      setCameraError(null)
-      setScanning(false)
-    } else {
-      stopCamera()
-    }
-    // Cleanup on unmount (prevents removeChild error when Dialog closes)
-    return () => {
-      stopCamera()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    isOpenRef.current = open
   }, [open])
 
-  // Start camera when entering camera mode
-  useEffect(() => {
-    if (open && mode === 'camera') {
-      // Small delay to let DOM render the container
-      const t = setTimeout(() => startCamera(), 100)
-      return () => clearTimeout(t)
-    } else {
-      stopCamera()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode])
-
-  const startCamera = async () => {
-    setCameraError(null)
-    setScanning(true)
-    try {
-      const { Html5Qrcode } = await import('html5-qrcode')
-      // Stop any existing scanner
-      if (scannerRef.current) {
-        try { await scannerRef.current.stop() } catch {}
-        scannerRef.current = null
-      }
-
-      // Create a FRESH div for the scanner — NOT managed by React.
-      // html5-qrcode will inject <video>, <canvas> etc. into this div.
-      // When we're done, we remove this div entirely (mountRef.innerHTML = ''),
-      // so React never sees those injected elements and can't throw removeChild errors.
-      if (!mountRef.current) return
-      mountRef.current.innerHTML = ''
-      const scannerDiv = document.createElement('div')
-      scannerDiv.id = 'barcode-scanner-region'
-      scannerDiv.style.width = '100%'
-      scannerDiv.style.height = '100%'
-      mountRef.current.appendChild(scannerDiv)
-
-      const scanner = new Html5Qrcode('barcode-scanner-region', { verbose: false })
-      scannerRef.current = scanner
-
-      const config = {
-        fps: 10,
-        qrbox: { width: 280, height: 160 },
-        aspectRatio: 16 / 9,
-        formatsToSupport: [
-          // Code-barres 1D (produits)
-          3,  // QR_CODE
-          4,  // EAN_13
-          5,  // EAN_8
-          6,  // CODE_39
-          7,  // CODE_93
-          8,  // CODE_128
-          9,  // ITF
-          10, // CODABAR
-          11, // UPC_A
-          12, // UPC_E
-        ],
-      }
-
-      await scanner.start(
-        { facingMode: 'environment' },
-        config,
-        (decodedText: string) => {
-          // Success callback
-          handleScannedCode(decodedText)
-        },
-        () => {
-          // Ignore per-frame failures
-        },
-      )
-
-      // Auto-stop after 30s
-      if (stopTimerRef.current) clearTimeout(stopTimerRef.current)
-      stopTimerRef.current = setTimeout(() => {
-        toast.info('Aucun code-barres détecté après 30s. Tu peux saisir le code manuellement.')
-        setMode('manual')
-      }, SCAN_TIMEOUT_MS)
-    } catch (e: any) {
-      console.error('Camera start error:', e)
-      setCameraError(e?.message || 'Impossible d\'accéder à la caméra. Vérifie les permissions ou saisis le code manuellement.')
-      setScanning(false)
-      setMode('manual')
-    }
-  }
-
+  // ── Camera stop logic (stable, no deps) ──
   const stopCamera = useCallback(async () => {
     if (stopTimerRef.current) {
       clearTimeout(stopTimerRef.current)
@@ -171,16 +75,67 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
     setScanning(false)
   }, [])
 
-  const handleScannedCode = async (code: string) => {
+  // ── Camera start logic ──
+  const startCamera = useCallback(async () => {
+    setCameraError(null)
+    setScanning(true)
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode')
+      // Stop any existing scanner
+      if (scannerRef.current) {
+        try { await scannerRef.current.stop() } catch {}
+        scannerRef.current = null
+      }
+
+      if (!mountRef.current) return
+      mountRef.current.innerHTML = ''
+      const scannerDiv = document.createElement('div')
+      scannerDiv.id = 'barcode-scanner-region'
+      scannerDiv.style.width = '100%'
+      scannerDiv.style.height = '100%'
+      mountRef.current.appendChild(scannerDiv)
+
+      const scanner = new Html5Qrcode('barcode-scanner-region', { verbose: false })
+      scannerRef.current = scanner
+
+      const config = {
+        fps: 10,
+        qrbox: { width: 280, height: 160 },
+        aspectRatio: 16 / 9,
+        formatsToSupport: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      }
+
+      await scanner.start(
+        { facingMode: 'environment' },
+        config,
+        (decodedText: string) => {
+          handleScannedCode(decodedText)
+        },
+        () => {},
+      )
+
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current)
+      stopTimerRef.current = setTimeout(() => {
+        toast.info('Aucun code-barres détecté après 30s. Tu peux saisir le code manuellement.')
+        setMode('manual')
+      }, SCAN_TIMEOUT_MS)
+    } catch (e: any) {
+      console.error('Camera start error:', e)
+      setCameraError(e?.message || 'Impossible d\'accéder à la caméra. Vérifie les permissions ou saisis le code manuellement.')
+      setScanning(false)
+      setMode('manual')
+    }
+  }, [])
+
+  // ── Handle scanned code ──
+  const handleScannedCode = useCallback(async (code: string) => {
     const trimmed = code.trim()
     if (!trimmed) return
-    // Stop camera to prevent multiple scans
     await stopCamera()
     setLookingUp(true)
     try {
       const res = await fetch(`/api/stock/by-barcode/${encodeURIComponent(trimmed)}`)
       if (res.status === 404) {
-        // Code inconnu → ouvrir formulaire d'ajout
         toast.info(`Code-barres ${trimmed} inconnu — création d'un nouvel article`)
         onNotFound(trimmed)
       } else if (res.ok) {
@@ -199,7 +154,40 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
     } finally {
       setLookingUp(false)
     }
-  }
+  }, [stopCamera, onFound, onNotFound])
+
+  // ── Start/stop camera when mode or open changes ──
+  useEffect(() => {
+    if (open && mode === 'camera') {
+      const t = setTimeout(() => startCamera(), 100)
+      return () => clearTimeout(t)
+    } else if (open && mode === 'manual') {
+      stopCamera()
+    }
+  }, [open, mode, startCamera, stopCamera])
+
+  // ── CRITICAL: stop camera BEFORE the dialog closes ──
+  // We intercept ALL close attempts. The Dialog stays open until the camera
+  // is fully stopped. This prevents React from unmounting DOM nodes while
+  // html5-qrcode is still cleaning up (which causes "removeChild" errors).
+  const handleClose = useCallback(async (nextOpen: boolean) => {
+    if (nextOpen) {
+      onOpenChange(true)
+      return
+    }
+    // Closing requested — stop camera FIRST, then close
+    setClosing(true)
+    await stopCamera()
+    setClosing(false)
+    onOpenChange(false)
+  }, [stopCamera, onOpenChange])
+
+  // ── Cleanup on unmount ──
+  useEffect(() => {
+    return () => {
+      stopCamera()
+    }
+  }, [stopCamera])
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -208,13 +196,6 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
       return
     }
     handleScannedCode(manualCode.trim())
-  }
-
-  const handleClose = (o: boolean) => {
-    if (!o) {
-      stopCamera()
-    }
-    onOpenChange(o)
   }
 
   return (
@@ -265,8 +246,8 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
             ) : (
               <>
                 {/* React only manages this outer div (mountRef). The scanner div
-                    inside is created/destroyed by startCamera/stopCamera via JS,
-                    so React never tries to removeChild on html5-qrcode's elements. */}
+                    inside is created/destroyed by our code via JS — React never
+                    sees html5-qrcode's injected <video>/<canvas> elements. */}
                 <div
                   ref={mountRef}
                   className="w-full aspect-video bg-black rounded-lg overflow-hidden relative"
@@ -278,11 +259,13 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
                   )}
                 </div>
                 <p className="text-xs text-center text-muted-foreground">
-                  {scanning
-                    ? 'Place le code-barres dans le cadre…'
-                    : lookingUp
-                      ? 'Recherche en cours…'
-                      : 'Caméra en attente'}
+                  {closing
+                    ? 'Fermeture en cours…'
+                    : scanning
+                      ? 'Place le code-barres dans le cadre…'
+                      : lookingUp
+                        ? 'Recherche en cours…'
+                        : 'Caméra en attente'}
                 </p>
                 {lookingUp && (
                   <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -324,8 +307,9 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
         )}
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => handleClose(false)}>
-            <X className="h-4 w-4 mr-1" /> Annuler
+          <Button variant="outline" onClick={() => handleClose(false)} disabled={closing}>
+            {closing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <X className="h-4 w-4 mr-1" />}
+            {closing ? 'Fermeture…' : 'Annuler'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -354,7 +338,6 @@ export function QuickQuantityModal({ open, onOpenChange, item, onConfirm }: Quic
 
   if (!item) return null
 
-  // Parse photos for display
   let photos: string[] = []
   try { photos = JSON.parse(item.photos) } catch {}
   const mainPhoto = photos[0] || null
@@ -390,7 +373,6 @@ export function QuickQuantityModal({ open, onOpenChange, item, onConfirm }: Quic
           </DialogDescription>
         </DialogHeader>
 
-        {/* Article preview */}
         <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40 border">
           <div className="h-14 w-14 rounded-md overflow-hidden bg-muted shrink-0">
             {mainPhoto ? (
