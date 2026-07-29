@@ -44,7 +44,7 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
   const containerId = 'barcode-scanner-region'
   const stopTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Reset on open
+  // Reset on open + cleanup on close
   useEffect(() => {
     if (open) {
       setMode('camera')
@@ -52,6 +52,10 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
       setCameraError(null)
       setScanning(false)
     } else {
+      stopCamera()
+    }
+    // Cleanup on unmount (prevents removeChild error when Dialog closes)
+    return () => {
       stopCamera()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,9 +143,18 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
         scannerRef.current = null
         if (s.isScanning) {
           await s.stop()
-          await s.clear()
         }
+        // clear() removes the library's injected DOM elements (video, canvas, etc.)
+        // This MUST be done before React tries to unmount the container div,
+        // otherwise React throws "removeChild" errors because the DOM was
+        // modified externally by html5-qrcode.
+        s.clear()
       } catch {}
+    }
+    // Extra safety: manually empty the container div to prevent React removeChild errors
+    const container = document.getElementById(containerId)
+    if (container) {
+      container.innerHTML = ''
     }
     setScanning(false)
   }, [])
@@ -239,7 +252,10 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
               </div>
             ) : (
               <>
+                {/* key={open} forces React to create a fresh DOM node each time the dialog opens,
+                    preventing "removeChild" errors from html5-qrcode's external DOM modifications */}
                 <div
+                  key={`scanner-${open}`}
                   id={containerId}
                   className="w-full aspect-video bg-black rounded-lg overflow-hidden relative"
                 >
