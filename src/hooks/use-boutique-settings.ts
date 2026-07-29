@@ -66,6 +66,7 @@ export interface BoutiqueSettings {
   seoDescription: string | null
   stripePublicKey: string | null
   stripeSecretKey: string | null
+  stripeWebhookSecret: string | null
   paypalClientId: string | null
   paypalSecret: string | null
   gdprEnabled: boolean
@@ -137,6 +138,7 @@ const DEFAULTS: BoutiqueSettings = {
   gaTagId: null,
   stripePublicKey: null,
   stripeSecretKey: null,
+  stripeWebhookSecret: null,
   paypalClientId: null,
   paypalSecret: null,
   gdprEnabled: true,

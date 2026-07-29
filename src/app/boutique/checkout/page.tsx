@@ -8,11 +8,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Lock, ShoppingBag, ChevronRight, AlertCircle, MapPin, TicketPercent, X } from 'lucide-react'
+import { Lock, ShoppingBag, ChevronRight, AlertCircle, MapPin, TicketPercent, X, CreditCard } from 'lucide-react'
 import { toast } from 'sonner'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
+import { StripePaymentForm } from '@/components/boutique/stripe-payment-form'
 import type { RelayPoint } from '@/components/boutique/relay-map'
 
 // Leaflet must be rendered client-side only (it accesses window at import time).
@@ -90,6 +91,9 @@ export default function CheckoutPage() {
   } | null>(null)
   const [couponError, setCouponError] = useState<string | null>(null)
   const [couponLoading, setCouponLoading] = useState(false)
+
+  // Stripe payment state
+  const [stripeOrder, setStripeOrder] = useState<{ orderId: string; amount: number } | null>(null)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -273,6 +277,15 @@ export default function CheckoutPage() {
       return
     }
 
+    // Check if Stripe is selected and configured
+    const selectedPayment = paymentOptions.find(p => p.code === paymentMethod)
+    const isStripePayment = selectedPayment?.provider === 'stripe'
+
+    if (isStripePayment && !settings.stripePublicKey) {
+      toast.error('Stripe n\'est pas configuré. L\'admin doit configurer les clés API dans Boutique Admin → Paiements.')
+      return
+    }
+
     setSubmitting(true)
     try {
       const res = await fetch('/api/boutique/checkout', {
@@ -282,7 +295,7 @@ export default function CheckoutPage() {
           customer: form,
           items: cart.map(i => ({ sku: i.sku, qty: i.qty, price: i.price })),
           shippingMethodCode: shippingMethod,
-          shippingCost: shipping, // send the calculated shipping cost from frontend
+          shippingCost: shipping,
           paymentMethodCode: paymentMethod,
           notes: form.notes,
           couponCode: appliedCoupon?.code || undefined,
@@ -305,13 +318,21 @@ export default function CheckoutPage() {
         return
       }
 
-      // Clear cart
+      // If Stripe payment, show the Stripe form instead of redirecting
+      if (isStripePayment) {
+        setStripeOrder({ orderId: data.orderId, amount: data.totalAmount })
+        setSubmitting(false)
+        // Scroll to the Stripe form
+        setTimeout(() => {
+          document.getElementById('stripe-payment-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 100)
+        return
+      }
+
+      // Non-Stripe payment: clear cart and redirect
       localStorage.removeItem('boutique_cart')
       window.dispatchEvent(new Event('cart-updated'))
-
-      // Store order info for confirmation page
       sessionStorage.setItem('last_order', JSON.stringify(data))
-
       router.push('/boutique/confirmation')
     } catch {
       toast.error('Erreur réseau')
@@ -632,6 +653,45 @@ export default function CheckoutPage() {
                   </span>
                 )}
               </Button>
+            )}
+
+            {/* Stripe payment form (shown after order is created, if Stripe was selected) */}
+            {stripeOrder && settings.stripePublicKey && (
+              <div id="stripe-payment-section" className="mt-6 p-4 rounded-lg border-2 border-[#635BFF] bg-[#635BFF]/5">
+                <div className="flex items-center gap-2 mb-4">
+                  <CreditCard className="h-5 w-5 text-[#635BFF]" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      Paiement de la commande {stripeOrder.orderId}
+                    </p>
+                    <p className="text-lg font-bold text-[#635BFF]">{stripeOrder.amount.toFixed(2)} €</p>
+                  </div>
+                </div>
+                <StripePaymentForm
+                  publishableKey={settings.stripePublicKey}
+                  amount={stripeOrder.amount}
+                  orderId={stripeOrder.orderId}
+                  customerEmail={form.email}
+                  onPaymentSuccess={(piId) => {
+                    // Payment succeeded — clear cart and redirect to confirmation
+                    localStorage.removeItem('boutique_cart')
+                    window.dispatchEvent(new Event('cart-updated'))
+                    sessionStorage.setItem('last_order', JSON.stringify({
+                      orderId: stripeOrder.orderId,
+                      totalAmount: stripeOrder.amount,
+                      paymentIntentId: piId,
+                      customer: { firstName: form.firstName, lastName: form.lastName, email: form.email },
+                    }))
+                    router.push('/boutique/confirmation')
+                  }}
+                  onPaymentError={(msg) => {
+                    toast.error('Paiement échoué: ' + msg)
+                  }}
+                />
+                <p className="text-xs text-gray-400 text-center mt-3">
+                  Le panier sera validé définitivement après confirmation du paiement.
+                </p>
+              </div>
             )}
 
             <p className="text-xs text-gray-400 text-center mt-3">

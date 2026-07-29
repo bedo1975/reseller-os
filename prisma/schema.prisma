@@ -463,6 +463,7 @@ model BoutiqueSettings {
   // Configuration Stripe
   stripePublicKey  String?
   stripeSecretKey  String?
+  stripeWebhookSecret String?
   // Configuration PayPal
   paypalClientId   String?
   paypalSecret     String?

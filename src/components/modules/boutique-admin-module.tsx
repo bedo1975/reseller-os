@@ -848,6 +848,7 @@ interface BoutiqueSettingsData {
   gdprCookiesJson: string
   stripePublicKey: string | null
   stripeSecretKey: string | null
+  stripeWebhookSecret: string | null
   paypalClientId: string | null
   paypalSecret: string | null
   mondialRelayEnseigne: string | null
@@ -2978,7 +2979,7 @@ function PaymentsTab() {
 
   // API keys state (stored in BoutiqueSettings, not PaymentMethod)
   const [apiKeys, setApiKeys] = useState({
-    stripePublicKey: '', stripeSecretKey: '',
+    stripePublicKey: '', stripeSecretKey: '', stripeWebhookSecret: '',
     paypalClientId: '', paypalSecret: '',
   })
   const [savingKeys, setSavingKeys] = useState(false)
@@ -2998,6 +2999,7 @@ function PaymentsTab() {
         setApiKeys({
           stripePublicKey: data.stripePublicKey || '',
           stripeSecretKey: data.stripeSecretKey || '',
+          stripeWebhookSecret: data.stripeWebhookSecret || '',
           paypalClientId: data.paypalClientId || '',
           paypalSecret: data.paypalSecret || '',
         })
@@ -3192,9 +3194,24 @@ function PaymentsTab() {
               className="font-mono text-xs"
             />
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Webhook Secret (optionnel, recommandé)</Label>
+            <Input
+              type={showSecrets ? 'text' : 'password'}
+              value={apiKeys.stripeWebhookSecret || ''}
+              onChange={e => setApiKeys({ ...apiKeys, stripeWebhookSecret: e.target.value })}
+              placeholder="whsec_..."
+              className="font-mono text-xs"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Trouvé dans le Dashboard Stripe → Developers → Webhooks → clic sur votre endpoint → « Signing secret ».
+              Sans cette clé, les webhooks ne sont pas vérifiés (OK en test, recommandé en production).
+            </p>
+          </div>
           <div className="rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 p-2.5 text-[11px] text-purple-800 dark:text-purple-200 space-y-1">
-            <p>📋 <strong>Webhook Stripe :</strong> configure un endpoint sur <code>https://junashop.fr/api/webhooks/stripe</code> dans le dashboard Stripe pour recevoir les événements de paiement.</p>
-            <p>🔧 Pour installer le SDK Stripe : <code>npm install stripe @stripe/stripe-js</code></p>
+            <p>📋 <strong>Webhook Stripe :</strong> configure un endpoint sur <code>https://junashop.fr/api/webhooks/stripe</code> dans le dashboard Stripe → Developers → Webhooks → Add endpoint.</p>
+            <p>📌 <strong>Événements à écouter :</strong> <code>payment_intent.succeeded</code> et <code>payment_intent.payment_failed</code></p>
+            <p>✅ <strong>SDK Stripe installé :</strong> <code>stripe</code> + <code>@stripe/stripe-js</code> — le formulaire CB est automatiquement disponible sur la page de paiement.</p>
           </div>
         </CardContent>
       </Card>
