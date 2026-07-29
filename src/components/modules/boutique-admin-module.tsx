@@ -4380,6 +4380,190 @@ function NewsletterTab() {
           </table>
         </div>
       )}
+
+      {/* ── Campagnes ── */}
+      <div className="pt-4 border-t">
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Send className="h-4 w-4" /> Campagnes d'envoi
+        </h3>
+        <NewsletterCampaignsSection />
+      </div>
+    </div>
+  )
+}
+
+// Section Campagnes
+
+interface Campaign {
+  id: string
+  name: string
+  subject: string
+  htmlContent: string
+  status: string
+  scheduledAt: string | null
+  sentAt: string | null
+  recipientsCount: number
+  sentCount: number
+  failCount: number
+  createdAt: string
+}
+
+function NewsletterCampaignsSection() {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<Campaign | null>(null)
+  const [sending, setSending] = useState<string | null>(null)
+  const [previewMode, setPreviewMode] = useState(false)
+  const [form, setForm] = useState({ name: '', subject: '', htmlContent: '', scheduledAt: '' })
+
+  const fetchCampaigns = useCallback(() => {
+    setLoading(true)
+    fetch('/api/boutique/admin/newsletter/campaigns')
+      .then(r => r.json())
+      .then(data => setCampaigns(data.campaigns || []))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { fetchCampaigns() }, [fetchCampaigns])
+
+  const resetForm = () => { setForm({ name: '', subject: '', htmlContent: '', scheduledAt: '' }); setEditing(null); setShowForm(false); setPreviewMode(false) }
+
+  const startEdit = (c: Campaign) => {
+    setForm({ name: c.name, subject: c.subject, htmlContent: c.htmlContent, scheduledAt: c.scheduledAt ? new Date(c.scheduledAt).toISOString().slice(0, 16) : '' })
+    setEditing(c); setShowForm(true)
+  }
+
+  const save = async () => {
+    if (!form.name || !form.subject || !form.htmlContent) { toast.error('Nom, sujet et contenu requis'); return }
+    setSending('saving')
+    try {
+      const url = editing ? `/api/boutique/admin/newsletter/campaigns/${editing.id}` : '/api/boutique/admin/newsletter/campaigns'
+      const method = editing ? 'PATCH' : 'POST'
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Erreur') }
+      toast.success(editing ? 'Campagne modifiée' : 'Campagne créée'); resetForm(); fetchCampaigns()
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Erreur') } finally { setSending(null) }
+  }
+
+  const sendNow = async (c: Campaign) => {
+    if (!confirm(`Envoyer "${c.subject}" à TOUS les abonnés actifs maintenant ?`)) return
+    setSending(c.id)
+    try {
+      const res = await fetch(`/api/boutique/admin/newsletter/campaigns/${c.id}/send`, { method: 'POST' })
+      const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Erreur')
+      toast.success(`Envoyé : ${data.sentCount} succès, ${data.failCount} échecs sur ${data.total}`); fetchCampaigns()
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Erreur') } finally { setSending(null) }
+  }
+
+  const cancelScheduled = async (c: Campaign) => {
+    await fetch(`/api/boutique/admin/newsletter/campaigns/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'cancelled' }) })
+    toast.success('Campagne annulée'); fetchCampaigns()
+  }
+
+  const removeCampaign = async (c: Campaign) => {
+    if (!confirm(`Supprimer la campagne "${c.name}" ?`)) return
+    await fetch(`/api/boutique/admin/newsletter/campaigns/${c.id}`, { method: 'DELETE' })
+    toast.success('Supprimée'); fetchCampaigns()
+  }
+
+  const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+    draft: { label: 'Brouillon', color: 'bg-gray-100 text-gray-700' },
+    scheduled: { label: 'Programmée', color: 'bg-amber-100 text-amber-700' },
+    sending: { label: 'Envoi en cours', color: 'bg-blue-100 text-blue-700' },
+    sent: { label: 'Envoyée', color: 'bg-emerald-100 text-emerald-700' },
+    cancelled: { label: 'Annulée', color: 'bg-red-100 text-red-700' },
+  }
+
+  return (
+    <div className="space-y-3">
+      {loading ? <Skeleton className="h-20" /> : campaigns.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">Aucune campagne. Cliquez sur « Nouvelle campagne » pour créer votre première newsletter.</p>
+      ) : (
+        <div className="space-y-2">
+          {campaigns.map(c => {
+            const st = STATUS_LABELS[c.status] || { label: c.status, color: 'bg-muted' }
+            return (
+              <div key={c.id} className="border rounded-md p-3 bg-card">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <p className="font-semibold text-sm">{c.name}</p>
+                      <Badge className={cn('text-[10px]', st.color)}>{st.label}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Sujet : <strong>{c.subject}</strong></p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px] text-muted-foreground">
+                      {c.scheduledAt && <span>Programmée : {formatDate(c.scheduledAt)} {new Date(c.scheduledAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                      {c.sentAt && <span>Envoyée : {formatDate(c.sentAt)} {new Date(c.sentAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                      {c.status === 'sent' && <span>✅ {c.sentCount} envoyés · ❌ {c.failCount} échecs · 📧 {c.recipientsCount} destinataires</span>}
+                      {!c.sentAt && !c.scheduledAt && <span>Créée : {formatDate(c.createdAt)}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {(c.status === 'draft' || c.status === 'scheduled') && (
+                      <Button size="sm" variant="outline" onClick={() => sendNow(c)} disabled={sending === c.id}>
+                        {sending === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1" />} Envoyer
+                      </Button>
+                    )}
+                    {c.status === 'draft' && (
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => startEdit(c)}><Edit className="h-3.5 w-3.5" /></Button>
+                    )}
+                    {c.status === 'scheduled' && (
+                      <Button size="sm" variant="ghost" className="text-amber-600 h-8" onClick={() => cancelScheduled(c)}>Annuler</Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="text-red-600 h-8 w-8 p-0" onClick={() => removeCampaign(c)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {showForm ? (
+        <div className="border rounded-md p-4 space-y-3 bg-muted/30">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold">{editing ? 'Modifier la campagne' : 'Nouvelle campagne'}</p>
+            <div className="flex gap-2">
+              <Button size="sm" variant={previewMode ? 'outline' : 'default'} onClick={() => setPreviewMode(false)}>Éditer</Button>
+              <Button size="sm" variant={previewMode ? 'default' : 'outline'} onClick={() => setPreviewMode(true)}>Aperçu</Button>
+            </div>
+          </div>
+          {previewMode ? (
+            <div className="border rounded-md overflow-hidden bg-white">
+              <div className="bg-[#007bff] text-white p-4 text-center font-semibold text-sm">Newsletter</div>
+              <div className="p-4 max-h-[400px] overflow-y-auto" dangerouslySetInnerHTML={{ __html: form.htmlContent || '<p class="text-gray-400 text-center">Aucun contenu</p>' }} />
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Nom interne *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Promo été 2026" /></div>
+                <div className="space-y-1"><Label className="text-xs">Sujet de l'email *</Label><Input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="🤑 -20% sur toute la boutique !" /></div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Contenu HTML *</Label>
+                <Textarea value={form.htmlContent} onChange={e => setForm({ ...form, htmlContent: e.target.value })} placeholder="<h2>Offres exclusives</h2><p>Découvrez nos nouveautés...</p>" rows={10} className="font-mono text-xs resize-y" />
+                <p className="text-[10px] text-muted-foreground">Code HTML libre. Le contenu sera inséré dans un template email avec en-tête coloré et lien de désinscription.</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Date d'envoi programmée (laisser vide = brouillon)</Label>
+                <Input type="datetime-local" value={form.scheduledAt} onChange={e => setForm({ ...form, scheduledAt: e.target.value })} />
+                <p className="text-[10px] text-muted-foreground">Pour envoyer maintenant, laissez vide et cliquez sur « Créer » puis « Envoyer » depuis la liste. Pour programmer, choisissez une date.</p>
+              </div>
+            </>
+          )}
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" size="sm" onClick={resetForm}>Annuler</Button>
+            <Button size="sm" onClick={save} disabled={sending === 'saving'}>{sending === 'saving' && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}{editing ? 'Modifier' : 'Créer'}</Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => { resetForm(); setShowForm(true) }}><Plus className="h-4 w-4 mr-1" /> Nouvelle campagne</Button>
+      )}
+
+      <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3 text-[11px] text-amber-800 dark:text-amber-200">
+        ⏰ <strong>Envoi programmé :</strong> configurez un cron job qui appelle <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">https://junashop.fr/api/cron/newsletter-send</code> toutes les 5-15 min. Crontab : <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">*/10 * * * * curl -s https://junashop.fr/api/cron/newsletter-send</code>
+      </div>
     </div>
   )
 }
