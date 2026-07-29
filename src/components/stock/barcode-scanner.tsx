@@ -41,7 +41,11 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
   const [lookingUp, setLookingUp] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const scannerRef = useRef<any>(null)
-  const containerId = 'barcode-scanner-region'
+  // Use a ref instead of an id — React manages the OUTER div, but the INNER
+  // scanner div is created/destroyed by our code (not React). This prevents
+  // the "removeChild" error because React never tries to unmount the
+  // scanner's injected <video>/<canvas> elements.
+  const mountRef = useRef<HTMLDivElement>(null)
   const stopTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Reset on open + cleanup on close
@@ -84,7 +88,19 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
         scannerRef.current = null
       }
 
-      const scanner = new Html5Qrcode(containerId, { verbose: false })
+      // Create a FRESH div for the scanner — NOT managed by React.
+      // html5-qrcode will inject <video>, <canvas> etc. into this div.
+      // When we're done, we remove this div entirely (mountRef.innerHTML = ''),
+      // so React never sees those injected elements and can't throw removeChild errors.
+      if (!mountRef.current) return
+      mountRef.current.innerHTML = ''
+      const scannerDiv = document.createElement('div')
+      scannerDiv.id = 'barcode-scanner-region'
+      scannerDiv.style.width = '100%'
+      scannerDiv.style.height = '100%'
+      mountRef.current.appendChild(scannerDiv)
+
+      const scanner = new Html5Qrcode('barcode-scanner-region', { verbose: false })
       scannerRef.current = scanner
 
       const config = {
@@ -144,17 +160,13 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
         if (s.isScanning) {
           await s.stop()
         }
-        // clear() removes the library's injected DOM elements (video, canvas, etc.)
-        // This MUST be done before React tries to unmount the container div,
-        // otherwise React throws "removeChild" errors because the DOM was
-        // modified externally by html5-qrcode.
         s.clear()
       } catch {}
     }
-    // Extra safety: manually empty the container div to prevent React removeChild errors
-    const container = document.getElementById(containerId)
-    if (container) {
-      container.innerHTML = ''
+    // Remove the scanner div entirely — React only knows about mountRef,
+    // not the scanner div inside it, so no removeChild error.
+    if (mountRef.current) {
+      mountRef.current.innerHTML = ''
     }
     setScanning(false)
   }, [])
@@ -252,15 +264,15 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
               </div>
             ) : (
               <>
-                {/* key={open} forces React to create a fresh DOM node each time the dialog opens,
-                    preventing "removeChild" errors from html5-qrcode's external DOM modifications */}
+                {/* React only manages this outer div (mountRef). The scanner div
+                    inside is created/destroyed by startCamera/stopCamera via JS,
+                    so React never tries to removeChild on html5-qrcode's elements. */}
                 <div
-                  key={`scanner-${open}`}
-                  id={containerId}
+                  ref={mountRef}
                   className="w-full aspect-video bg-black rounded-lg overflow-hidden relative"
                 >
                   {scanning && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                       <div className="absolute left-0 right-0 h-0.5 bg-emerald-400 animate-pulse" style={{ top: '50%' }} />
                     </div>
                   )}
