@@ -7,6 +7,7 @@ import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 import { ProductCard } from '@/components/boutique/product-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowRight, Truck, Shield, RefreshCw, Headphones, Package, Star, Check, Clock } from 'lucide-react'
+import { NewsletterBlock } from '@/components/boutique/newsletter-block'
 
 interface Product {
   sku: string
@@ -223,6 +224,20 @@ export default function BoutiqueHomePage() {
           </div>
         )}
       </section>
+
+      {/* Newsletter */}
+      {settings.newsletterEnabled && (
+        <NewsletterBlock
+          settings={{
+            newsletterTitle: settings.newsletterTitle,
+            newsletterSubtitle: settings.newsletterSubtitle,
+            newsletterButtonText: settings.newsletterButtonText,
+            newsletterPlaceholder: settings.newsletterPlaceholder,
+            newsletterSuccessMessage: settings.newsletterSuccessMessage,
+            newsletterColor: settings.newsletterColor,
+          }}
+        />
+      )}
 
       {/* Newsletter / CTA */}
       <section className="text-white" style={{ background: `linear-gradient(to right, ${primaryColor}, ${primaryDarkColor})` }}>

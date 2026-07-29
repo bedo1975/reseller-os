@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2,
+  TicketPercent, Share2, MailOpen,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,7 +28,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { formatEUR, formatDate } from '@/lib/constants'
 
-type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share'
+type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter'
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'orders', label: 'Commandes', icon: Package },
@@ -40,6 +40,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'categories', label: 'Catégories', icon: Layers },
   { id: 'coupons', label: 'Coupons', icon: TicketPercent },
   { id: 'share', label: 'Partage', icon: Share2 },
+  { id: 'newsletter', label: 'Newsletter', icon: MailOpen },
 ]
 
 export function BoutiqueAdminModule() {
@@ -89,6 +90,7 @@ export function BoutiqueAdminModule() {
       {tab === 'categories' && <CategoriesTab />}
       {tab === 'coupons' && <CouponsTab />}
       {tab === 'share' && <ShareTab />}
+      {tab === 'newsletter' && <NewsletterTab />}
     </div>
   )
 }
@@ -4053,6 +4055,324 @@ function ShareTab() {
                     <Button size="sm" variant="ghost" className="text-red-600 h-7 w-7 p-0" onClick={() => removeReferral(r.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET 10 — NEWSLETTER
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface NewsletterSubscriber {
+  id: string
+  email: string
+  active: boolean
+  source: string
+  createdAt: string
+}
+
+function NewsletterTab() {
+  const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>([])
+  const [stats, setStats] = useState({ total: 0, active: 0 })
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState('all')
+  const [showSettings, setShowSettings] = useState(false)
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [newEmail, setNewEmail] = useState('')
+
+  const [settings, setSettings] = useState({
+    newsletterEnabled: false,
+    newsletterTitle: 'Newsletter',
+    newsletterSubtitle: 'Recevez nos nouveautés et offres exclusives',
+    newsletterButtonText: "S'inscrire",
+    newsletterPlaceholder: 'Votre adresse email',
+    newsletterSuccessMessage: "Merci ! Vous êtes maintenant inscrit(e) à notre newsletter.",
+    newsletterColor: '#007bff',
+  })
+
+  const fetchSubscribers = useCallback(() => {
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (search) params.set('search', search)
+    if (filter !== 'all') params.set('filter', filter)
+    fetch(`/api/boutique/admin/newsletter/subscribers?${params}`)
+      .then(r => r.json())
+      .then(data => {
+        setSubscribers(data.subscribers || [])
+        setStats(data.stats || { total: 0, active: 0 })
+      })
+      .finally(() => setLoading(false))
+  }, [search, filter])
+
+  const fetchSettings = useCallback(() => {
+    fetch('/api/boutique/admin/settings')
+      .then(r => r.json())
+      .then(data => {
+        setSettings({
+          newsletterEnabled: data.newsletterEnabled === true,
+          newsletterTitle: data.newsletterTitle || 'Newsletter',
+          newsletterSubtitle: data.newsletterSubtitle || 'Recevez nos nouveautés et offres exclusives',
+          newsletterButtonText: data.newsletterButtonText || "S'inscrire",
+          newsletterPlaceholder: data.newsletterPlaceholder || 'Votre adresse email',
+          newsletterSuccessMessage: data.newsletterSuccessMessage || "Merci ! Vous êtes maintenant inscrit(e) à notre newsletter.",
+          newsletterColor: data.newsletterColor || '#007bff',
+        })
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => { fetchSubscribers(); fetchSettings() }, [fetchSubscribers, fetchSettings])
+
+  const saveSettings = async () => {
+    setSavingSettings(true)
+    try {
+      const res = await fetch('/api/boutique/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      })
+      if (!res.ok) { toast.error('Erreur'); return }
+      toast.success('Paramètres sauvegardés')
+      setShowSettings(false)
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSavingSettings(false)
+    }
+  }
+
+  const addManual = async () => {
+    if (!newEmail.trim() || !newEmail.includes('@')) {
+      toast.error('Email invalide')
+      return
+    }
+    const res = await fetch('/api/boutique/admin/newsletter/subscribers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: newEmail.trim() }),
+    })
+    if (res.ok) {
+      toast.success('Abonné ajouté')
+      setNewEmail('')
+      fetchSubscribers()
+    } else {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error || 'Erreur')
+    }
+  }
+
+  const toggleActive = async (s: NewsletterSubscriber) => {
+    await fetch(`/api/boutique/admin/newsletter/subscribers/${s.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !s.active }),
+    })
+    toast.success(s.active ? 'Désactivé' : 'Activé')
+    fetchSubscribers()
+  }
+
+  const remove = async (s: NewsletterSubscriber) => {
+    if (!confirm(`Supprimer ${s.email} ?`)) return
+    await fetch(`/api/boutique/admin/newsletter/subscribers/${s.id}`, { method: 'DELETE' })
+    toast.success('Supprimé')
+    fetchSubscribers()
+  }
+
+  const exportCsv = () => {
+    const csv = subscribers.map(s => s.email).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `newsletter-abonnes-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`${subscribers.length} emails exportés`)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200">
+        📧 <strong>Module Newsletter :</strong> vos clients peuvent s'inscrire à la newsletter depuis la page d'accueil de la boutique. Les emails sont collectés ici.
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase">Total abonnés</p>
+            <p className="text-2xl font-bold mt-1">{stats.total}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase">Abonnés actifs</p>
+            <p className="text-2xl font-bold mt-1 text-emerald-600">{stats.active}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2 flex-wrap">
+        <Button variant="outline" size="sm" onClick={() => setShowSettings(!showSettings)}>
+          <MailOpen className="h-4 w-4 mr-1" /> {showSettings ? 'Fermer' : 'Paramètres'}
+        </Button>
+        <Button variant="outline" size="sm" onClick={exportCsv} disabled={subscribers.length === 0}>
+          <FileText className="h-4 w-4 mr-1" /> Exporter CSV
+        </Button>
+        <Button variant="outline" size="sm" onClick={fetchSubscribers}>
+          <RefreshCw className="h-4 w-4 mr-1" /> Actualiser
+        </Button>
+      </div>
+
+      {/* Settings panel */}
+      {showSettings && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <MailOpen className="h-4 w-4" /> Paramètres de la newsletter
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={settings.newsletterEnabled}
+                onCheckedChange={v => setSettings({ ...settings, newsletterEnabled: v })}
+              />
+              <Label className="text-sm cursor-pointer">Afficher le formulaire d'inscription sur la boutique</Label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Titre</Label>
+                <Input value={settings.newsletterTitle} onChange={e => setSettings({ ...settings, newsletterTitle: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Couleur d'accent</Label>
+                <div className="flex gap-2">
+                  <Input type="color" value={settings.newsletterColor} onChange={e => setSettings({ ...settings, newsletterColor: e.target.value })} className="w-16 h-9 p-1 cursor-pointer" />
+                  <Input value={settings.newsletterColor} onChange={e => setSettings({ ...settings, newsletterColor: e.target.value })} className="flex-1 font-mono text-xs" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Sous-titre</Label>
+              <Input value={settings.newsletterSubtitle} onChange={e => setSettings({ ...settings, newsletterSubtitle: e.target.value })} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Texte du bouton</Label>
+                <Input value={settings.newsletterButtonText} onChange={e => setSettings({ ...settings, newsletterButtonText: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Placeholder du champ email</Label>
+                <Input value={settings.newsletterPlaceholder} onChange={e => setSettings({ ...settings, newsletterPlaceholder: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Message de succès</Label>
+              <Textarea value={settings.newsletterSuccessMessage} onChange={e => setSettings({ ...settings, newsletterSuccessMessage: e.target.value })} rows={2} />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => { setShowSettings(false); fetchSettings() }}>Annuler</Button>
+              <Button size="sm" onClick={saveSettings} disabled={savingSettings}>
+                {savingSettings && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                Sauvegarder
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Manual add */}
+      <div className="flex gap-2">
+        <Input
+          type="email"
+          placeholder="Ajouter manuellement un email…"
+          value={newEmail}
+          onChange={e => setNewEmail(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManual() } }}
+          className="max-w-xs"
+        />
+        <Button variant="outline" size="sm" onClick={addManual}>
+          <Plus className="h-4 w-4 mr-1" /> Ajouter
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-2 items-center">
+        <Input
+          placeholder="Rechercher un email…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') fetchSubscribers() }}
+          className="max-w-xs"
+        />
+        <Select value={filter} onValueChange={setFilter}>
+          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous</SelectItem>
+            <SelectItem value="active">Actifs</SelectItem>
+            <SelectItem value="inactive">Inactifs</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Subscribers table */}
+      {loading ? (
+        <Skeleton className="h-32" />
+      ) : subscribers.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-8 text-center">
+          Aucun abonné pour le moment. Les emails apparaîtront ici quand des visiteurs s'inscriront depuis la boutique.
+        </p>
+      ) : (
+        <div className="border rounded-md overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/50">
+              <tr className="text-left text-[10px] text-muted-foreground uppercase border-b">
+                <th className="px-3 py-2 font-medium">Email</th>
+                <th className="px-3 py-2 font-medium">Source</th>
+                <th className="px-3 py-2 font-medium">Statut</th>
+                <th className="px-3 py-2 font-medium">Date</th>
+                <th className="px-3 py-2 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {subscribers.map(s => (
+                <tr key={s.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <td className="px-3 py-2 font-mono text-[11px]">{s.email}</td>
+                  <td className="px-3 py-2">
+                    <Badge variant="secondary" className="text-[10px]">{s.source}</Badge>
+                  </td>
+                  <td className="px-3 py-2">
+                    {s.active ? (
+                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[10px]">Actif</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-[10px]">Inactif</Badge>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">{formatDate(s.createdAt)}</td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => toggleActive(s)}>
+                        {s.active ? 'Désactiver' : 'Activer'}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="text-red-600 h-7 w-7 p-0" onClick={() => remove(s)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

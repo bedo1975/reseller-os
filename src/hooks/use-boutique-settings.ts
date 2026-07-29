@@ -82,6 +82,14 @@ export interface BoutiqueSettings {
   shareSubject: string
   shareMessage: string
   shareButtonText: string
+  // Newsletter
+  newsletterEnabled: boolean
+  newsletterTitle: string
+  newsletterSubtitle: string
+  newsletterButtonText: string
+  newsletterPlaceholder: string
+  newsletterSuccessMessage: string
+  newsletterColor: string
 }
 
 const DEFAULTS: BoutiqueSettings = {
@@ -153,6 +161,13 @@ const DEFAULTS: BoutiqueSettings = {
   shareSubject: 'Un ami vous recommande cet article',
   shareMessage: 'Bonjour,\n\nJ\'ai trouvé cet article sur {SITE_NAME} et j\'ai pensé qu\'il pourrait vous plaire.\n\nDécouvrez-le ici : {URL}',
   shareButtonText: 'Partager cet article',
+  newsletterEnabled: false,
+  newsletterTitle: 'Newsletter',
+  newsletterSubtitle: 'Recevez nos nouveautés et offres exclusives',
+  newsletterButtonText: "S'inscrire",
+  newsletterPlaceholder: 'Votre adresse email',
+  newsletterSuccessMessage: "Merci ! Vous êtes maintenant inscrit(e) à notre newsletter.",
+  newsletterColor: '#007bff',
 }
 
 let cache: BoutiqueSettings | null = null

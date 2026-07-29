@@ -548,7 +548,30 @@ model BoutiqueSettings {
   shareSubject             String   @default("Un ami vous recommande cet article")  // sujet de l'email
   shareMessage             String   @default("Bonjour,\n\nJ'ai trouvé cet article sur {SITE_NAME} et j'ai pensé qu'il pourrait vous plaire.\n\nDécouvrez-le ici : {URL}")  // corps de l'email
   shareButtonText          String   @default("Partager cet article")  // texte du bouton principal
+  // ── Module Newsletter ──
+  newsletterEnabled        Boolean  @default(false)       // afficher le formulaire d'inscription sur la boutique
+  newsletterTitle          String   @default("Newsletter") // titre du bloc
+  newsletterSubtitle       String   @default("Recevez nos nouveautés et offres exclusives") // sous-titre
+  newsletterButtonText     String   @default("S'inscrire")  // texte du bouton
+  newsletterPlaceholder    String   @default("Votre adresse email") // placeholder du champ email
+  newsletterSuccessMessage String   @default("Merci ! Vous êtes maintenant inscrit(e) à notre newsletter.") // message de succès
+  newsletterColor          String   @default("#007bff")   // couleur d'accent du bloc newsletter
   updatedAt       DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// NEWSLETTER — Abonnés à la newsletter
+// ═══════════════════════════════════════════════════════════════════════
+model NewsletterSubscriber {
+  id          String   @id @default(cuid())
+  email       String   @unique  // email de l'abonné
+  active      Boolean  @default(true)  // actif (peut se désinscrire)
+  source      String   @default("boutique")  // boutique | admin | import
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active])
+  @@index([createdAt])
 }
 
 // ═══════════════════════════════════════════════════════════════════════
