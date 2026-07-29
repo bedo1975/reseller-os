@@ -15,7 +15,7 @@ import { notifyNewOrder } from '@/lib/email'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { customer, items, shippingMethodCode, paymentMethodCode, notes, relayId, relayName, relayAddress, shippingCost: clientShippingCost, couponCode } = body
+    const { customer, items, shippingMethodCode, paymentMethodCode, notes, relayId, relayName, relayAddress, shippingCost: clientShippingCost, couponCode, paidImmediately, paymentIntentId } = body
 
     if (!customer?.email || !customer?.firstName || !customer?.lastName || !customer?.address) {
       return NextResponse.json({ error: 'Coordonnées client incomplètes' }, { status: 400 })
@@ -293,13 +293,23 @@ export async function POST(req: NextRequest) {
         couponCode: appliedCouponCode,
         discountAmount: parseFloat(discountAmount.toFixed(2)),
         notes: notes || null,
-        status: 'pending',
+        status: paidImmediately ? 'paid' : 'pending',
         invoiceNumbers: JSON.stringify(invoiceNumbers),
         relayId: isRelayMethod ? String(relayId) : null,
         relayName: isRelayMethod ? String(relayName) : null,
         relayAddress: isRelayMethod ? String(relayAddress) : null,
       },
     })
+
+    // If paidImmediately (Stripe payment already succeeded), add the paymentIntentId to notes
+    if (paidImmediately && paymentIntentId) {
+      await db.boutiqueOrder.update({
+        where: { id: order.id },
+        data: {
+          notes: (notes || '') + `\n[Stripe] Paiement confirmé — PI: ${paymentIntentId}`,
+        },
+      })
+    }
 
     // Increment coupon usage counter (if a coupon was applied)
     if (appliedCouponCode) {

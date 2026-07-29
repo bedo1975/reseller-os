@@ -286,6 +286,21 @@ export default function CheckoutPage() {
       return
     }
 
+    // ── Stripe flow: show the payment form FIRST (no order created yet) ──
+    // The order will be created only AFTER the payment succeeds.
+    // This prevents stock from being decremented if the customer doesn't pay.
+    if (isStripePayment) {
+      // Generate a temporary orderId for the PaymentIntent metadata
+      const tempOrderId = `CMD-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+      setStripeOrder({ orderId: tempOrderId, amount: total })
+      // Scroll to the Stripe form
+      setTimeout(() => {
+        document.getElementById('stripe-payment-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+      return
+    }
+
+    // ── Non-Stripe flow: create the order immediately ──
     setSubmitting(true)
     try {
       const res = await fetch('/api/boutique/checkout', {
@@ -318,21 +333,63 @@ export default function CheckoutPage() {
         return
       }
 
-      // If Stripe payment, show the Stripe form instead of redirecting
-      if (isStripePayment) {
-        setStripeOrder({ orderId: data.orderId, amount: data.totalAmount })
-        setSubmitting(false)
-        // Scroll to the Stripe form
-        setTimeout(() => {
-          document.getElementById('stripe-payment-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }, 100)
-        return
-      }
-
-      // Non-Stripe payment: clear cart and redirect
+      // Clear cart and redirect
       localStorage.removeItem('boutique_cart')
       window.dispatchEvent(new Event('cart-updated'))
       sessionStorage.setItem('last_order', JSON.stringify(data))
+      router.push('/boutique/confirmation')
+    } catch {
+      toast.error('Erreur réseau')
+      setSubmitting(false)
+    }
+  }
+
+  // ── Create the order AFTER Stripe payment succeeds ──
+  const createOrderAfterStripePayment = async (paymentIntentId: string) => {
+    if (!stripeOrder) return
+
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/boutique/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer: form,
+          items: cart.map(i => ({ sku: i.sku, qty: i.qty, price: i.price })),
+          shippingMethodCode: shippingMethod,
+          shippingCost: shipping,
+          paymentMethodCode: paymentMethod,
+          notes: form.notes,
+          couponCode: appliedCoupon?.code || undefined,
+          discountAmount: discountAmount,
+          relayId: isRelayShipping && selectedRelay ? selectedRelay.id : undefined,
+          relayName: isRelayShipping && selectedRelay ? selectedRelay.name : undefined,
+          relayAddress: isRelayShipping && selectedRelay ? JSON.stringify({
+            address: selectedRelay.address,
+            postalCode: selectedRelay.postalCode,
+            city: selectedRelay.city,
+            lat: selectedRelay.lat,
+            lng: selectedRelay.lng,
+          }) : undefined,
+          // Mark as paid directly since Stripe payment already succeeded
+          paidImmediately: true,
+          paymentIntentId,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Erreur lors de la création de la commande')
+        setSubmitting(false)
+        return
+      }
+
+      // Clear cart and redirect
+      localStorage.removeItem('boutique_cart')
+      window.dispatchEvent(new Event('cart-updated'))
+      sessionStorage.setItem('last_order', JSON.stringify({
+        ...data,
+        paymentIntentId,
+      }))
       router.push('/boutique/confirmation')
     } catch {
       toast.error('Erreur réseau')
@@ -638,7 +695,7 @@ export default function CheckoutPage() {
             ) : (
               <Button
                 onClick={submitOrder}
-                disabled={submitting}
+                disabled={submitting || !!stripeOrder}
                 className="w-full mt-5 h-11 bg-[#007bff] hover:bg-[#0056b3]"
               >
                 {submitting ? (
@@ -646,25 +703,34 @@ export default function CheckoutPage() {
                     <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Traitement...
                   </span>
+                ) : stripeOrder ? (
+                  <span className="flex items-center gap-2">
+                    <Lock className="h-4 w-4" />
+                    En attente de paiement…
+                  </span>
                 ) : (
                   <span className="flex items-center gap-2">
                     <Lock className="h-4 w-4" />
-                    Confirmer la commande
+                    {paymentOptions.find(p => p.code === paymentMethod)?.provider === 'stripe'
+                      ? 'Procéder au paiement'
+                      : 'Confirmer la commande'}
                   </span>
                 )}
               </Button>
             )}
 
-            {/* Stripe payment form (shown after order is created, if Stripe was selected) */}
+            {/* Stripe payment form (shown when Stripe is selected — BEFORE order creation) */}
             {stripeOrder && settings.stripePublicKey && (
               <div id="stripe-payment-section" className="mt-6 p-4 rounded-lg border-2 border-[#635BFF] bg-[#635BFF]/5">
                 <div className="flex items-center gap-2 mb-4">
                   <CreditCard className="h-5 w-5 text-[#635BFF]" />
                   <div>
                     <p className="text-sm font-semibold text-gray-900">
-                      Paiement de la commande {stripeOrder.orderId}
+                      Paiement sécurisé · {stripeOrder.amount.toFixed(2)} €
                     </p>
-                    <p className="text-lg font-bold text-[#635BFF]">{stripeOrder.amount.toFixed(2)} €</p>
+                    <p className="text-xs text-gray-500">
+                      Saisissez vos informations bancaires pour finaliser la commande.
+                    </p>
                   </div>
                 </div>
                 <StripePaymentForm
@@ -673,16 +739,8 @@ export default function CheckoutPage() {
                   orderId={stripeOrder.orderId}
                   customerEmail={form.email}
                   onPaymentSuccess={(piId) => {
-                    // Payment succeeded — clear cart and redirect to confirmation
-                    localStorage.removeItem('boutique_cart')
-                    window.dispatchEvent(new Event('cart-updated'))
-                    sessionStorage.setItem('last_order', JSON.stringify({
-                      orderId: stripeOrder.orderId,
-                      totalAmount: stripeOrder.amount,
-                      paymentIntentId: piId,
-                      customer: { firstName: form.firstName, lastName: form.lastName, email: form.email },
-                    }))
-                    router.push('/boutique/confirmation')
+                    // Payment succeeded — NOW create the order (stock will be decremented)
+                    createOrderAfterStripePayment(piId)
                   }}
                   onPaymentError={(msg) => {
                     toast.error('Paiement échoué: ' + msg)
