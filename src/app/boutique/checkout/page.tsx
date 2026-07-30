@@ -755,6 +755,8 @@ export default function CheckoutPage() {
             <p className="text-xs text-gray-400 text-center mt-3">
               En validant, vous acceptez nos{' '}
               <Link href="/boutique/cgv" className="text-[#007bff] hover:underline">CGV</Link>
+              {' '}·{' '}
+              <Link href="/boutique/retractation" className="text-[#007bff] hover:underline">Droit de rétractation</Link>
             </p>
           </div>
         </div>

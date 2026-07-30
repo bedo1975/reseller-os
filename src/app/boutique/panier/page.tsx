@@ -225,7 +225,8 @@ export default function CartPage() {
             )}
 
             <p className="text-xs text-gray-400 text-center mt-3">
-              Paiement sécurisé · Satisfait ou remboursé 14j
+              Paiement sécurisé ·{' '}
+              <Link href="/boutique/retractation" className="text-[#007bff] hover:underline">Droit de rétractation 14j</Link>
             </p>
           </div>
         </div>

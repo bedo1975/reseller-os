@@ -212,6 +212,20 @@ export default function BoutiqueLayout({ children }: { children: React.ReactNode
                 })}
               </nav>
 
+              {/* Search bar */}
+              <form
+                action="/boutique/recherche"
+                className="hidden md:flex items-center relative flex-1 max-w-xs mx-4"
+              >
+                <Search className="absolute left-3 h-4 w-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  name="q"
+                  placeholder="Rechercher un article..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-full focus:outline-none focus:border-[#007bff] focus:ring-1 focus:ring-[#007bff] bg-gray-50"
+                />
+              </form>
+
               {/* Actions */}
               <div className="flex items-center gap-2">
                 {client ? (
@@ -257,6 +271,18 @@ export default function BoutiqueLayout({ children }: { children: React.ReactNode
             {/* Mobile menu */}
             {mobileMenuOpen && (
               <nav className="lg:hidden border-t border-gray-200 py-2 space-y-1">
+                {/* Mobile search */}
+                <form action="/boutique/recherche" className="px-4 py-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      name="q"
+                      placeholder="Rechercher un article..."
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-full focus:outline-none focus:border-[#007bff] bg-gray-50"
+                    />
+                  </div>
+                </form>
                 <Link
                   href="/boutique"
                   onClick={() => setMobileMenuOpen(false)}
