@@ -29,13 +29,16 @@ export async function GET(req: NextRequest) {
     const visitors = await db.visitorTracking.findMany({
       where: { createdAt: { gte: dateFilter } },
       select: {
-        country: true, city: true, referrerSource: true, referrerDomain: true,
+        id: true, visitorId: true, ipAddress: true,
+        country: true, city: true, region: true,
+        referrerSource: true, referrerDomain: true,
         device: true, browser: true, os: true, isFirstVisit: true, createdAt: true,
+        userAgent: true, language: true,
       },
     })
 
     const totalVisitors = visitors.length
-    const uniqueVisitors = new Set(visitors.map(v => v.country + v.city)).size
+    const uniqueVisitors = new Set(visitors.map(v => v.visitorId)).size
     const newVisitors = visitors.filter(v => v.isFirstVisit).length
 
     // By country
@@ -50,8 +53,8 @@ export async function GET(req: NextRequest) {
     for (const v of visitors) {
       const c = v.country || 'Inconnu'
       byCountry[c] = (byCountry[c] || 0) + 1
-      const city = v.city ? `${v.city}, ${c}` : c
-      byCity[city] = (byCity[city] || 0) + 1
+      const cityKey = v.city ? `${v.city}, ${c}` : c
+      byCity[cityKey] = (byCity[cityKey] || 0) + 1
       const s = v.referrerSource || 'direct'
       bySource[s] = (bySource[s] || 0) + 1
       const d = v.device || 'unknown'
@@ -63,6 +66,26 @@ export async function GET(req: NextRequest) {
       const day = new Date(v.createdAt).toISOString().slice(0, 10)
       byDay[day] = (byDay[day] || 0) + 1
     }
+
+    // Recent visitors with full details (for the visitor list)
+    const recentVisitors = visitors
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 50)
+      .map(v => ({
+        id: v.id,
+        ipAddress: v.ipAddress || '—',
+        country: v.country || 'Inconnu',
+        city: v.city || '—',
+        region: v.region || null,
+        device: v.device || 'unknown',
+        browser: v.browser || 'unknown',
+        os: v.os || 'unknown',
+        referrerSource: v.referrerSource || 'direct',
+        referrerDomain: v.referrerDomain || null,
+        language: v.language || null,
+        isFirstVisit: v.isFirstVisit,
+        createdAt: v.createdAt,
+      }))
 
     // ── Page Views ──
     const pageViews = await db.pageView.findMany({
@@ -202,6 +225,7 @@ export async function GET(req: NextRequest) {
       topPages,
       topProducts,
       dailyChart,
+      recentVisitors,
       reviews: {
         total: totalReviews,
         avgRating: parseFloat(avgRating.toFixed(1)),

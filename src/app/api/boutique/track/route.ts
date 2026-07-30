@@ -5,18 +5,8 @@ import { db } from '@/lib/db'
  * POST /api/boutique/track
  * Public — tracks a visitor + page view.
  *
- * Body: {
- *   visitorId: string,       // unique ID from localStorage
- *   path: string,            // current page path
- *   pageType: string,        // home | product | category | checkout | other
- *   productSku?: string,
- *   category?: string,
- *   duration?: number,       // seconds spent on page (for unload events)
- *   isFirstVisit?: boolean,
- * }
- *
  * Server-side enrichment:
- * - IP address → geo-IP (country, city) via free ipapi.co API (no key)
+ * - IP address → geo-IP (country, city) via ipinfo.io (HTTPS, free, 50k/month)
  * - User-Agent → device, browser, OS parsing
  * - Referrer → source normalization (google, facebook, direct, etc.)
  */
@@ -26,19 +16,16 @@ export async function POST(req: NextRequest) {
     const { visitorId, path, pageType, productSku, category, duration, isFirstVisit } = body
 
     if (!visitorId || !path) {
-      return NextResponse.json({ ok: true }) // silent fail
+      return NextResponse.json({ ok: true })
     }
 
-    // ── Extract request metadata ──
-    // Behind nginx/proxy: x-forwarded-for contains the real client IP
-    // Format: "client_ip, proxy1_ip, proxy2_ip" — we want the first one
+    // ── Extract real client IP ──
     const forwarded = req.headers.get('x-forwarded-for')
     const xRealIp = req.headers.get('x-real-ip')
     const cfConnectingIp = req.headers.get('cf-connecting-ip')
-    let ipAddress = null
+    let ipAddress: string | null = null
 
     if (forwarded) {
-      // x-forwarded-for: "client, proxy1, proxy2" → take the first (client)
       ipAddress = forwarded.split(',')[0].trim()
     } else if (xRealIp) {
       ipAddress = xRealIp.trim()
@@ -46,14 +33,22 @@ export async function POST(req: NextRequest) {
       ipAddress = cfConnectingIp.trim()
     }
 
-    // Filter out local/private IPs
+    // Clean up IPv6-mapped IPv4
+    if (ipAddress && ipAddress.startsWith('::ffff:')) {
+      ipAddress = ipAddress.replace('::ffff:', '')
+    }
+
     const isLocalIp = !ipAddress
       || ipAddress === '127.0.0.1'
       || ipAddress === '::1'
       || ipAddress.startsWith('192.168.')
       || ipAddress.startsWith('10.')
       || ipAddress.startsWith('172.16.')
-      || ipAddress.startsWith('::ffff:127.')
+      || ipAddress.startsWith('172.17.')
+      || ipAddress.startsWith('172.18.')
+      || ipAddress.startsWith('172.19.')
+      || ipAddress.startsWith('172.2')
+      || ipAddress.startsWith('172.3')
 
     const userAgent = req.headers.get('user-agent') || null
     const language = req.headers.get('accept-language')?.split(',')[0] || null
@@ -61,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     // ── Parse referrer source ──
     let referrerSource = 'direct'
-    let referrerDomain = null
+    let referrerDomain: string | null = null
     if (referrer) {
       try {
         const url = new URL(referrer)
@@ -80,23 +75,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Parse User-Agent (simple regex, no dependency) ──
+    // ── Parse User-Agent ──
     let device = 'desktop'
     let browser = 'unknown'
     let os = 'unknown'
 
     if (userAgent) {
-      // Device
       if (/iPad|Tablet/i.test(userAgent)) device = 'tablet'
       else if (/Mobile|Android|iPhone/i.test(userAgent)) device = 'mobile'
 
-      // Browser
       if (/Edg\//i.test(userAgent)) browser = 'edge'
       else if (/Chrome\//i.test(userAgent)) browser = 'chrome'
       else if (/Firefox\//i.test(userAgent)) browser = 'firefox'
       else if (/Safari\//i.test(userAgent)) browser = 'safari'
 
-      // OS
       if (/Windows/i.test(userAgent)) os = 'windows'
       else if (/Mac OS/i.test(userAgent)) os = 'macos'
       else if (/Android/i.test(userAgent)) os = 'android'
@@ -104,80 +96,91 @@ export async function POST(req: NextRequest) {
       else if (/Linux/i.test(userAgent)) os = 'linux'
     }
 
-    // ── Geo-IP via multiple providers (free, no API key) ──
-    // Try ip-api.com first (45 req/min, reliable), then ipapi.co as fallback
-    let country = null
-    let countryCode = null
-    let city = null
-    let region = null
+    // ── Geo-IP via ipinfo.io (HTTPS, free, 50k req/month, no API key) ──
+    let country: string | null = null
+    let countryCode: string | null = null
+    let city: string | null = null
+    let region: string | null = null
 
     if (!isLocalIp && ipAddress) {
-      // Provider 1: ip-api.com (JSON, free, 45 req/min)
       try {
-        const geoRes = await fetch(`http://ip-api.com/json/${ipAddress}?fields=status,country,countryCode,regionName,city`, {
-          signal: AbortSignal.timeout(3000),
+        const geoRes = await fetch(`https://ipinfo.io/${ipAddress}/json`, {
+          signal: AbortSignal.timeout(5000),
         })
         if (geoRes.ok) {
           const geo = await geoRes.json()
-          if (geo && geo.status === 'success') {
-            country = geo.country || null
-            countryCode = geo.countryCode || null
+          if (geo && !geo.error && geo.country) {
+            country = geo.country_name || null
+            countryCode = geo.country || null
             city = geo.city || null
-            region = geo.regionName || null
+            region = geo.region || null
+            // If country_name is missing, use a mapping from country code
+            if (!country && countryCode) {
+              const countryMap: Record<string, string> = {
+                FR: 'France', BE: 'Belgique', CH: 'Suisse', DE: 'Allemagne',
+                ES: 'Espagne', IT: 'Italie', GB: 'Royaume-Uni', PT: 'Portugal',
+                NL: 'Pays-Bas', LU: 'Luxembourg', US: 'États-Unis', CA: 'Canada',
+              }
+              country = countryMap[countryCode] || countryCode
+            }
           }
         }
       } catch {
-        // Provider 2: ipapi.co fallback
-        try {
-          const geoRes2 = await fetch(`https://ipapi.co/${ipAddress}/json/`, {
-            signal: AbortSignal.timeout(3000),
-            headers: { 'User-Agent': 'Junashop/1.0' },
-          })
-          if (geoRes2.ok) {
-            const geo2 = await geoRes2.json()
-            if (geo2 && !geo2.error) {
-              country = geo2.country_name || country
-              countryCode = geo2.country_code || countryCode
-              city = geo2.city || city
-              region = geo2.region || region
-            }
-          }
-        } catch {
-          // Both providers failed — silently skip geo
-        }
+        // Geo-IP failed — IP is still stored, just without geo data
       }
     }
 
-    // ── Save visitor tracking (on first visit, or if no tracking record exists for this visitorId) ──
-    // We check if a record already exists for this visitorId to avoid duplicates.
-    // The IP + geo data are stored on the FIRST tracking record for each visitorId.
-    if (isFirstVisit) {
-      // Double-check: only create if no record exists yet for this visitorId
-      const existing = await db.visitorTracking.findFirst({
-        where: { visitorId },
-        select: { id: true },
+    // ── Save/update visitor tracking ──
+    // We ALWAYS check if a tracking record exists for this visitorId.
+    // If not, we create one (regardless of isFirstVisit from the client —
+    // the client might have cleared localStorage, or it's a new session).
+    // If it exists but has no IP (created when geo failed), we update it.
+    const existing = await db.visitorTracking.findFirst({
+      where: { visitorId },
+      select: { id: true, ipAddress: true, city: true },
+    })
+
+    if (!existing) {
+      // New visitor — create tracking record with IP + geo
+      await db.visitorTracking.create({
+        data: {
+          visitorId,
+          ipAddress,
+          country,
+          countryCode,
+          city,
+          region,
+          userAgent,
+          referrer,
+          referrerSource,
+          referrerDomain,
+          language,
+          device,
+          browser,
+          os,
+          isFirstVisit: true,
+        },
       })
-      if (!existing) {
-        await db.visitorTracking.create({
-          data: {
-            visitorId,
-            ipAddress,
-            country,
-            countryCode,
-            city,
-            region,
-            userAgent,
-            referrer,
-            referrerSource,
-            referrerDomain,
-            language,
-            device,
-            browser,
-            os,
-            isFirstVisit: true,
-          },
-        })
-      }
+    } else if (!existing.ipAddress && ipAddress) {
+      // Existing visitor but no IP stored yet — update with IP + geo
+      await db.visitorTracking.update({
+        where: { id: existing.id },
+        data: {
+          ipAddress,
+          country,
+          countryCode,
+          city,
+          region,
+          userAgent,
+          referrer,
+          referrerSource,
+          referrerDomain,
+          language,
+          device,
+          browser,
+          os,
+        },
+      })
     }
 
     // ── Save page view ──
@@ -196,6 +199,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error('POST /api/boutique/track error:', error)
-    return NextResponse.json({ ok: true }) // always return ok to not break the client
+    return NextResponse.json({ ok: true })
   }
 }

@@ -54,6 +54,11 @@ interface StatsData {
   topPages: { path: string; count: number }[]
   topProducts: { sku: string; views: number; brand: string; title: string; photo: string }[]
   dailyChart: { date: string; visitors: number; sales: number; revenue: number }[]
+  recentVisitors: {
+    id: string; ipAddress: string; country: string; city: string; region: string | null;
+    device: string; browser: string; os: string; referrerSource: string; referrerDomain: string | null;
+    language: string | null; isFirstVisit: boolean; createdAt: string;
+  }[]
   reviews: {
     total: number
     avgRating: number
@@ -317,6 +322,54 @@ export function StatisticsModule() {
                   <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
                 </a>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recent visitors with details */}
+      {data.recentVisitors && data.recentVisitors.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Visiteurs récents ({data.recentVisitors.length})</CardTitle>
+            <CardDescription>IP, géolocalisation, appareil et provenance</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/50">
+                  <tr className="text-left text-[10px] text-muted-foreground uppercase border-b">
+                    <th className="px-2 py-2 font-medium">Date</th>
+                    <th className="px-2 py-2 font-medium">IP</th>
+                    <th className="px-2 py-2 font-medium">Pays</th>
+                    <th className="px-2 py-2 font-medium">Ville</th>
+                    <th className="px-2 py-2 font-medium">Appareil</th>
+                    <th className="px-2 py-2 font-medium">Navigateur</th>
+                    <th className="px-2 py-2 font-medium">OS</th>
+                    <th className="px-2 py-2 font-medium">Source</th>
+                    <th className="px-2 py-2 font-medium">Langue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recentVisitors.map(v => (
+                    <tr key={v.id} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
+                        {new Date(v.createdAt).toLocaleDateString('fr-FR')} {new Date(v.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="px-2 py-1.5 font-mono text-[10px]">{v.ipAddress}</td>
+                      <td className="px-2 py-1.5">{v.country}</td>
+                      <td className="px-2 py-1.5">{v.city}{v.region ? ` (${v.region})` : ''}</td>
+                      <td className="px-2 py-1.5 capitalize">{v.device}</td>
+                      <td className="px-2 py-1.5 capitalize">{v.browser}</td>
+                      <td className="px-2 py-1.5 capitalize">{v.os}</td>
+                      <td className="px-2 py-1.5">
+                        <Badge variant="secondary" className="text-[9px]">{v.referrerSource}</Badge>
+                      </td>
+                      <td className="px-2 py-1.5 text-muted-foreground">{v.language || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </CardContent>
         </Card>
