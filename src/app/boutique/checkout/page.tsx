@@ -345,7 +345,7 @@ export default function CheckoutPage() {
   }
 
   // ── Create the order AFTER Stripe payment succeeds ──
-  const createOrderAfterStripePayment = async (sessionId: string) => {
+  const createOrderAfterStripePayment = async (paymentIntentId: string) => {
     if (!stripeOrder) return
 
     setSubmitting(true)
@@ -373,7 +373,7 @@ export default function CheckoutPage() {
           }) : undefined,
           // Mark as paid directly since Stripe payment already succeeded
           paidImmediately: true,
-          paymentIntentId: sessionId,
+          paymentIntentId,
         }),
       })
       const data = await res.json()
@@ -388,7 +388,7 @@ export default function CheckoutPage() {
       window.dispatchEvent(new Event('cart-updated'))
       sessionStorage.setItem('last_order', JSON.stringify({
         ...data,
-        paymentIntentId: sessionId,
+        paymentIntentId,
       }))
       router.push('/boutique/confirmation')
     } catch {
@@ -738,9 +738,9 @@ export default function CheckoutPage() {
                   amount={stripeOrder.amount}
                   orderId={stripeOrder.orderId}
                   customerEmail={form.email}
-                  onPaymentSuccess={(sid) => {
+                  onPaymentSuccess={(piId) => {
                     // Payment succeeded — NOW create the order (stock will be decremented)
-                    createOrderAfterStripePayment(sid)
+                    createOrderAfterStripePayment(piId)
                   }}
                   onPaymentError={(msg) => {
                     toast.error('Paiement échoué: ' + msg)

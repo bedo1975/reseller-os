@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { loadStripe, Stripe } from '@stripe/stripe-js'
-import { CheckoutElementsProvider, useCheckoutElements, PaymentElement } from '@stripe/react-stripe-js/checkout'
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { Button } from '@/components/ui/button'
 import { Loader2, Lock, CreditCard, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -16,48 +16,43 @@ function getStripe(publishableKey: string): Promise<Stripe | null> {
   return stripePromise || Promise.resolve(null)
 }
 
-// ── Inner form using Checkout Elements ───────────────────────────────────
+// ── Inner form ───────────────────────────────────────────────────────────
 
 function CheckoutForm({
   onSuccess,
   onError,
 }: {
-  onSuccess: (sessionId: string) => void
+  onSuccess: (paymentIntentId: string) => void
   onError: (message: string) => void
 }) {
-  const checkout = useCheckoutElements()
+  const stripe = useStripe()
+  const elements = useElements()
   const [processing, setProcessing] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!checkout) return
+    if (!stripe || !elements) return
 
     setProcessing(true)
     setMessage(null)
 
-    try {
-      // Confirm the payment using Checkout Sessions API
-      const result = await checkout.confirm()
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {},
+      redirect: 'if_required',
+    })
 
-      if (result.type === 'success') {
-        setMessage(null)
-        // session.id is available on the checkout object
-        onSuccess(checkout.session?.id || '')
-      } else if (result.type === 'error') {
-        const errMsg = result.error?.message || 'Une erreur est survenue lors du paiement.'
-        setMessage(errMsg)
-        onError(errMsg)
-        setProcessing(false)
-      } else if (result.type === 'action_required') {
-        // 3D Secure or other authentication
-        setMessage('Authentification requise. Suivez les instructions pour compléter le paiement.')
-        // The checkout.confirm() handles the redirect automatically
-      }
-    } catch (err: any) {
-      const errMsg = err?.message || 'Erreur lors de la confirmation du paiement.'
+    if (error) {
+      const errMsg = error.message || 'Une erreur est survenue lors du paiement.'
       setMessage(errMsg)
       onError(errMsg)
+      setProcessing(false)
+    } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+      setMessage(null)
+      onSuccess(paymentIntent.id)
+    } else if (paymentIntent) {
+      setMessage(`Statut: ${paymentIntent.status}. Si une fenêtre s'ouvre, suivez les instructions.`)
       setProcessing(false)
     }
   }
@@ -67,10 +62,7 @@ function CheckoutForm({
       <div className="rounded-lg border border-gray-200 p-4 bg-white">
         <PaymentElement
           options={{
-            layout: {
-              type: 'tabs',
-              defaultCollapsed: false,
-            },
+            layout: { type: 'tabs', defaultCollapsed: false },
           }}
         />
       </div>
@@ -84,7 +76,7 @@ function CheckoutForm({
 
       <Button
         type="submit"
-        disabled={!checkout || processing}
+        disabled={!stripe || processing}
         className="w-full h-12 bg-[#635BFF] hover:bg-[#5851ED] text-white"
       >
         {processing ? (
@@ -115,7 +107,7 @@ interface StripePaymentFormProps {
   amount: number
   orderId: string
   customerEmail: string
-  onPaymentSuccess: (sessionId: string) => void
+  onPaymentSuccess: (paymentIntentId: string) => void
   onPaymentError?: (message: string) => void
 }
 
@@ -140,20 +132,17 @@ export function StripePaymentForm({
     }
     getStripe(publishableKey).then(s => {
       setStripe(s)
-      if (!s) {
-        setError('Impossible de charger Stripe. Vérifiez la clé publique.')
-      }
+      if (!s) setError('Impossible de charger Stripe. Vérifiez la clé publique.')
     })
   }, [publishableKey])
 
-  // Create a Checkout Session when Stripe is loaded
   useEffect(() => {
     if (!stripe || !amount || !orderId) return
 
     setLoading(true)
     setError(null)
 
-    fetch('/api/stripe/create-checkout-session', {
+    fetch('/api/stripe/create-payment-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount, orderId, customerEmail }),
@@ -163,7 +152,7 @@ export function StripePaymentForm({
         if (data.clientSecret) {
           setClientSecret(data.clientSecret)
         } else {
-          setError(data.error || 'Erreur lors de la création de la session de paiement')
+          setError(data.error || 'Erreur lors de la création du paiement')
         }
       })
       .catch(() => setError('Erreur réseau'))
@@ -201,6 +190,21 @@ export function StripePaymentForm({
     )
   }
 
+  const options = {
+    clientSecret,
+    appearance: {
+      theme: 'stripe' as const,
+      variables: {
+        colorPrimary: '#007bff',
+        colorBackground: '#ffffff',
+        colorText: '#1a1a1a',
+        colorDanger: '#dc2626',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        borderRadius: '8px',
+      },
+    },
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-3">
@@ -213,18 +217,18 @@ export function StripePaymentForm({
         </div>
       </div>
 
-      <CheckoutElementsProvider stripe={stripe} options={{ clientSecret }}>
+      <Elements stripe={stripe} options={options}>
         <CheckoutForm
-          onSuccess={(sid) => {
+          onSuccess={(piId) => {
             toast.success('Paiement réussi !')
-            onPaymentSuccess(sid)
+            onPaymentSuccess(piId)
           }}
           onError={(msg) => {
             toast.error(msg)
             onPaymentError?.(msg)
           }}
         />
-      </CheckoutElementsProvider>
+      </Elements>
     </div>
   )
 }
