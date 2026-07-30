@@ -74,12 +74,40 @@ export async function POST(req: NextRequest) {
       case 'payment_intent.payment_failed': {
         const paymentIntent = event.data.object
         console.log(`[stripe] Payment failed: ${paymentIntent.id} for order ${paymentIntent.metadata?.orderId}`)
-        // Could send an email to the customer here
+        break
+      }
+
+      case 'checkout.session.completed': {
+        const session = event.data.object
+        console.log(`[stripe] Checkout session completed: ${session.id}`)
+        const orderId = session.metadata?.orderId
+        if (orderId) {
+          try {
+            const order = await db.boutiqueOrder.findFirst({ where: { orderId } })
+            if (order && order.status === 'pending') {
+              await db.boutiqueOrder.update({
+                where: { id: order.id },
+                data: {
+                  status: 'paid',
+                  notes: (order.notes || '') + `\n[Stripe] Paiement confirmé — Session: ${session.id}`,
+                },
+              })
+              console.log(`[stripe] Order ${orderId} marked as paid (checkout session)`)
+            }
+          } catch (e) {
+            console.error('[stripe] Failed to update order status:', e)
+          }
+        }
+        break
+      }
+
+      case 'checkout.session.expired': {
+        const session = event.data.object
+        console.log(`[stripe] Checkout session expired: ${session.id}`)
         break
       }
 
       default:
-        // Unhandled event type — log it
         console.log(`[stripe] Unhandled event type: ${event.type}`)
     }
 
