@@ -224,6 +224,20 @@ export default function CartPage() {
               </Button>
             )}
 
+            <Button
+              variant="outline"
+              className="w-full mt-2 h-10 text-red-600 border-red-300 hover:bg-red-50"
+              onClick={() => {
+                if (confirm('Vider le panier et retourner à l\'accueil ?')) {
+                  localStorage.removeItem('boutique_cart')
+                  window.dispatchEvent(new Event('cart-updated'))
+                  router.push('/boutique')
+                }
+              }}
+            >
+              Annuler la commande
+            </Button>
+
             <p className="text-xs text-gray-400 text-center mt-3">
               Paiement sécurisé ·{' '}
               <Link href="/boutique/retractation" className="text-[#007bff] hover:underline">Droit de rétractation 14j</Link>

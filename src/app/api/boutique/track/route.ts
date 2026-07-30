@@ -30,8 +30,31 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Extract request metadata ──
+    // Behind nginx/proxy: x-forwarded-for contains the real client IP
+    // Format: "client_ip, proxy1_ip, proxy2_ip" — we want the first one
     const forwarded = req.headers.get('x-forwarded-for')
-    const ipAddress = forwarded?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || null
+    const xRealIp = req.headers.get('x-real-ip')
+    const cfConnectingIp = req.headers.get('cf-connecting-ip')
+    let ipAddress = null
+
+    if (forwarded) {
+      // x-forwarded-for: "client, proxy1, proxy2" → take the first (client)
+      ipAddress = forwarded.split(',')[0].trim()
+    } else if (xRealIp) {
+      ipAddress = xRealIp.trim()
+    } else if (cfConnectingIp) {
+      ipAddress = cfConnectingIp.trim()
+    }
+
+    // Filter out local/private IPs
+    const isLocalIp = !ipAddress
+      || ipAddress === '127.0.0.1'
+      || ipAddress === '::1'
+      || ipAddress.startsWith('192.168.')
+      || ipAddress.startsWith('10.')
+      || ipAddress.startsWith('172.16.')
+      || ipAddress.startsWith('::ffff:127.')
+
     const userAgent = req.headers.get('user-agent') || null
     const language = req.headers.get('accept-language')?.split(',')[0] || null
     const referrer = body.referrer || req.headers.get('referer') || null
@@ -81,53 +104,80 @@ export async function POST(req: NextRequest) {
       else if (/Linux/i.test(userAgent)) os = 'linux'
     }
 
-    // ── Geo-IP via ipapi.co (free, no API key, 1000 req/day) ──
+    // ── Geo-IP via multiple providers (free, no API key) ──
+    // Try ip-api.com first (45 req/min, reliable), then ipapi.co as fallback
     let country = null
     let countryCode = null
     let city = null
     let region = null
 
-    if (ipAddress && ipAddress !== '127.0.0.1' && ipAddress !== '::1' && !ipAddress.startsWith('192.168')) {
+    if (!isLocalIp && ipAddress) {
+      // Provider 1: ip-api.com (JSON, free, 45 req/min)
       try {
-        const geoRes = await fetch(`https://ipapi.co/${ipAddress}/json/`, {
+        const geoRes = await fetch(`http://ip-api.com/json/${ipAddress}?fields=status,country,countryCode,regionName,city`, {
           signal: AbortSignal.timeout(3000),
-          headers: { 'User-Agent': 'Junashop/1.0' },
         })
         if (geoRes.ok) {
           const geo = await geoRes.json()
-          if (geo && !geo.error) {
-            country = geo.country_name || null
-            countryCode = geo.country_code || null
+          if (geo && geo.status === 'success') {
+            country = geo.country || null
+            countryCode = geo.countryCode || null
             city = geo.city || null
-            region = geo.region || null
+            region = geo.regionName || null
           }
         }
       } catch {
-        // Geo-IP failed (rate limit, timeout) — silently skip
+        // Provider 2: ipapi.co fallback
+        try {
+          const geoRes2 = await fetch(`https://ipapi.co/${ipAddress}/json/`, {
+            signal: AbortSignal.timeout(3000),
+            headers: { 'User-Agent': 'Junashop/1.0' },
+          })
+          if (geoRes2.ok) {
+            const geo2 = await geoRes2.json()
+            if (geo2 && !geo2.error) {
+              country = geo2.country_name || country
+              countryCode = geo2.country_code || countryCode
+              city = geo2.city || city
+              region = geo2.region || region
+            }
+          }
+        } catch {
+          // Both providers failed — silently skip geo
+        }
       }
     }
 
-    // ── Save visitor tracking (only on first visit or if new session) ──
+    // ── Save visitor tracking (on first visit, or if no tracking record exists for this visitorId) ──
+    // We check if a record already exists for this visitorId to avoid duplicates.
+    // The IP + geo data are stored on the FIRST tracking record for each visitorId.
     if (isFirstVisit) {
-      await db.visitorTracking.create({
-        data: {
-          visitorId,
-          ipAddress,
-          country,
-          countryCode,
-          city,
-          region,
-          userAgent,
-          referrer,
-          referrerSource,
-          referrerDomain,
-          language,
-          device,
-          browser,
-          os,
-          isFirstVisit: true,
-        },
+      // Double-check: only create if no record exists yet for this visitorId
+      const existing = await db.visitorTracking.findFirst({
+        where: { visitorId },
+        select: { id: true },
       })
+      if (!existing) {
+        await db.visitorTracking.create({
+          data: {
+            visitorId,
+            ipAddress,
+            country,
+            countryCode,
+            city,
+            region,
+            userAgent,
+            referrer,
+            referrerSource,
+            referrerDomain,
+            language,
+            device,
+            browser,
+            os,
+            isFirstVisit: true,
+          },
+        })
+      }
     }
 
     // ── Save page view ──
