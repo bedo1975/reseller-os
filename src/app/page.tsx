@@ -29,6 +29,7 @@ import { VintedModule } from '@/components/modules/vinted-module'
 import { ProductTrendModule } from '@/components/modules/product-trend-module'
 import { PhotoSessionModule } from '@/components/modules/photo-session-module'
 import { BoutiqueAdminModule } from '@/components/modules/boutique-admin-module'
+import { StatisticsModule } from '@/components/modules/statistics-module'
 import { SettingsModule } from '@/components/modules/settings-module'
 import { ReminderPopup } from '@/components/shared/reminder-popup'
 import { cn } from '@/lib/utils'
@@ -57,6 +58,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'product-trend', label: 'Product Trend', short: 'Trend', icon: Sparkles, description: 'Produits tendance multi-marketplaces' },
   { key: 'photos', label: 'Shooting Photo', short: 'Photos', icon: Camera, description: 'Sessions photos produits' },
   { key: 'boutique-admin', label: 'Boutique Admin', short: 'Boutique', icon: ShoppingBag, description: 'Gestion boutique en ligne', adminOnly: true },
+  { key: 'statistics', label: 'Statistiques', short: 'Stats', icon: BarChart3, description: 'Visiteurs, pages vues, avis', adminOnly: true },
   { key: 'settings', label: 'Paramètres', short: 'Paramètres', icon: Settings, description: 'Catégories, états, tailles, couleurs' },
 ]
 
@@ -414,6 +416,7 @@ export default function Home() {
             {activeModule === 'product-trend' && <ProductTrendModule />}
             {activeModule === 'photos' && <PhotoSessionModule />}
             {activeModule === 'boutique-admin' && isAdmin && <BoutiqueAdminModule />}
+            {activeModule === 'statistics' && isAdmin && <StatisticsModule />}
             {activeModule === 'settings' && <SettingsModule />}
           </div>
         </div>

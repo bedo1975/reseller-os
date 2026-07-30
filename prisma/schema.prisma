@@ -633,6 +633,52 @@ model ProductReview {
   @@index([createdAt])
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// STATISTIQUES — Tracking des visiteurs et pages vues
+// ═══════════════════════════════════════════════════════════════════════
+model VisitorTracking {
+  id          String   @id @default(cuid())
+  visitorId   String                // identifiant unique (cookie/localStorage)
+  ipAddress   String?               // adresse IP (pour pays/ville)
+  country     String?               // pays (via geo-IP)
+  countryCode String?
+  city        String?               // ville (via geo-IP)
+  region      String?
+  userAgent   String?               // navigateur + OS
+  referrer    String?               // page de provenance (Google, direct, etc.)
+  referrerSource String?            // source normalisée: google | facebook | direct | other
+  referrerDomain String?            // domaine de provenance: google.com, facebook.com, etc.
+  language    String?               // langue du navigateur
+  device      String?               // mobile | desktop | tablet
+  browser     String?
+  os          String?
+  isFirstVisit Boolean @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([visitorId])
+  @@index([createdAt])
+  @@index([country])
+  @@index([referrerSource])
+}
+
+model PageView {
+  id          String   @id @default(cuid())
+  visitorId   String                // lien avec VisitorTracking
+  path        String                // chemin de la page (ex: /boutique, /boutique/produit/NK-001)
+  pageType    String   @default("other")  // home | product | category | checkout | other
+  productSku  String?               // si pageType=product, le SKU du produit
+  category    String?               // si pageType=category, la catégorie
+  referrer    String?               // referrer de cette page vue
+  duration    Int?                  // temps passé sur la page (secondes) — envoyé au unload
+  createdAt   DateTime @default(now())
+
+  @@index([visitorId])
+  @@index([path])
+  @@index([pageType])
+  @@index([productSku])
+  @@index([createdAt])
+}
+
 // Mode de livraison (CRUD admin)
 model ShippingMethod {
   id          String   @id @default(cuid())

@@ -16,6 +16,7 @@ export type ModuleKey =
   | 'product-trend'
   | 'photos'
   | 'boutique-admin'
+  | 'statistics'
   | 'settings'
 
 interface AppState {
