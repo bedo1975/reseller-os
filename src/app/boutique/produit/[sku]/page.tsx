@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShareModal } from '@/components/boutique/share-modal'
+import { ReviewsSection } from '@/components/boutique/reviews-section'
 
 const CONDITION_LABELS: Record<string, string> = {
   'neuf': 'Neuf avec étiquette',
@@ -337,6 +338,9 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           </div>
         </div>
       </div>
+
+      {/* Reviews section */}
+      {product && <ReviewsSection sku={product.sku} />}
 
       {/* Share modal */}
       {product && (

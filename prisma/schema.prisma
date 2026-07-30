@@ -615,6 +615,24 @@ model ShareReferral {
   @@index([productSku])
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// AVIS PRODUITS — Notes et commentaires des clients
+// ═══════════════════════════════════════════════════════════════════════
+model ProductReview {
+  id          String   @id @default(cuid())
+  productSku  String                // SKU de l'article évalué
+  authorName  String                // nom du client (ex: "Jean D.")
+  rating      Int                   // 1 à 5 étoiles
+  title       String?               // titre de l'avis (optionnel)
+  comment     String?               // commentaire (optionnel)
+  active      Boolean  @default(true) // modération admin
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([productSku, active])
+  @@index([createdAt])
+}
+
 // Mode de livraison (CRUD admin)
 model ShippingMethod {
   id          String   @id @default(cuid())

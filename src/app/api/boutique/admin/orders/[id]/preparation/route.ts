@@ -127,7 +127,7 @@ export async function GET(
   <div class="header">
     <div>
       <div class="title">BON DE PRÉPARATION</div>
-      <div class="subtitle">DBoxPro Boutique</div>
+      <div class="subtitle">Junashop -  Boutique</div>
     </div>
     <div class="order-meta">
       <strong>${escapeHtml(order.orderId)}</strong><br>
