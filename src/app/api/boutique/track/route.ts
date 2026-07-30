@@ -20,16 +20,53 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Extract real client IP ──
+    // Behind nginx: X-Real-IP is set to $remote_addr (the real client IP)
+    // X-Forwarded-For is "client_ip, proxy1_ip, ..." but can contain local IPs
+    // if nginx proxies to localhost.
+    // Strategy: try x-real-ip first, then parse x-forwarded-for for the first
+    // non-local IP, then cf-connecting-ip.
     const forwarded = req.headers.get('x-forwarded-for')
     const xRealIp = req.headers.get('x-real-ip')
     const cfConnectingIp = req.headers.get('cf-connecting-ip')
+
+    // Helper: is this IP local/private?
+    const isPrivateIp = (ip: string): boolean => {
+      const clean = ip.startsWith('::ffff:') ? ip.replace('::ffff:', '') : ip
+      return clean === '127.0.0.1'
+        || clean === '::1'
+        || clean.startsWith('192.168.')
+        || clean.startsWith('10.')
+        || clean.startsWith('172.16.')
+        || clean.startsWith('172.17.')
+        || clean.startsWith('172.18.')
+        || clean.startsWith('172.19.')
+        || clean.startsWith('172.2')
+        || clean.startsWith('172.3')
+        || clean.startsWith('::ffff:127.')
+        || clean.startsWith('::ffff:192.168.')
+        || clean.startsWith('::ffff:10.')
+    }
+
     let ipAddress: string | null = null
 
-    if (forwarded) {
-      ipAddress = forwarded.split(',')[0].trim()
-    } else if (xRealIp) {
+    // 1. Try X-Real-IP (set by nginx to $remote_addr)
+    if (xRealIp && !isPrivateIp(xRealIp.trim())) {
       ipAddress = xRealIp.trim()
-    } else if (cfConnectingIp) {
+    }
+
+    // 2. Try X-Forwarded-For — find the first non-local IP in the chain
+    if (!ipAddress && forwarded) {
+      const ips = forwarded.split(',').map(s => s.trim())
+      for (const ip of ips) {
+        if (!isPrivateIp(ip)) {
+          ipAddress = ip
+          break
+        }
+      }
+    }
+
+    // 3. Try Cloudflare header
+    if (!ipAddress && cfConnectingIp && !isPrivateIp(cfConnectingIp.trim())) {
       ipAddress = cfConnectingIp.trim()
     }
 
@@ -38,17 +75,7 @@ export async function POST(req: NextRequest) {
       ipAddress = ipAddress.replace('::ffff:', '')
     }
 
-    const isLocalIp = !ipAddress
-      || ipAddress === '127.0.0.1'
-      || ipAddress === '::1'
-      || ipAddress.startsWith('192.168.')
-      || ipAddress.startsWith('10.')
-      || ipAddress.startsWith('172.16.')
-      || ipAddress.startsWith('172.17.')
-      || ipAddress.startsWith('172.18.')
-      || ipAddress.startsWith('172.19.')
-      || ipAddress.startsWith('172.2')
-      || ipAddress.startsWith('172.3')
+    const isLocalIp = !ipAddress || isPrivateIp(ipAddress)
 
     const userAgent = req.headers.get('user-agent') || null
     const language = req.headers.get('accept-language')?.split(',')[0] || null
