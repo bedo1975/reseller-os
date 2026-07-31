@@ -146,6 +146,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function OrdersTab() {
   const { getByType } = useSettings()
+  const { can } = usePermissions()
   const carriers = getByType('carrier')
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
