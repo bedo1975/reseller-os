@@ -2416,7 +2416,7 @@ ${footerBlock}
         'Réinitialisation de votre mot de passe',
         '<p>Bonjour {firstName},</p><p>Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour en choisir un nouveau. Ce lien est valable 1 heure.</p>',
         'Réinitialiser mon mot de passe',
-        '/boutique/connexion',
+        '{resetUrl}',
       )
     case 'templatePasswordChanged':
       return wrap(

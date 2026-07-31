@@ -1553,3 +1553,71 @@ Task: Implement Mondial Relay point relais with Leaflet map in checkout
 ## Build
 - npx next build --webpack: success
 - Zip: 980 KB, MD5: eeafb0b03825e9a072961634ce7c95e6
+
+---
+Task ID: password-email-template-fix
+Agent: main
+Task: Fix the password-changed confirmation email — it was using inline hardcoded HTML that didn't match the admin's custom template style. User wanted it to be based on the admin's custom email templates like the other notification emails.
+
+## Problem
+- `/api/boutique/client/forgot-password/route.ts` sent the password-reset-request email with inline hardcoded HTML (different colors, no logo, no admin customization).
+- `/api/boutique/client/reset-password/route.ts` sent the password-changed confirmation email with inline hardcoded HTML (green box with `Mot de passe modifié ✓` — totally different from the other emails).
+- The admin had a `templatePasswordLost` field in EmailSettings but it was never used.
+
+## Solution — Reuse the same pattern as notifyNewOrder / notifyOrderStatusChange
+
+### 1. Schema change (`prisma/schema.prisma`)
+- Added new field `templatePasswordChanged String?` to `EmailSettings` model.
+- Aligned column formatting for readability.
+- `bunx prisma db push` — DB now in sync.
+
+### 2. API route — `src/app/api/email-settings/route.ts`
+- Added `templatePasswordChanged` to destructured body and the data object in PUT handler.
+- GET already returns all DB columns automatically.
+
+### 3. Admin UI — `src/components/modules/settings-module.tsx`
+- Added `templatePasswordChanged: string | null` to `EmailSettingsData` interface.
+- Added new case in `getModernPreset()` for `templatePasswordChanged` — produces a "Mot de passe modifié ✓" preset with green success badge + "Se connecter" button.
+- Added new entry to the templates list in `EmailSection`: `{ key: 'templatePasswordChanged', label: 'Mot de passe modifié', placeholder: '...' }` — placed right after "Mot de passe perdu" for logical grouping.
+- Updated CardDescription variables list to include `{resetUrl}` (used in the password-lost template).
+
+### 4. Email helpers — `src/lib/email.ts`
+Added two new exported functions:
+
+**`notifyPasswordResetRequest(clientEmail, clientFirstName, resetUrl)`**
+- Uses `config.templatePasswordLost` if it's HTML — replaces `{firstName}`, `{resetUrl}`, `{email}`.
+- If the template doesn't already contain a reset link/button, appends a "Réinitialiser mon mot de passe" CTA button.
+- If no custom HTML template, falls back to `buildEmailTemplate()` — the SAME wrapper used by `notifyNewOrder` / `notifyOrderStatusChange` (rounded card, colored header `#007bff`, footer "À bientôt sur ${logoText}"). Body includes the email address + 1-hour expiry note + safety reassurance.
+
+**`notifyPasswordChanged(clientEmail, clientFirstName)`**
+- Uses `config.templatePasswordChanged` if it's HTML — replaces `{firstName}`, `{email}`.
+- If the template doesn't already link to `/boutique/connexion`, appends a "Se connecter" CTA button (green `#10b981`).
+- If no custom HTML template, falls back to `buildEmailTemplate()` with green success badge + security warning.
+
+Both functions follow the EXACT same pattern as `notifyNewOrder` / `notifyOrderStatusChange`:
+1. Fetch `getEmailConfig()` + `getBoutiqueSettings()`
+2. Build `defaultText` for plaintext fallback
+3. If admin's custom template is HTML → use it with variable substitution (+ optional appended CTA button if not already present in the template)
+4. Otherwise → use `buildEmailTemplate()` for the consistent visual wrapper
+
+### 5. Forgot-password route — `src/app/api/boutique/client/forgot-password/route.ts`
+- Removed the 30-line inline HTML template.
+- Replaced with a single call: `await notifyPasswordResetRequest(cleanEmail, client.firstName, resetUrl)`.
+- Token generation + DB update logic unchanged.
+- Anti-enumeration behavior preserved (returns success even if email doesn't exist).
+
+### 6. Reset-password route — `src/app/api/boutique/client/reset-password/route.ts`
+- Removed the 30-line inline HTML template.
+- Replaced with a single call: `await notifyPasswordChanged(client.email, client.firstName)`.
+- Token validation + bcrypt hashing unchanged.
+
+## Result
+- All 5 password-related emails (register, validate, password-lost, password-changed, order, order-status) now share the SAME visual style and the SAME admin-customization mechanism.
+- Admin can fully customize the "Mot de passe modifié" email via the WYSIWYG editor in Settings → Email → "Modèles d'emails" — including the "Charger un modèle" button that loads the modern preset.
+- If admin leaves the template empty, the email falls back to `buildEmailTemplate()` — identical wrapper to order emails.
+- Variables available in templates: `{firstName}`, `{lastName}`, `{email}`, `{orderId}`, `{total}`, `{status}`, `{resetUrl}`.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (109/109 static pages). No new TS errors.
+- `bash scripts/make-zip.sh`: zip = 1039 KB, MD5: `1999bd1c03d00e769d0adf3a09fe18b3`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

@@ -479,7 +479,11 @@ export async function notifyPasswordResetRequest(
 
     let html: string
     if (template && /<[a-z][\s\S]*>/i.test(template)) {
-      // Custom HTML template — replace variables {firstName}, {resetUrl}
+      // Custom HTML template — replace variables {firstName}, {resetUrl}, {email}.
+      // The admin is responsible for adding their own CTA button inside the
+      // custom template (the modern preset already includes one). We do NOT
+      // append a fallback button here — that was causing duplicate buttons
+      // when the admin's template already had one.
       let processedTemplate = template
       const vars: Record<string, string> = {
         firstName: clientFirstName,
@@ -489,13 +493,7 @@ export async function notifyPasswordResetRequest(
       for (const [key, value] of Object.entries(vars)) {
         processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
       }
-      // Only append the reset button if the template doesn't already contain a reset link
-      const hasResetLink = processedTemplate.includes('/boutique/reinitialiser-mot-de-passe')
-        || processedTemplate.includes('{resetUrl}')
-      const resetButton = resetUrl && !hasResetLink
-        ? `<div style="margin-top:16px;text-align:center;"><a href="${resetUrl}" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:12px 32px;border-radius:6px;font-weight:600;font-size:15px;">Réinitialiser mon mot de passe →</a></div>`
-        : ''
-      html = processedTemplate + resetButton
+      html = processedTemplate
     } else {
       // Use standard HTML template (same wrapper as order emails)
       const bodyHtml = `
@@ -555,7 +553,11 @@ export async function notifyPasswordChanged(
 
     let html: string
     if (template && /<[a-z][\s\S]*>/i.test(template)) {
-      // Custom HTML template — replace {firstName}
+      // Custom HTML template — replace {firstName}, {email}.
+      // The admin is responsible for adding their own CTA button inside the
+      // custom template (the modern preset already includes one). We do NOT
+      // append a fallback button here — that was causing duplicate buttons
+      // when the admin's template already had one.
       let processedTemplate = template
       const vars: Record<string, string> = {
         firstName: clientFirstName,
@@ -564,12 +566,7 @@ export async function notifyPasswordChanged(
       for (const [key, value] of Object.entries(vars)) {
         processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
       }
-      // Only append the login button if the template doesn't already link to /boutique/connexion
-      const hasLoginLink = processedTemplate.includes('/boutique/connexion')
-      const loginButton = loginUrl && !hasLoginLink
-        ? `<div style="margin-top:16px;text-align:center;"><a href="${loginUrl}" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;padding:12px 32px;border-radius:6px;font-weight:600;font-size:15px;">Se connecter →</a></div>`
-        : ''
-      html = processedTemplate + loginButton
+      html = processedTemplate
     } else {
       // Use standard HTML template (same wrapper as order emails)
       const bodyHtml = `
