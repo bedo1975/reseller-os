@@ -1731,3 +1731,95 @@ The admin must **re-click "Charger un modèle"** on each template in *Réglages 
 - `npx next build --webpack`: ✓ Compiled successfully (109/109 static pages).
 - `bash scripts/make-zip.sh`: zip = 1039 KB, MD5: `1ffa86f4f8eab1ebe1a287cebcf0ec18`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: email-buttons-fix + account-validation-feature
+Agent: main
+Task: Two combined fixes: (1) email CTA buttons not clickable in email clients, (2) implement email validation flow for boutique client accounts.
+
+## Part 1 — Fix email buttons not clickable (backward-compat)
+
+### Root cause
+Old saved admin templates contain **relative URLs** (`/boutique/connexion`, `/boutique/compte/commandes`) as button `href`. Email clients cannot resolve relative URLs — clicking the button does nothing.
+
+Earlier fix added placeholders (`{loginUrl}`, `{ordersUrl}`) but the user's saved templates still had the old relative URLs. Re-clicking "Charger un modèle" was needed but not done.
+
+### Fix — auto-migrate at send-time
+Added `migrateRelativeUrls(html, siteUrl)` helper in `src/lib/email.ts`:
+- Detects `href="/boutique/..."` and `href='/boutique/...'` patterns
+- Replaces with absolute `href="${siteUrl}/boutique/..."`
+- Applied in ALL 5 notify functions: notifyNewOrder, notifyOrderStatusChange, notifyClientRegistration, notifyPasswordResetRequest, notifyPasswordChanged
+- Also applied in the new notifyAccountValidation function
+
+Now even old saved templates with relative URLs will work — the migration happens automatically at email send-time. No admin action needed.
+
+## Part 2 — Implement email validation flow for boutique accounts
+
+### Schema change (`prisma/schema.prisma`)
+Added two new fields to `BoutiqueClient`:
+- `emailValidated Boolean @default(false)` — true once the user clicked the validation link
+- `validationToken String?` — token sent in the validation email
+- `bunx prisma db push` — DB now in sync
+
+### New email helper — `notifyAccountValidation()`
+Added to `src/lib/email.ts`:
+- Uses `config.templateValidate` if it's HTML → substitute `{firstName}`, `{validationUrl}`, `{email}` + apply migrateRelativeUrls
+- Otherwise falls back to `buildEmailTemplate()` (same wrapper as order emails) with the validation URL as button
+
+### New API routes
+1. **`POST /api/boutique/client/validate-account`**
+   - Body: `{ token }`
+   - Finds client by `validationToken`, marks `emailValidated=true`, clears token
+   - Returns 400 if token is invalid or already used
+
+2. **`POST /api/boutique/client/resend-validation`**
+   - Body: `{ email }`
+   - Anti-enumeration: always returns generic success
+   - Only sends email if account exists AND is not yet validated
+   - Generates a fresh token + sends `notifyAccountValidation()`
+
+### New page — `/boutique/valider-compte`
+- Reads `?token=xxx` from URL
+- Calls `POST /api/boutique/client/validate-account` with the token
+- Shows 3 states: loading (spinner), success (green check + "Se connecter" button), error (red X + retry options)
+- Wrapped in `<Suspense>` because it uses `useSearchParams`
+
+### Updated registration flow — `POST /api/boutique/client/register`
+- Removed `signClientToken` + cookie set (no auto-login anymore)
+- Generates `validationToken` (crypto.randomBytes)
+- Stores `emailValidated: false` + `validationToken`
+- Sends `notifyAccountValidation()` with the validation URL
+- Returns `{ needsValidation: true, clientEmail, message }` instead of the auth cookie
+
+### Updated login flow — `POST /api/boutique/client/login`
+- After successful password check, if `emailValidated === false`:
+  - **Legacy account check**: if `validationToken` is null → auto-validate (for accounts created before this feature was deployed). This prevents existing users from being locked out.
+  - **New account with pending token**: return 403 with `{ needsValidation: true, clientEmail }`
+- Otherwise: proceed with normal login + cookie set
+
+### Updated connexion page — `src/app/boutique/connexion/page.tsx`
+- New state: `pendingValidationEmail: string | null`
+- When login/register API returns `needsValidation: true` → show "Vérifiez vos emails" panel instead of the form:
+  - Icon `MailCheck`
+  - Shows the email address
+  - "Renvoyer l'email de validation" button → calls `/api/boutique/client/resend-validation`
+  - "Retour à la connexion" button → clears state, returns to form
+- Register form: hint text now says "Un email de validation vous sera envoyé pour activer votre compte."
+- Register success: if `needsValidation: true` → show the validation panel (no auto-redirect)
+
+### Updated preset — `templateValidate` in `settings-module.tsx`
+- Button link changed from `{loginUrl}` → `{validationUrl}`
+- Body text updated: "Merci pour votre inscription ! Pour activer votre compte... Ce lien est valable 24 heures."
+- Added `{validationUrl}` to the CardDescription variables list
+
+## Variables now available in all email templates
+`{firstName}, {lastName}, {email}, {orderId}, {total}, {status}, {resetUrl}, {validationUrl}, {loginUrl}, {ordersUrl}`
+
+## Legacy account migration
+Existing boutique clients (created before this feature) have `emailValidated=false` and `validationToken=null` (default values). The login API auto-validates them on next successful login — no manual migration needed, no user-facing disruption.
+
+## Build & zip
+- `bunx prisma db push`: ✓ schema in sync
+- `npx next build --webpack`: ✓ Compiled successfully (112/112 static pages — was 109 before, the new valider-compte page + 2 APIs added).
+- `bash scripts/make-zip.sh`: zip = 1043 KB, MD5: `98d6a07db6f0c62d88bf0ea77cca405b`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

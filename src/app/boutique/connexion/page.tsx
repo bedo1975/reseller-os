@@ -1,16 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, User, Mail, Lock, Phone, MailCheck } from 'lucide-react'
+import { Loader2, User, Mail, Lock, Phone, MailCheck, CheckCircle2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
-export default function ConnexionPage() {
+function ConnexionPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [loading, setLoading] = useState(false)
   const [resending, setResending] = useState(false)
@@ -19,6 +20,24 @@ export default function ConnexionPage() {
   })
   // When set: show the "check your email" panel instead of the form
   const [pendingValidationEmail, setPendingValidationEmail] = useState<string | null>(null)
+  // Validation result from the email link (GET /api/boutique/client/validate-account redirects here)
+  const [validationResult, setValidationResult] = useState<'success' | 'error' | null>(null)
+
+  useEffect(() => {
+    // Read validation result from URL params (set by the GET validate-account API)
+    const validated = searchParams.get('validated')
+    const validationError = searchParams.get('validation_error')
+    if (validated === '1') {
+      setValidationResult('success')
+      toast.success('Votre compte a été validé avec succès ! Vous pouvez maintenant vous connecter.')
+      // Clean the URL (remove the query param) so a refresh doesn't re-trigger the toast
+      router.replace('/boutique/connexion')
+    } else if (validationError === '1') {
+      setValidationResult('error')
+      toast.error('Lien de validation invalide ou déjà utilisé.')
+      router.replace('/boutique/connexion')
+    }
+  }, [searchParams, router])
 
   useEffect(() => {
     // If already logged in, redirect to account
@@ -96,6 +115,77 @@ export default function ConnexionPage() {
     } finally {
       setResending(false)
     }
+  }
+
+  // ── Validation success screen ──────────────────────────────────────────
+  if (validationResult === 'success') {
+    return (
+      <div className="max-w-md mx-auto px-4 py-12">
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm text-center">
+          <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 className="h-10 w-10 text-green-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Compte validé ! 🎉</h1>
+          <p className="text-sm text-gray-600 mb-6">
+            Votre adresse email a été validée avec succès. Vous pouvez maintenant vous connecter
+            à votre compte.
+          </p>
+          <Button
+            onClick={() => setValidationResult(null)}
+            className="w-full h-11 bg-[#007bff] hover:bg-[#0056b3]"
+          >
+            Se connecter
+          </Button>
+          <div className="mt-6 text-center">
+            <Link href="/boutique" className="text-xs text-gray-500 hover:text-[#007bff]">
+              ← Continuer sans compte
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Validation error screen ────────────────────────────────────────────
+  if (validationResult === 'error') {
+    return (
+      <div className="max-w-md mx-auto px-4 py-12">
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm text-center">
+          <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <XCircle className="h-10 w-10 text-red-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Lien invalide</h1>
+          <p className="text-sm text-gray-600 mb-6">
+            Le lien de validation est invalide, a déjà été utilisé, ou a expiré.
+            Si vous n&apos;arrivez pas à valider votre compte, vous pouvez renvoyer un email de validation.
+          </p>
+          <div className="space-y-2">
+            <Button
+              onClick={() => {
+                setValidationResult(null)
+                setMode('register')
+              }}
+              variant="outline"
+              className="w-full h-11"
+            >
+              Renvoyer un email de validation
+            </Button>
+            <Button
+              onClick={() => setValidationResult(null)}
+              variant="ghost"
+              className="w-full h-11"
+            >
+              Retour à la connexion
+            </Button>
+          </div>
+          <div className="mt-6 text-center">
+            <Link href="/boutique" className="text-xs text-gray-500 hover:text-[#007bff]">
+              ← Continuer sans compte
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // ── Pending validation screen ──────────────────────────────────────────
@@ -285,5 +375,17 @@ export default function ConnexionPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ConnexionPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-md mx-auto px-4 py-12 text-center">
+        <Loader2 className="h-8 w-8 text-[#007bff] animate-spin mx-auto" />
+      </div>
+    }>
+      <ConnexionPageContent />
+    </Suspense>
   )
 }
