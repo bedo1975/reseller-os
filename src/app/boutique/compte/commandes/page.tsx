@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Loader2, Package, ChevronRight, Truck, FileText, ExternalLink, TicketPercent } from 'lucide-react'
+import { Loader2, Package, ChevronRight, Truck, FileText, ExternalLink, TicketPercent, CheckCircle2, Clock, PackageCheck, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 interface OrderItem {
@@ -137,6 +137,51 @@ export default function MesCommandesPage() {
                     </p>
                   </div>
                   <Badge className={status.color}>{status.label}</Badge>
+                </div>
+
+                {/* Timeline de statut */}
+                <div className="flex items-center gap-1 mb-4">
+                  {[
+                    { key: 'pending', label: 'Reçue', icon: Clock },
+                    { key: 'paid', label: 'Payée', icon: CheckCircle2 },
+                    { key: 'preparation', label: 'Préparation', icon: PackageCheck },
+                    { key: 'shipped', label: 'Expédiée', icon: Truck },
+                    { key: 'delivered', label: 'Livrée', icon: Package },
+                  ].map((step, i, arr) => {
+                    const currentIdx = arr.findIndex(s => s.key === order.status)
+                    const stepIdx = i
+                    const isDone = currentIdx >= stepIdx
+                    const isCancelled = order.status === 'cancelled'
+                    const isCurrent = order.status === step.key
+
+                    if (isCancelled) {
+                      return (
+                        <div key={step.key} className="flex items-center gap-1">
+                          {i > 0 && <div className="w-4 h-0.5 bg-gray-200" />}
+                          <div className="flex flex-col items-center gap-0.5">
+                            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                              <XCircle className="h-3 w-3 text-gray-400" />
+                            </div>
+                            <span className="text-[8px] text-gray-400">{step.label}</span>
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div key={step.key} className="flex items-center gap-1">
+                        {i > 0 && <div className={`w-4 h-0.5 ${isDone ? 'bg-green-500' : 'bg-gray-200'}`} />}
+                        <div className="flex flex-col items-center gap-0.5">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                            isDone ? (isCurrent ? 'bg-[#007bff] text-white ring-2 ring-blue-200' : 'bg-green-500 text-white') : 'bg-gray-200 text-gray-400'
+                          }`}>
+                            <step.icon className="h-3 w-3" />
+                          </div>
+                          <span className={`text-[8px] ${isDone ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>{step.label}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
 
                 <div className="space-y-2 mb-4">

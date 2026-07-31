@@ -1,4 +1,5 @@
 import { db } from '@/lib/db'
+import { getBoutiqueSettings } from '@/lib/boutique-settings'
 
 /**
  * Email helper — sends emails using configured SMTP settings (nodemailer).
@@ -166,18 +167,35 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
   try {
     console.log('[email] notifyNewOrder triggered:', orderId, 'to', clientEmail)
     const config = await getEmailConfig()
-    const template = config?.templateOrder || null
-    const text = applyTemplate(
-      template,
-      `Bonjour ${clientFirstName},\n\nMerci pour votre commande !\n\nNuméro de commande : ${orderId}\nMontant total : ${total.toFixed(2)} €\n\nVous pouvez suivre votre commande dans votre espace client.\n\nÀ bientôt !`,
-      { firstName: clientFirstName, orderId, total: total.toFixed(2) + ' €' },
-    )
+    const settings = await getBoutiqueSettings()
+    const siteUrl = settings.shareSiteUrl || ''
+
+    const text = `Bonjour ${clientFirstName},\n\nMerci pour votre commande !\n\nNuméro de commande : ${orderId}\nMontant total : ${total.toFixed(2)} €\n\nVous pouvez suivre votre commande dans votre espace client.\n${siteUrl ? siteUrl + '/boutique/compte/commandes' : ''}\n\nÀ bientôt !`
+
+    const html = `<!DOCTYPE html>
+<html><body style="font-family:system-ui,sans-serif;color:#1a1a1a;background:#f3f4f6;padding:20px;margin:0;">
+<table style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+<tr><td style="background:#007bff;color:#fff;padding:20px;text-align:center;"><h1 style="margin:0;font-size:20px;">Merci pour votre commande !</h1></td></tr>
+<tr><td style="padding:24px;">
+<p>Bonjour ${clientFirstName},</p>
+<p>Nous avons bien reçu votre commande et nous vous en remercions !</p>
+<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:16px 0;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;">Numéro de commande</p>
+<p style="margin:0 0 12px 0;font-family:monospace;font-weight:600;">${orderId}</p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;">Montant total</p>
+<p style="margin:0;font-size:18px;font-weight:700;color:#007bff;">${total.toFixed(2)} €</p>
+</div>
+${siteUrl ? `<a href="${siteUrl}/boutique/compte/commandes" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:600;font-size:14px;">Suivre ma commande →</a>` : ''}
+<p style="margin-top:16px;font-size:12px;color:#9ca3af;">À bientôt sur ${settings.logoText || 'notre boutique'} !</p>
+</td></tr>
+</table>
+</body></html>`
 
     await sendEmail({
       to: clientEmail,
       subject: `Confirmation de commande ${orderId}`,
       text,
-      html: asHtml(text),
+      html,
     })
 
     // Also notify admin
@@ -217,6 +235,8 @@ export async function notifyOrderStatusChange(
 
     const config = await getEmailConfig()
     const template = config?.templateOrderStatus || null
+    const bs = await getBoutiqueSettings()
+    const siteUrl = bs.shareSiteUrl || ''
 
     // Build tracking info if shipped with tracking number
     let trackingText = ''
@@ -249,7 +269,7 @@ export async function notifyOrderStatusChange(
         </div>`
     }
 
-    const defaultText = `Bonjour ${clientFirstName},\n\nLe statut de votre commande ${orderId} a été mis à jour : ${statusLabel}\n\nConnectez-vous à votre compte pour plus de détails.${trackingText}`
+    const defaultText = `Bonjour ${clientFirstName},\n\nLe statut de votre commande ${orderId} a été mis à jour : ${statusLabel}\n\n${siteUrl ? 'Suivez votre commande : ' + siteUrl + '/boutique/compte/commandes' : ''}${trackingText}`
     const text = applyTemplate(
       template,
       defaultText,
@@ -257,12 +277,16 @@ export async function notifyOrderStatusChange(
     )
 
     let html = asHtml(text)
+    // Add a "Follow my order" button
+    const followButtonHtml = siteUrl
+      ? `<div style="margin-top:16px;"><a href="${siteUrl}/boutique/compte/commandes" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:600;font-size:14px;">Suivre ma commande →</a></div>`
+      : ''
     // If template is HTML, append tracking HTML after the template content
     if (template && /<[a-z][\s\S]*>/i.test(template)) {
-      html = html + trackingHtml
+      html = html + trackingHtml + followButtonHtml
     } else {
       // Plain text template — convert tracking text too
-      html = html + trackingHtml
+      html = html + trackingHtml + followButtonHtml
     }
 
     await sendEmail({
@@ -281,17 +305,34 @@ export async function notifyClientRegistration(clientEmail: string, clientFirstN
     console.log('[email] notifyClientRegistration triggered:', clientEmail)
     const config = await getEmailConfig()
     const template = config?.templateRegister || null
-    const text = applyTemplate(
-      template,
-      `Bienvenue ${clientFirstName} !\n\nVotre compte a été créé avec succès.\n\nVous pouvez maintenant passer commande, suivre vos commandes et nous contacter via la messagerie.\n\nÀ bientôt !`,
-      { firstName: clientFirstName, email: clientEmail },
-    )
+    const bs = await getBoutiqueSettings()
+    const siteUrl = bs.shareSiteUrl || ''
+
+    const text = `Bienvenue ${clientFirstName} !\n\nVotre compte a été créé avec succès.\n\nVous pouvez maintenant passer commande, suivre vos commandes et nous contacter via la messagerie.\n${siteUrl ? 'Accédez à votre compte : ' + siteUrl + '/boutique/compte' : ''}\n\nÀ bientôt !`
+
+    const html = `<!DOCTYPE html>
+<html><body style="font-family:system-ui,sans-serif;color:#1a1a1a;background:#f3f4f6;padding:20px;margin:0;">
+<table style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+<tr><td style="background:#10b981;color:#fff;padding:20px;text-align:center;"><h1 style="margin:0;font-size:20px;">Bienvenue ! 🎉</h1></td></tr>
+<tr><td style="padding:24px;">
+<p>Bonjour ${clientFirstName},</p>
+<p>Votre compte a été créé avec succès. Vous pouvez maintenant :</p>
+<ul style="margin:8px 0;padding-left:20px;">
+<li>🛍️ Passer commande sur notre boutique</li>
+<li>📦 Suivre vos commandes en temps réel</li>
+<li>💬 Nous contacter via la messagerie</li>
+</ul>
+${siteUrl ? `<a href="${siteUrl}/boutique/compte" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:600;font-size:14px;margin-top:12px;">Accéder à mon compte →</a>` : ''}
+<p style="margin-top:16px;font-size:12px;color:#9ca3af;">À bientôt sur ${bs.logoText || 'notre boutique'} !</p>
+</td></tr>
+</table>
+</body></html>`
 
     await sendEmail({
       to: clientEmail,
       subject: 'Bienvenue !',
       text,
-      html: asHtml(text),
+      html,
     })
   } catch (e: any) {
     console.error('[email] notifyClientRegistration error:', e?.message)

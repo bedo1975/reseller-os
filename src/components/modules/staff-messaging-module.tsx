@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -70,6 +70,34 @@ export function StaffMessagingModule() {
   }, [])
 
   useEffect(() => { fetchMessages(); fetchRecipients() }, [fetchMessages, fetchRecipients])
+
+  // Poll for new messages every 30 seconds
+  const prevUnreadRef = useRef(0)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch('/api/staff/messages')
+        .then(r => r.json())
+        .then(data => {
+          const newUnread = data.unreadCount || 0
+          if (newUnread > prevUnreadRef.current && prevUnreadRef.current !== -1) {
+            toast.info(`📬 Vous avez ${newUnread - prevUnreadRef.current} nouveau(x) message(s) !`)
+          }
+          prevUnreadRef.current = newUnread
+          setInbox(data.inbox || [])
+          setSent(data.sent || [])
+          setUnreadCount(newUnread)
+        })
+        .catch(() => {})
+    }, 30000) // 30s
+    return () => clearInterval(interval)
+  }, [])
+
+  // Initialize prevUnread
+  useEffect(() => {
+    if (prevUnreadRef.current === 0 && unreadCount > 0) {
+      prevUnreadRef.current = unreadCount
+    }
+  }, [unreadCount])
 
   const markAsRead = async (msg: Message) => {
     if (msg.isRead) return
