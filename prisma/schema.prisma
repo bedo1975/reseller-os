@@ -36,6 +36,33 @@ model User {
   photoSessions   PhotoSession[]
   trendSearches   ProductTrendSearch[]
   permissions     UserPermission[]
+  sentMessages     StaffMessage[] @relation("StaffMessageSender")
+  receivedMessages StaffMessage[] @relation("StaffMessageRecipient")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MESSAGERIE INTERNE — Entre membres du staff
+// ═══════════════════════════════════════════════════════════════════════
+model StaffMessage {
+  id          String   @id @default(cuid())
+  senderId    String   // User qui envoie
+  sender      User     @relation("StaffMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId String   // User destinataire (ou "all" pour tous le staff)
+  recipient   User?    @relation("StaffMessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  subject     String
+  body        String
+  isRead      Boolean  @default(false)
+  readAt      DateTime?
+  // Pour les replies: si non-null, c'est une réponse au message parent
+  parentId    String?
+  parent      StaffMessage? @relation("StaffMessageReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     StaffMessage[] @relation("StaffMessageReplies")
+  createdAt   DateTime @default(now())
+
+  @@index([recipientId])
+  @@index([senderId])
+  @@index([isRead])
+  @@index([createdAt])
 }
 
 // ═══════════════════════════════════════════════════════════════════════

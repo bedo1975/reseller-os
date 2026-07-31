@@ -44,6 +44,7 @@ const MODULES_CONFIG = [
   { key: 'photos', label: 'Shooting Photo', icon: '📸', viewOnly: false },
   { key: 'boutique-admin', label: 'Boutique Admin', icon: '🛍️', viewOnly: false },
   { key: 'statistics', label: 'Statistiques', icon: '📊', viewOnly: true },
+  { key: 'staff-messaging', label: 'Messagerie interne', icon: '✉️', viewOnly: false },
   { key: 'settings', label: 'Paramètres', icon: '⚙️', viewOnly: false },
 ]
 
@@ -73,6 +74,7 @@ const MODULE_ACTIONS_MAP: Record<string, string[]> = {
   photos: ['view', 'create', 'edit', 'delete'],
   'boutique-admin': ['view', 'create', 'edit', 'delete', 'export'],
   statistics: ['view', 'export'],
+  'staff-messaging': ['view', 'create', 'delete'],
   settings: ['view', 'edit'],
 }
 

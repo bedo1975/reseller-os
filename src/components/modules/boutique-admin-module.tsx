@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { usePermissions } from '@/hooks/use-permissions'
 import { formatEUR, formatDate } from '@/lib/constants'
 
 type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter'
@@ -44,6 +45,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 ]
 
 export function BoutiqueAdminModule() {
+  const { can } = usePermissions()
   const [tab, setTab] = useState<Tab>('orders')
 
   return (
@@ -326,9 +328,11 @@ function OrdersTab() {
                     >
                       <Package className="h-3.5 w-3.5 mr-1" /> Bon de préparation
                     </Button>
-                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => deleteOrder(order.id)}>
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer
-                    </Button>
+                    {can('boutique-admin', 'delete') && (
+                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => deleteOrder(order.id)}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

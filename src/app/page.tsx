@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Boxes, Truck, FileText, ShoppingCart, Package,
   TrendingUp, Receipt, BarChart3, Menu, Store, Sparkles, RotateCw, Settings,
-  LogOut, Crown, UserCircle, Loader2, ShieldAlert, QrCode, Search, Camera, ShoppingBag,
+  LogOut, Crown, UserCircle, Loader2, ShieldAlert, QrCode, Search, Camera, ShoppingBag, Mail,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +30,7 @@ import { ProductTrendModule } from '@/components/modules/product-trend-module'
 import { PhotoSessionModule } from '@/components/modules/photo-session-module'
 import { BoutiqueAdminModule } from '@/components/modules/boutique-admin-module'
 import { StatisticsModule } from '@/components/modules/statistics-module'
+import { StaffMessagingModule } from '@/components/modules/staff-messaging-module'
 import { SettingsModule } from '@/components/modules/settings-module'
 import { ReminderPopup } from '@/components/shared/reminder-popup'
 import { cn } from '@/lib/utils'
@@ -59,6 +60,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'photos', label: 'Shooting Photo', short: 'Photos', icon: Camera, description: 'Sessions photos produits' },
   { key: 'boutique-admin', label: 'Boutique Admin', short: 'Boutique', icon: ShoppingBag, description: 'Gestion boutique en ligne', adminOnly: true },
   { key: 'statistics', label: 'Statistiques', short: 'Stats', icon: BarChart3, description: 'Visiteurs, pages vues, avis', adminOnly: true },
+  { key: 'staff-messaging', label: 'Messagerie', short: 'Messages', icon: Mail, description: 'Messagerie interne staff' },
   { key: 'settings', label: 'Paramètres', short: 'Paramètres', icon: Settings, description: 'Catégories, états, tailles, couleurs' },
 ]
 
@@ -443,6 +445,7 @@ export default function Home() {
             {activeModule === 'photos' && <PhotoSessionModule />}
             {activeModule === 'boutique-admin' && isAdmin && <BoutiqueAdminModule />}
             {activeModule === 'statistics' && isAdmin && <StatisticsModule />}
+            {activeModule === 'staff-messaging' && <StaffMessagingModule />}
             {activeModule === 'settings' && <SettingsModule />}
           </div>
         </div>

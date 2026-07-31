@@ -17,6 +17,7 @@ export type ModuleKey =
   | 'photos'
   | 'boutique-admin'
   | 'statistics'
+  | 'staff-messaging'
   | 'settings'
 
 interface AppState {

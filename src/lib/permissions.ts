@@ -16,6 +16,7 @@ export const ALL_MODULES = [
   'photos',
   'boutique-admin',
   'statistics',
+  'staff-messaging',
   'settings',
 ] as const
 
@@ -41,6 +42,7 @@ export const MODULE_ACTIONS: Record<string, string[]> = {
   photos: ['view', 'create', 'edit', 'delete'],
   'boutique-admin': ['view', 'create', 'edit', 'delete', 'export'],
   statistics: ['view', 'export'],
+  'staff-messaging': ['view', 'create', 'delete'],
   settings: ['view', 'edit'],
 }
 
@@ -60,6 +62,7 @@ export const DEFAULT_STAFF_ACTIONS: Record<string, string[]> = {
   photos: ['view', 'create', 'edit'],
   'boutique-admin': [],
   statistics: [],
+  'staff-messaging': ['view', 'create'],
   settings: [],
 }
 
