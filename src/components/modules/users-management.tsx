@@ -20,10 +20,40 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Mail, Crown, UserCircle, Plus, Edit, Trash2, Shield, Loader2, Users, Key,
+} from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Trash2, Edit, Users, Shield, Crown, Mail, Key, Loader2, UserCircle } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/constants'
+
+const MODULES_CONFIG = [
+  { key: 'dashboard', label: 'Tableau de bord', icon: '📊', viewOnly: true },
+  { key: 'stock', label: 'Stock', icon: '📦', viewOnly: false },
+  { key: 'sourcing', label: 'Sourcing', icon: '🚚', viewOnly: false },
+  { key: 'publication', label: 'Publication', icon: '📝', viewOnly: false },
+  { key: 'sales', label: 'Ventes', icon: '🛒', viewOnly: false },
+  { key: 'parcels', label: 'Colis', icon: '📬', viewOnly: false },
+  { key: 'profitability', label: 'Rentabilité', icon: '📈', viewOnly: false },
+  { key: 'taxes', label: 'Fiscalité', icon: '🧾', viewOnly: false },
+  { key: 'bi', label: 'Intelligence métier', icon: '📊', viewOnly: true },
+  { key: 'vinted', label: 'Vinted Deals', icon: '🔍', viewOnly: false },
+  { key: 'product-trend', label: 'Product Trend', icon: '✨', viewOnly: false },
+  { key: 'photos', label: 'Shooting Photo', icon: '📸', viewOnly: false },
+  { key: 'boutique-admin', label: 'Boutique Admin', icon: '🛍️', viewOnly: false },
+  { key: 'statistics', label: 'Statistiques', icon: '📊', viewOnly: true },
+  { key: 'settings', label: 'Paramètres', icon: '⚙️', viewOnly: false },
+]
+
+const ALL_ACTIONS = [
+  { key: 'view', label: 'Voir' },
+  { key: 'create', label: 'Créer' },
+  { key: 'edit', label: 'Éditer' },
+  { key: 'delete', label: 'Supprimer' },
+  { key: 'export', label: 'Exporter' },
+]
 
 interface UserRow {
   id: string
@@ -42,6 +72,10 @@ export function UsersManagement() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<UserRow | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null)
+  const [permUser, setPermUser] = useState<UserRow | null>(null)
+  const [permData, setPermData] = useState<Record<string, string[]>>({})
+  const [permLoading, setPermLoading] = useState(false)
+  const [permSaving, setPermSaving] = useState(false)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -74,6 +108,60 @@ export function UsersManagement() {
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Erreur')
     }
+  }
+
+  const openPermissions = async (u: UserRow) => {
+    setPermUser(u)
+    setPermLoading(true)
+    try {
+      const res = await fetch(`/api/users/${u.id}/permissions`)
+      const data = await res.json()
+      if (res.ok) {
+        setPermData(data.permissions || {})
+      }
+    } catch {
+      toast.error('Erreur')
+    } finally {
+      setPermLoading(false)
+    }
+  }
+
+  const savePermissions = async () => {
+    if (!permUser) return
+    setPermSaving(true)
+    try {
+      const res = await fetch(`/api/users/${permUser.id}/permissions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissions: permData }),
+      })
+      if (!res.ok) throw new Error('Erreur')
+      toast.success('Permissions mises à jour')
+      setPermUser(null)
+    } catch {
+      toast.error('Erreur')
+    } finally {
+      setPermSaving(false)
+    }
+  }
+
+  const togglePerm = (module: string, action: string) => {
+    setPermData(prev => {
+      const current = prev[module] || []
+      const next = current.includes(action)
+        ? current.filter(a => a !== action)
+        : [...current, action]
+      return { ...prev, [module]: next }
+    })
+  }
+
+  const toggleAllPerm = (module: string, checked: boolean) => {
+    setPermData(prev => ({
+      ...prev,
+      [module]: checked
+        ? (MODULES_CONFIG.find(m => m.key === module)?.viewOnly ? ['view'] : ALL_ACTIONS.map(a => a.key))
+        : [],
+    }))
   }
 
   return (
@@ -192,6 +280,16 @@ export function UsersManagement() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => openPermissions(u)}
+                            disabled={u.role === 'admin'}
+                            title={u.role === 'admin' ? 'Les admins ont toutes les permissions' : 'Permissions'}
+                          >
+                            <Shield className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700"
                             onClick={() => setDeleteTarget(u)}
                             disabled={isMe}
@@ -238,6 +336,97 @@ export function UsersManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Permissions Dialog */}
+      <Dialog open={!!permUser} onOpenChange={(o) => !o && setPermUser(null)}>
+        <DialogContent className="sm:!max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Permissions — {permUser?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Cochez les actions autorisées pour chaque module. Décochez « Voir » pour masquer le module.
+            </DialogDescription>
+          </DialogHeader>
+
+          {permLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-2 py-2">
+              {/* Header row */}
+              <div className="grid grid-cols-[1fr_repeat(5,auto)] gap-2 items-center px-2 pb-2 border-b text-[10px] text-muted-foreground uppercase font-medium">
+                <span>Module</span>
+                {ALL_ACTIONS.map(a => <span key={a.key} className="text-center w-12">{a.label}</span>)}
+                <span className="text-center w-12">Tout</span>
+              </div>
+
+              {MODULES_CONFIG.map(mod => {
+                const actions = permData[mod.key] || []
+                const isViewOnly = mod.viewOnly
+                return (
+                  <div key={mod.key} className="grid grid-cols-[1fr_repeat(5,auto)] gap-2 items-center px-2 py-1.5 rounded hover:bg-muted/30">
+                    <span className="text-sm flex items-center gap-2">
+                      <span>{mod.icon}</span>
+                      <span className="font-medium">{mod.label}</span>
+                    </span>
+                    {ALL_ACTIONS.map(a => {
+                      // For viewOnly modules, only 'view' is available
+                      if (isViewOnly && a.key !== 'view') {
+                        return <div key={a.key} className="w-12 text-center text-muted-foreground/30">—</div>
+                      }
+                      const checked = actions.includes(a.key)
+                      return (
+                        <div key={a.key} className="w-12 flex justify-center">
+                          <Switch
+                            checked={checked}
+                            onCheckedChange={() => togglePerm(mod.key, a.key)}
+                            className="scale-75"
+                          />
+                        </div>
+                      )
+                    })}
+                    <div className="w-12 flex justify-center">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded"
+                        checked={actions.length > 0 && (isViewOnly ? actions.includes('view') : ALL_ACTIONS.every(a => actions.includes(a.key)))}
+                        onChange={(e) => toggleAllPerm(mod.key, e.target.checked)}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Quick actions */}
+              <div className="flex gap-2 pt-3 border-t">
+                <Button variant="outline" size="sm" onClick={() => {
+                  const all: Record<string, string[]> = {}
+                  for (const m of MODULES_CONFIG) {
+                    all[m.key] = m.viewOnly ? ['view'] : ALL_ACTIONS.map(a => a.key)
+                  }
+                  setPermData(all)
+                }}>
+                  Tout autoriser
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setPermData({})}>
+                  Tout révoquer
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setPermUser(null)}>Annuler</Button>
+            <Button onClick={savePermissions} disabled={permSaving}>
+              {permSaving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Sauvegarder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

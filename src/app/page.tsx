@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import {
@@ -77,9 +77,22 @@ function SidebarContent() {
   const [reseeding, setReseeding] = useState(false)
 
   const isAdmin = session?.user?.role === 'admin'
+  const [sidebarPerms, setSidebarPerms] = useState<Record<string, boolean> | null>(null)
 
-  // Filter out admin-only items for staff users
-  const visibleNavItems = NAV_ITEMS.filter(n => !n.adminOnly || isAdmin)
+  useEffect(() => {
+    if (session?.user) {
+      fetch('/api/auth/permissions')
+        .then(r => r.json())
+        .then(data => setSidebarPerms(data.sidebar || null))
+        .catch(() => setSidebarPerms(null))
+    }
+  }, [session])
+
+  const visibleNavItems = NAV_ITEMS.filter(n => {
+    if (n.adminOnly && !isAdmin) return false
+    if (sidebarPerms && sidebarPerms[n.key] === false) return false
+    return true
+  })
 
   const handleReseed = async () => {
     setReseeding(true)
@@ -340,9 +353,22 @@ export default function Home() {
   const { activeModule, setModule, mobileNavOpen, setMobileNavOpen } = useAppStore()
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === 'admin'
+  const [sidebarPerms, setSidebarPerms] = useState<Record<string, boolean> | null>(null)
 
-  // Filter out admin-only items for staff users
-  const visibleNavItems = NAV_ITEMS.filter(n => !n.adminOnly || isAdmin)
+  useEffect(() => {
+    if (session?.user) {
+      fetch('/api/auth/permissions')
+        .then(r => r.json())
+        .then(data => setSidebarPerms(data.sidebar || null))
+        .catch(() => setSidebarPerms(null))
+    }
+  }, [session])
+
+  const visibleNavItems = NAV_ITEMS.filter(n => {
+    if (n.adminOnly && !isAdmin) return false
+    if (sidebarPerms && sidebarPerms[n.key] === false) return false
+    return true
+  })
 
   // Make sure the active module is allowed for the current user.
   // If staff somehow lands on an admin-only module, redirect to dashboard.

@@ -35,6 +35,23 @@ model User {
   savedSearches   SavedSearch[]
   photoSessions   PhotoSession[]
   trendSearches   ProductTrendSearch[]
+  permissions     UserPermission[]
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PERMISSIONS — Contrôle d'accès granulaire par module et par action
+// ═══════════════════════════════════════════════════════════════════════
+model UserPermission {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module    String   // dashboard | stock | sourcing | publication | sales | parcels | profitability | taxes | bi | vinted | product-trend | photos | boutique-admin | statistics | settings
+  actions   String   @default("[]")  // JSON array: ["view","create","edit","delete","export"] — empty = no access
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, module])
+  @@index([userId])
 }
 
 // ─────────────────────────────────────────────
