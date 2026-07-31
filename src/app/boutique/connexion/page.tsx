@@ -74,12 +74,12 @@ function ConnexionPageContent() {
       }
 
       if (mode === 'register') {
-        // Registration succeeded but needs validation — show "check your email" panel
+        // Registration succeeded — show "check your email" panel for confirmation,
+        // but the account is already usable (login will auto-validate).
         if (data.needsValidation) {
           setPendingValidationEmail(data.clientEmail || form.email)
-          toast.success('Compte créé ! Vérifiez vos emails pour valider votre compte.')
+          toast.success('Compte créé ! Un email de confirmation vous a été envoyé.')
         } else {
-          // Backward-compat: if for some reason no validation is needed, log in
           toast.success('Compte créé')
           router.push('/boutique/compte')
           router.refresh()
@@ -197,16 +197,25 @@ function ConnexionPageContent() {
             <MailCheck className="h-10 w-10 text-[#007bff]" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Vérifiez vos emails</h1>
-          <p className="text-sm text-gray-600 mb-2">
-            Un email de validation a été envoyé à :
+          <p className="text-sm text-gray-600 mb-6">
+            Un email de confirmation a été envoyé à :
           </p>
           <p className="text-sm font-semibold text-gray-900 mb-4 break-all">{pendingValidationEmail}</p>
           <p className="text-sm text-gray-600 mb-6">
-            Cliquez sur le lien dans l&apos;email pour activer votre compte. Pensez à vérifier vos spams
-            si vous ne le trouvez pas.
+            Cliquez sur le lien dans l&apos;email pour confirmer votre adresse. Vous pouvez aussi
+            vous connecter directement avec vos identifiants — votre compte est déjà actif.
           </p>
 
           <div className="space-y-2">
+            <Button
+              onClick={() => {
+                setPendingValidationEmail(null)
+                setForm(prev => ({ ...prev, password: '' }))
+              }}
+              className="w-full h-11 bg-[#007bff] hover:bg-[#0056b3]"
+            >
+              Se connecter maintenant
+            </Button>
             <Button
               onClick={resendValidation}
               disabled={resending}
@@ -214,17 +223,7 @@ function ConnexionPageContent() {
               className="w-full h-11"
             >
               {resending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              {resending ? 'Envoi…' : 'Renvoyer l\'email de validation'}
-            </Button>
-            <Button
-              onClick={() => {
-                setPendingValidationEmail(null)
-                setForm(prev => ({ ...prev, password: '' }))
-              }}
-              variant="ghost"
-              className="w-full h-11"
-            >
-              Retour à la connexion
+              {resending ? 'Envoi…' : 'Renvoyer l\'email de confirmation'}
             </Button>
           </div>
 
@@ -353,7 +352,7 @@ function ConnexionPageContent() {
             </div>
             {mode === 'register' && (
               <p className="text-[11px] text-gray-400">
-                6 caractères minimum. Un email de validation vous sera envoyé pour activer votre compte.
+                6 caractères minimum. Un email de confirmation vous sera envoyé à l&apos;inscription.
               </p>
             )}
           </div>

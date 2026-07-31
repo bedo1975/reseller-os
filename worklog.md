@@ -1823,3 +1823,98 @@ Existing boutique clients (created before this feature) have `emailValidated=fal
 - `npx next build --webpack`: ✓ Compiled successfully (112/112 static pages — was 109 before, the new valider-compte page + 2 APIs added).
 - `bash scripts/make-zip.sh`: zip = 1043 KB, MD5: `98d6a07db6f0c62d88bf0ea77cca405b`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: account-validation-redirect-fix
+Agent: main
+Task: Fix the account validation loop — clicking the email link was not validating the account, causing an infinite loop (validate → login fails → resend → validate → ...).
+
+## Root cause analysis
+The previous approach used a separate page `/boutique/valider-compte?token=xxx` that:
+1. Loaded client-side React
+2. Read the token from URL via `useSearchParams()`
+3. Called `POST /api/boutique/client/validate-account` via fetch
+4. Showed success/error UI
+
+This approach had multiple potential failure points:
+- The Suspense boundary around `useSearchParams()` could prevent the useEffect from running
+- The fetch call could fail silently (network error, CORS, etc.)
+- The client-side JS could fail to load (ad blockers, slow connection)
+- Any error in the React component tree would show the error UI with "Aller à la page de connexion" — making it look like the user was "redirected" to the login page
+
+When the validation silently failed, the user would:
+1. Click the email link → land on valider-compte → see error (or nothing) → click "Aller à la connexion"
+2. Try to login → blocked with "needsValidation: true" → see "Vérifiez vos emails" panel
+3. Click "Renvoyer" → new token generated → old email link now invalid
+4. Receive new email → click → loop
+
+## Fix — switched to GET + redirect approach
+
+### New API: `GET /api/boutique/client/validate-account?token=xxx`
+- Added a GET handler to the existing route file
+- Validates the token server-side (no client JS needed)
+- On success → `302 redirect` to `/boutique/connexion?validated=1`
+- On failure (invalid token, expired, already used) → `302 redirect` to `/boutique/connexion?validation_error=1`
+- On server error → also redirects to `?validation_error=1` (never leaves the user stuck)
+- Detailed console.log at each step (token received, client found, account validated) for debugging
+
+### Updated email link construction
+Both `register` and `resend-validation` API routes now build the validation URL as:
+```
+${siteUrl}/api/boutique/client/validate-account?token=${token}
+```
+(was: `${siteUrl}/boutique/valider-compte?token=${token}`)
+
+The email button now points directly to the API GET route. When the user clicks:
+1. Browser sends GET request to the API
+2. API validates the token server-side
+3. API returns a 302 redirect to `/boutique/connexion?validated=1` (or `?validation_error=1`)
+4. Browser follows the redirect
+5. Login page loads and reads the URL param
+
+No client-side fetch, no Suspense boundary, no React component to fail. The validation happens entirely server-side before the user even sees the login page.
+
+### Updated connexion page
+- Wrapped in `<Suspense>` (because it now uses `useSearchParams`)
+- Added `validationResult` state: `'success' | 'error' | null`
+- New `useEffect` reads `?validated=1` and `?validation_error=1` from URL params:
+  - `?validated=1` → show green success screen "Compte validé ! 🎉" with "Se connecter" button + toast.success
+  - `?validation_error=1` → show red error screen "Lien invalide" with "Renvoyer un email" button + toast.error
+  - Cleans the URL with `router.replace('/boutique/connexion')` so refresh doesn't re-trigger the toast
+- Imported `CheckCircle2` and `XCircle` icons from lucide-react
+
+### Backward compat
+- The POST handler on validate-account is kept (the /boutique/valider-compte page still calls it)
+- The /boutique/valider-compte page is kept (in case someone has an old email with that link)
+- But NEW emails use the GET route directly
+
+## Why this is more robust
+| Old approach (page + fetch) | New approach (GET + redirect) |
+|---|---|
+| Client-side JS required | Server-side only |
+| Suspense boundary could block useEffect | No React component needed |
+| Fetch could fail silently | HTTP redirect is native browser behavior |
+| Error UI with "go to login" button | Direct redirect to login with status param |
+| No server logs for debugging | Detailed console.log at each step |
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (112/112 static pages).
+- `bash scripts/make-zip.sh`: zip = 1045 KB, MD5: `0de02bcb592d17185b688034bbc31b9e`.
+- Verified the GET handler is in the zip.
+- Verified register + resend-validation APIs use the new URL pattern.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+## Testing notes
+After deploying, the user should:
+1. Create a new account
+2. Click the link in the validation email
+3. Browser should redirect to `/boutique/connexion?validated=1`
+4. See the green "Compte validé !" screen
+5. Click "Se connecter" → login should now work
+
+If the validation still fails, the server logs will show:
+- `[validate-account] GET received, token: xxx...`
+- `[validate-account] Client found: <email>` or `null`
+- `[validate-account] ✓ Account validated for: <email>`
+
+These logs will help diagnose any remaining issues.
