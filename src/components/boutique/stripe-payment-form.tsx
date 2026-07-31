@@ -205,6 +205,11 @@ export function StripePaymentForm({
     },
   }
 
+  // Detect if we're using test keys (pk_test_) — if so, we hide Stripe's
+  // "test mode" warning banner that appears at the top of the Payment Element.
+  // In production with live keys (pk_live_), the banner doesn't appear.
+  const isTestMode = publishableKey.startsWith('pk_test_')
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-3">
@@ -217,18 +222,31 @@ export function StripePaymentForm({
         </div>
       </div>
 
-      <Elements stripe={stripe} options={options}>
-        <CheckoutForm
-          onSuccess={(piId) => {
-            toast.success('Paiement réussi !')
-            onPaymentSuccess(piId)
+      <div className="relative">
+        <Elements stripe={stripe} options={options}>
+          <CheckoutForm
+            onSuccess={(piId) => {
+              toast.success('Paiement réussi !')
+              onPaymentSuccess(piId)
           }}
           onError={(msg) => {
             toast.error(msg)
             onPaymentError?.(msg)
           }}
         />
-      </Elements>
+        </Elements>
+
+        {/* In test mode, Stripe shows a yellow "test mode" banner at the top
+            of the Payment Element. We overlay a div to hide it from customers.
+            In production (pk_live_), the banner doesn't appear — the overlay
+            is not rendered. */}
+        {isTestMode && (
+          <div
+            className="absolute top-0 left-0 right-0 h-[40px] bg-white z-20 pointer-events-none rounded-t-lg"
+            aria-hidden="true"
+          />
+        )}
+      </div>
     </div>
   )
 }

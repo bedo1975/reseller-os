@@ -29,7 +29,7 @@ export async function PUT(req: NextRequest) {
     const {
       smtpHost, smtpPort, smtpUser, smtpPassword, smtpSecure,
       fromEmail, fromName,
-      templateRegister, templateValidate, templatePasswordLost, templateOrder, templateOrderStatus,
+      templateRegister, templateValidate, templatePasswordLost, templatePasswordChanged, templateOrder, templateOrderStatus,
     } = body
 
     const data: any = {}
@@ -43,6 +43,7 @@ export async function PUT(req: NextRequest) {
     if (typeof templateRegister === 'string') data.templateRegister = templateRegister || null
     if (typeof templateValidate === 'string') data.templateValidate = templateValidate || null
     if (typeof templatePasswordLost === 'string') data.templatePasswordLost = templatePasswordLost || null
+    if (typeof templatePasswordChanged === 'string') data.templatePasswordChanged = templatePasswordChanged || null
     if (typeof templateOrder === 'string') data.templateOrder = templateOrder || null
     if (typeof templateOrderStatus === 'string') data.templateOrderStatus = templateOrderStatus || null
 

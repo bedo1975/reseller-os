@@ -1,0 +1,722 @@
+     1→// Reseller OS — Prisma schema
+     2→// Couvre les 9 modules : Stock, Sourcing, Publication, Ventes, Colis, Rentabilité, Fiscalité, BI
+     3→
+     4→generator client {
+     5→  provider = "prisma-client-js"
+     6→}
+     7→
+     8→datasource db {
+     9→  provider = "sqlite"
+    10→  url      = env("DATABASE_URL")
+    11→}
+    12→
+    13→// ─────────────────────────────────────────────
+    14→// Multi-utilisateur : Comptes & rôles
+    15→// ─────────────────────────────────────────────
+    16→model User {
+    17→  id        String   @id @default(cuid())
+    18→  email     String   @unique
+    19→  name      String
+    20→  password  String   // bcrypt hash
+    21→  role      String   @default("staff")  // "admin" | "staff"
+    22→  createdAt DateTime @default(now())
+    23→  updatedAt DateTime @updatedAt
+    24→
+    25→  stockItems      StockItem[]
+    26→  sales           Sale[]
+    27→  suppliers       Supplier[]
+    28→  expenses        Expense[]
+    29→  purchases       Purchase[]
+    30→  invoiceSettings InvoiceSettings?
+    31→  aiConfig        AIConfig?
+    32→  taxSettings     TaxSettings?
+    33→  emailSettings   EmailSettings?
+    34→  reminders       Reminder[]
+    35→  savedSearches   SavedSearch[]
+    36→  photoSessions   PhotoSession[]
+    37→  trendSearches   ProductTrendSearch[]
+    38→}
+    39→
+    40→// ─────────────────────────────────────────────
+    41→// Module Taux d'imposition — Cotisations URSSAF
+    42→// ─────────────────────────────────────────────
+    43→model TaxSettings {
+    44→  id              String   @id @default(cuid())
+    45→  userId          String   @unique
+    46→  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    47→
+    48→  // Catégorie d'activité (détermine le taux de cotisation)
+    49→  activityType    String   @default("achat_revente")
+    50→  // achat_revente | prestation_service | autre_prestation | profession_liberale | location_meuble
+    51→
+    52→  // Taux de cotisation URSSAF (en %) — modifiable
+    53→  taxRate         Float    @default(12.3)
+    54→
+    55→  createdAt       DateTime @default(now())
+    56→  updatedAt       DateTime @updatedAt
+    57→}
+    58→
+    59→// ─────────────────────────────────────────────
+    60→// Module IA — Configuration du fournisseur d'IA
+    61→// ─────────────────────────────────────────────
+    62→model AIConfig {
+    63→  id        String   @id @default(cuid())
+    64→  userId    String   @unique
+    65→  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    66→
+    67→  provider  String   @default("gemini")  // "gemini" | "mistral" | "openai" | "zai"
+    68→  apiKey    String?  // clé API du fournisseur (inutile pour zai)
+    69→  model     String?  // modèle à utiliser (optionnel, sinon défaut par provider)
+    70→
+    71→  createdAt DateTime @default(now())
+    72→  updatedAt DateTime @updatedAt
+    73→}
+    74→
+    75→// ─────────────────────────────────────────────
+    76→// Module Facturation — Paramètres de facturation
+    77→// ─────────────────────────────────────────────
+    78→model InvoiceSettings {
+    79→  id              String   @id @default(cuid())
+    80→  userId          String   @unique
+    81→  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    82→
+    83→  // Société (émetteur de la facture)
+    84→  companyName     String
+    85→  address         String
+    86→  postalCode      String
+    87→  city            String
+    88→  country         String   @default("France")
+    89→  email           String?
+    90→  phone           String?
+    91→
+    92→  // Identifiants légaux
+    93→  siret           String?
+    94→  rcs             String?  // RCS/RM
+    95→
+    96→  // TVA
+    97→  vatEnabled      Boolean  @default(false)
+    98→  vatNumber       String?
+    99→  vatRate         Float    @default(20.0)
+   100→  // Mention d'exonération de TVA affichée sur la facture quand vatEnabled = false
+   101→  // Par défaut : mention légale française (modifiable par l'utilisateur)
+   102→  vatExemptionText String  @default("TVA non applicable, art. 293 B du CGI — franchise en base")
+   103→
+   104→  // Numérotation des factures
+   105→  invoicePrefix   String   @default("F-{YEAR}-")
+   106→  invoiceCounter  Int      @default(0)
+   107→  invoicePadLength Int     @default(3)
+   108→
+   109→  // Mentions légales footer
+   110→  legalMentions   String?
+   111→
+   112→  createdAt       DateTime @default(now())
+   113→  updatedAt       DateTime @updatedAt
+   114→}
+   115→
+   116→// ─────────────────────────────────────────────
+   117→// Module 2 — Sourcing : Fournisseurs
+   118→// ─────────────────────────────────────────────
+   119→model Supplier {
+   120→  id          String   @id @default(cuid())
+   121→  name        String
+   122→  type        String   // friperie | grossiste | destockeur | vide-grenier | particulier
+   123→  siret       String?  // SIRET du fournisseur (si professionnel)
+   124→  contact     String?
+   125→  phone       String?
+   126→  email       String?
+   127→  address     String?
+   128→  notes       String?
+   129→  createdAt   DateTime @default(now())
+   130→  updatedAt   DateTime @updatedAt
+   131→
+   132→  userId      String?
+   133→  user        User?    @relation(fields: [userId], references: [id])
+   134→
+   135→  stockItems  StockItem[]
+   136→  purchases   Purchase[]
+   137→}
+   138→
+   139→// ─────────────────────────────────────────────
+   140→// Module 1 — Stock : Articles
+   141→// ─────────────────────────────────────────────
+   142→model StockItem {
+   143→  id            String   @id @default(cuid())
+   144→
+   145→  // Identification
+   146→  sku           String   @unique
+   147→  barcode       String?
+   148→  photos        String   // JSON array of URLs (serialized)
+   149→  title         String?  // titre / nom du produit (ex: "T-shirt Nike Sportswear")
+   150→  brand         String
+   151→  category      String   // vetements | chaussures | accessoires | luxe | etc.
+   152→  subcategory   String?  // sous-catégorie (ex: "tshirts", "jeans", "vestes")
+   153→  size          String?
+   154→  color         String?
+   155→  condition     String   // neuf | tres-bon | bon | correct
+   156→
+   157→  // Achat
+   158→  purchaseDate  DateTime
+   159→  supplierId    String?
+   160→  supplier      Supplier? @relation(fields: [supplierId], references: [id])
+   161→  purchaseCost  Float
+   162→  purchaseInvoiceNumber String?  // n° de facture du fournisseur
+   163→  purchasePaymentMethod String?  // espèces | carte_bancaire | virement | cheque | paypal
+   164→  lotReference  String?
+   165→  lotOrigin     String?  // lot d'origine (attribut configurable)
+   166→  lotCurrent    String?  // lot actuel (entrée manuelle)
+   167→
+   168→  // Logistique
+   169→  weight        Float?   // poids en grammes (pour calcul frais de port)
+   170→  quantity      Int      @default(1)  // quantité en stock
+   171→
+   172→  // Stockage
+   173→  warehouse     String?
+   174→  rack          String?
+   175→  shelf         String?
+   176→  bin           String?
+   177→
+   178→  // Publication
+   179→  status        String   @default("A_PHOTOGRAPHIER")
+   180→  // A_PHOTOGRAPHIER | A_REDIGER | PRET_A_PUBLIER | PUBLIE | RESERVE | VENDU
+   181→
+   182→  salePlatform  String?  // plateforme de VENTE (attribut configurable - rempli quand l'article est vendu)
+   183→  platform      String?  // legacy: plateforme de VENTE (rempli quand l'article est vendu)
+   184→  platforms     String   @default("[]")  // JSON array : plateformes où l'article est publié (ex: ["vinted","leboncoin"])
+   185→  suggestedPrice Float?
+   186→  salePrice      Float?  // prix promo (si null ou saleActive false, pas de promo)
+   187→  saleActive     Boolean @default(false) // active/désactive la promotion
+   188→  description   String?
+   189→  measurements  String?  // JSON serialisé
+   190→
+   191→  createdAt     DateTime @default(now())
+   192→  updatedAt     DateTime @updatedAt
+   193→
+   194→  userId        String?
+   195→  user          User?    @relation(fields: [userId], references: [id])
+   196→
+   197→  sale          Sale?
+   198→}
+   199→
+   200→// ─────────────────────────────────────────────
+   201→// Module 4 — Ventes
+   202→// ─────────────────────────────────────────────
+   203→model Sale {
+   204→  id            String   @id @default(cuid())
+   205→  stockItemId   String   @unique
+   206→  stockItem     StockItem @relation(fields: [stockItemId], references: [id])
+   207→
+   208→  saleDate      DateTime @default(now())
+   209→  platform      String   // vinted | leboncoin | ebay | vestiaire | boutique
+   210→  paymentMethod String?  // mode de paiement réel (CB, PayPal, Virement...) — rempli pour les ventes boutique
+   211→  customerName  String?
+   212→  customerContact String?
+   213→  salePrice     Float
+   214→  shippingCost  Float    @default(0)
+   215→  platformFees  Float    @default(0)        // frais variables (% du prix de vente)
+   216→  platformFixedFees Float @default(0)       // frais fixes (ex. 0,70€ Vinted)
+   217→  profit        Float
+   218→  margin        Float    // pourcentage
+   219→  carrier       String?  // mondial_relay | chronopost | colissimo | dhl |UPS
+   220→  trackingNumber String?
+   221→
+   222→  parcelStatus  String   @default("A_PREPARER")
+   223→  // A_PREPARER | A_IMPRIMER | A_DEPOSER | EN_TRANSIT | LIVRE | PROBLEME
+   224→
+   225→  notes         String?
+   226→  invoiceNumber String?  // ex: "F-2026-001" — numéro de facture séquentiel
+   227→  createdAt     DateTime @default(now())
+   228→  updatedAt     DateTime @updatedAt
+   229→
+   230→  userId        String?
+   231→  user          User?    @relation(fields: [userId], references: [id])
+   232→}
+   233→
+   234→// ─────────────────────────────────────────────
+   235→// Module 5 — Colis (vue Kanban)
+   236→// ─────────────────────────────────────────────
+   237→// Implémenté via Sale.parcelStatus — pas de modèle séparé pour éviter la duplication.
+   238→
+   239→// ─────────────────────────────────────────────
+   240→// Module 6/7 — Transactions financières (frais divers)
+   241→// ─────────────────────────────────────────────
+   242→model Expense {
+   243→  id          String   @id @default(cuid())
+   244→  date        DateTime @default(now())
+   245→  category    String   // frais_port | frais_plateforme | abonnement | fourniture | carburant | autre
+   246→  label       String
+   247→  amount      Float
+   248→
+   249→  // Dépense récurrente
+   250→  isRecurring Boolean   @default(false)
+   251→  recurringFreq String? // weekly | monthly | yearly
+   252→
+   253→  createdAt   DateTime @default(now())
+   254→  updatedAt   DateTime @updatedAt
+   255→
+   256→  userId      String?
+   257→  user        User?    @relation(fields: [userId], references: [id])
+   258→}
+   259→
+   260→// ─────────────────────────────────────────────
+   261→// Module Settings — Attributs personnalisables
+   262→// ─────────────────────────────────────────────
+   263→model Attribute {
+   264→  id          String   @id @default(cuid())
+   265→  type        String   // category | subcategory | condition | size | color | carrier | platform | lot_origin
+   266→  value       String   // valeur affichée (ex. "Vêtements", "Neuf avec étiquette")
+   267→  code        String   // code interne (ex. "vetements", "neuf", "L", "Bleu marine")
+   268→  trackingUrl String?  // URL de suivi pour transporteurs
+   269→  parentCode  String?  // pour sous-catégories: code de la catégorie parente
+   270→  sortOrder   Int      @default(0)
+   271→  isDefault   Boolean  @default(false)
+   272→  createdAt   DateTime @default(now())
+   273→  updatedAt   DateTime @updatedAt
+   274→
+   275→  @@unique([type, code])
+   276→  @@index([type, parentCode])
+   277→}
+   278→
+   279→// ─────────────────────────────────────────────
+   280→// Achats hors stock (fournitures, emballages, outils...)
+   281→// ─────────────────────────────────────────────
+   282→model Purchase {
+   283→  id              String   @id @default(cuid())
+   284→  date            DateTime @default(now())
+   285→  designation     String   // description (ex: "Cartons d'emballage x50")
+   286→  category        String   @default("fourniture") // fourniture | emballage | outil | materiel | autre
+   287→  supplierId      String?
+   288→  supplier        Supplier? @relation(fields: [supplierId], references: [id])
+   289→  supplierName    String?  // nom libre si pas de fournisseur sélectionné
+   290→  amount          Float    // montant TTC
+   291→  invoiceNumber   String?  // n° facture fournisseur
+   292→  paymentMethod   String?  // especes | carte_bancaire | virement | cheque | paypal
+   293→  notes           String?
+   294→  userId          String?
+   295→  user            User?    @relation(fields: [userId], references: [id])
+   296→  createdAt       DateTime @default(now())
+   297→  updatedAt       DateTime @updatedAt
+   298→}
+   299→
+   300→// ─────────────────────────────────────────────
+   301→// Module Rappels — Actions récurrentes
+   302→// ─────────────────────────────────────────────
+   303→model Reminder {
+   304→  id          String   @id @default(cuid())
+   305→  userId      String
+   306→  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   307→
+   308→  title       String   // titre court de l'action
+   309→  description String?  // détails
+   310→  category    String   @default("general") // urssaf | stock | compta | general
+   311→  frequency   String   @default("monthly") // daily | weekly | monthly | quarterly | yearly
+   312→  intervalNum Int      @default(1) // tous les N (ex: 2 = toutes les 2 semaines)
+   313→
+   314→  lastDone    DateTime? // dernière fois que l'action a été faite
+   315→  nextDue     DateTime   // prochaine échéance
+   316→  dismissed   Boolean   @default(false) // rappel popup fermé sans action
+   317→
+   318→  createdAt   DateTime @default(now())
+   319→  updatedAt   DateTime @updatedAt
+   320→}
+   321→
+   322→// ─────────────────────────────────────────────
+   323→// Module Vinted Deals — Recherches sauvegardées + Alertes
+   324→// ─────────────────────────────────────────────
+   325→model SavedSearch {
+   326→  id          String   @id @default(cuid())
+   327→  userId      String
+   328→  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   329→
+   330→  name        String   // nom donné par l'utilisateur (ex: "T-shirts Nike M")
+   331→  // Tous les filtres de recherche (sérialisés en JSON pour rester flexibles)
+   332→  // searchParams = { query, order, priceFrom, priceTo, statusIds, sizeIds, brandIds, catalogIds, sizeFilter, maxLikes, pages }
+   333→  searchParams String  // JSON string
+   334→
+   335→  // Cron: toutes les N heures (minimum 1h pour éviter spam — respect Vinted)
+   336→  intervalHours Int    @default(6)
+   337→
+   338→  // Tracking des IDs déjà vus (pour ne pas re-notifier)
+   339→  // Stocké en JSON: { "9281678570": 1, "9281677900": 1, ... }
+   340→  seenItemIds String   @default("{}")
+   341→
+   342→  // Date du dernier scan
+   343→  lastScannedAt DateTime?
+   344→
+   345→  // Activer/désactiver sans supprimer
+   346→  enabled     Boolean  @default(true)
+   347→
+   348→  // Compteur d'alertes en attente (affiché en badge)
+   349→  pendingAlerts Int    @default(0)
+   350→
+   351→  createdAt   DateTime @default(now())
+   352→  updatedAt   DateTime @updatedAt
+   353→
+   354→  alerts      VintedAlert[]
+   355→
+   356→  @@index([userId])
+   357→  @@index([enabled, lastScannedAt])
+   358→}
+   359→
+   360→model VintedAlert {
+   361→  id            String   @id @default(cuid())
+   362→  savedSearchId String
+   363→  savedSearch   SavedSearch @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+   364→
+   365→  // L'article Vinted qui a déclenché l'alerte (snapshot JSON)
+   366→  // = { id, title, price, currency, url, image, brand, size, condition, likes, views, seller }
+   367→  itemData      String   // JSON string
+   368→
+   369→  // ID Vinted de l'article (pour déduplication côté UI)
+   370→  vintedItemId String
+   371→
+   372→  // Statut de lecture
+   373→  read          Boolean  @default(false)
+   374→
+   375→  createdAt     DateTime @default(now())
+   376→
+   377→  @@index([savedSearchId, read])
+   378→  @@index([read, createdAt])
+   379→}
+   380→
+   381→// ─────────────────────────────────────────────
+   382→// Module Shooting Photo — Sessions de photos
+   383→// ─────────────────────────────────────────────
+   384→model PhotoSession {
+   385→  id          String   @id @default(cuid())
+   386→  userId      String
+   387→  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   388→
+   389→  name        String   // nom mémo (ex: "T-shirt Nike M noir")
+   390→  notes       String?  // notes optionnelles (état, défauts...)
+   391→  
+   392→  // JSON array of { id, path, filename, createdAt }
+   393→  // Photos stored in /public/uploads/sessions/{sessionId}/{filename}
+   394→  photos      String   @default("[]")
+   395→  
+   396→  // If attached to a stock item, reference it (soft link — no FK to avoid circular)
+   397→  attachedStockId String? // ID of StockItem if photos were attached
+   398→  attachedAt      DateTime?
+   399→  
+   400→  createdAt   DateTime @default(now())
+   401→  updatedAt   DateTime @updatedAt
+   402→
+   403→  @@index([userId])
+   404→  @@index([attachedStockId])
+   405→}
+   406→
+   407→// ─────────────────────────────────────────────
+   408→// Boutique — Configuration, Clients, Commandes, Messagerie
+   409→// ─────────────────────────────────────────────
+   410→
+   411→// Configuration globale de la boutique (une seule ligne, éditable par l'admin)
+   412→model BoutiqueSettings {
+   413→  id              String   @id @default("default")
+   414→  // Hero
+   415→  heroTitle       String   @default("La mode responsable, accessible à tous")
+   416→  heroSubtitle    String   @default("Des vêtements et accessoires soigneusement sélectionnés, à prix justes. Donnez une seconde vie aux pièces que vous aimez.")
+   417→  heroCtaLabel    String   @default("Découvrir la collection")
+   418→  heroCtaLink     String   @default("#produits")
+   419→  // Top bar
+   420→  topBarText      String   @default("Livraison offerte dès 50€ d'achat · Paiement sécurisé")
+   421→  // Footer
+   422→  footerAbout     String   @default("Votre boutique de vêtements et accessoires seconde main, soigneusement sélectionnés.")
+   423→  footerEmail     String   @default("contact@dboxpro.fr")
+   424→  footerPhone     String?
+   425→  // Logo
+   426→  logoText        String   @default("DBoxPro")
+   427→  logoSubtitle    String   @default("Boutique")
+   428→  logoImage       String?  // optional uploaded logo (header + footer)
+   429→  // Seuil livraison offerte
+   430→  freeShippingThreshold Float @default(50)
+   431→  freeShippingEnabled   Boolean @default(false) // Master switch: active/désactive la livraison offerte
+   432→  // Boutique fermée (masque les boutons commander/acheter)
+   433→  boutiqueClosed        Boolean @default(false)
+   434→  boutiqueClosedMessage String  @default("La boutique est temporairement fermée. Revenez bientôt !")
+   435→  // Design des emails (moderne par défaut)
+   436→  emailDesign           String  @default("modern") // modern | classic | minimal
+   437→  // Configuration Stripe
+   438→  stripePublicKey  String?
+   439→  stripeSecretKey  String?
+   440→  // Configuration PayPal
+   441→  paypalClientId   String?
+   442→  paypalSecret     String?
+   443→  // Configuration Mondial Relay (points relais)
+   444→  mondialRelayEnseigne String?  // Code marchand (ex: "BDTEST")
+   445→  mondialRelayApiKey   String?  // Clé privée API
+   446→  // Configuration Chronopost Shop2Shop (points relais)
+   447→  chronopostAccountNumber String?  // Numéro de compte Chronopost
+   448→  chronopostApiKey         String?  // Clé API Chronopost
+   449→  // Couleurs personnalisables (hex sans #)
+   450→  primaryColor    String   @default("007bff")
+   451→  primaryDarkColor String  @default("0056b3")
+   452→  headerBgColor   String   @default("ffffff")
+   453→  topbarBgColor   String   @default("0a3d62")
+   454→  footerBgColor   String   @default("0a3d62")
+   455→  // Hero background image
+   456→  heroImage       String?
+   457→  // Horaires
+   458→  hoursJson       String   @default("[]")  // JSON array of { day: "Lundi", hours: "9h-18h", closed: false, visible: true }
+   459→  hoursVisible    Boolean  @default(true)  // Master switch: show/hide the entire hours block in the footer
+   460→  // CGV éditables
+   461→  cgvText         String?
+   462→  // Mentions légales éditables
+   463→  legalText       String?
+   464→  // Trust badges (section sous le hero)
+   465→  trustBadge1Icon   String  @default("truck")
+   466→  trustBadge1Title  String  @default("Livraison rapide")
+   467→  trustBadge1Desc   String  @default("Expédition sous 48h")
+   468→  trustBadge2Icon   String  @default("shield")
+   469→  trustBadge2Title  String  @default("Paiement sécurisé")
+   470→  trustBadge2Desc   String  @default("Vos données protégées")
+   471→  trustBadge3Icon   String  @default("refresh")
+   472→  trustBadge3Title  String  @default("Retours 14 jours")
+   473→  trustBadge3Desc   String  @default("Satisfait ou remboursé")
+   474→  trustBadge4Icon   String  @default("headphones")
+   475→  trustBadge4Title  String  @default("Service client")
+   476→  trustBadge4Desc   String  @default("À votre écoute")
+   477→  // Section nouveautés
+   478→  newProductsTitle       String  @default("Nos nouveautés")
+   479→  newProductsSubtitle    String  @default("Les dernières pièces ajoutées à la boutique")
+   480→  // Section contact
+   481→  contactTitle       String  @default("Une question ?")
+   482→  contactSubtitle    String  @default("Notre équipe est à votre écoute pour vous accompagner")
+   483→  contactButtonText  String  @default("Nous contacter")
+   484→  // Section catégories
+   485→  categoriesTitle    String  @default("Explorer par catégorie")
+   486→  categoriesSubtitle String  @default("Trouvez exactement ce que vous cherchez")
+   487→  // Footer custom links
+   488→  footerLinksJson    String  @default("[]")  // JSON: [{label, url, visible}]
+   489→  // Footer colonnes éditables
+   490→  footerBoutiqueTitle     String  @default("Boutique")
+   491→  footerInfosTitle        String  @default("Informations")
+   492→  footerContactTitle      String  @default("Contact")
+   493→  footerBoutiqueLinksJson String  @default("[]")  // JSON [{label, url, visible}]
+   494→  footerInfosLinksJson    String  @default("[]")  // JSON [{label, url, visible}]
+   495→  // Menu de navigation personnalisable
+   496→  navMenuJson             String  @default("[]")  // JSON [{label, url, visible, order}]
+   497→  // Pages "confiance" éditables (Paiement sécurisé, Livraison rapide, Retours 14 jours)
+   498→  trustPagePaymentTitle    String  @default("Paiement sécurisé")
+   499→  trustPagePaymentContent  String? // HTML
+   500→  trustPageShippingTitle   String  @default("Livraison rapide")
+   501→  trustPageShippingContent String? // HTML
+   502→  trustPageReturnsTitle    String  @default("Retours 14 jours")
+   503→  trustPageReturnsContent  String? // HTML
+   504→  // Google Analytics — ID de mesure (ex: G-XXXXXXXXXX)
+   505→  gaTagId                  String?
+   506→  // SEO — titre et description personnalisables pour l'onglet navigateur
+   507→  seoTitle                 String?  // ex: "Junashop — Vêtements seconde main"
+   508→  seoDescription           String?  // ex: "Achetez des vêtements et accessoires seconde main..."
+   509→  // RGPD / GDPR — consentement cookies
+   510→  gdprEnabled              Boolean  @default(true)
+   511→  gdprBannerTitle          String   @default("Vos données personnelles")
+   512→  gdprBannerMessage        String   @default("Nous utilisons des cookies pour améliorer votre expérience, analyser le trafic et sécuriser les paiements. Vous pouvez accepter ou refuser les cookies non essentiels.")
+   513→  gdprPrivacyPolicyUrl     String?  // URL de la page politique de confidentialité
+   514→  gdprCookiesJson          String   @default("[]")  // JSON: [{ id, name, description, required, enabled }]
+   515→  updatedAt       DateTime @updatedAt
+   516→}
+   517→
+   518→// Mode de livraison (CRUD admin)
+   519→model ShippingMethod {
+   520→  id          String   @id @default(cuid())
+   521→  code        String   @unique  // 'standard' | 'tracked' | 'pickup' | custom
+   522→  label       String              // "Standard (3-5j)"
+   523→  price       Float               // 3.50 (prix de base si pas de règle de poids)
+   524→  delay       String              // "3 à 5 jours ouvrés"
+   525→  carrierCode String?             // lien vers Attribute(type='carrier').code — ex: "colissimo", "chronopost"
+   526→  active      Boolean  @default(true)
+   527→  order       Int      @default(0)
+   528→  weightRules ShippingWeightRule[]
+   529→  createdAt   DateTime @default(now())
+   530→  updatedAt   DateTime @updatedAt
+   531→}
+   532→
+   533→// Catégorie de boutique (image de fond personnalisable + couleur/opacité + sous-catégories)
+   534→model BoutiqueCategory {
+   535→  slug            String   @id  // 'vetements', 'chaussures', etc.
+   536→  label           String
+   537→  parentId        String?  // null = catégorie top-level, sinon slug du parent
+   538→  parent          BoutiqueCategory? @relation("CategoryTree", fields: [parentId], references: [slug], onDelete: SetNull)
+   539→  children        BoutiqueCategory[] @relation("CategoryTree")
+   540→  backgroundImage String?  // path /uploads/boutique-categories/...
+   541→  bgColor         String?  // hex sans #, ex: "007bff" (couleur de fond si pas d'image)
+   542→  bgOpacity       Float    @default(0.5)  // 0.0 à 1.0 — opacité de l'image de fond
+   543→  emoji           String   @default("📦")
+   544→  order           Int      @default(0)
+   545→  filtersJson     String   @default("[]")  // JSON: [{ type: "size"|"color"|"condition"|"brand", label: "Taille", collapsed: false }]
+   546→  updatedAt       DateTime @updatedAt
+   547→
+   548→  @@index([parentId])
+   549→}
+   550→
+   551→// Client de la boutique (compte client, séparé des utilisateurs staff Reseller OS)
+   552→model BoutiqueClient {
+   553→  id           String   @id @default(cuid())
+   554→  email        String   @unique
+   555→  password     String   // bcrypt hash
+   556→  firstName    String
+   557→  lastName     String
+   558→  phone        String?
+   559→  // Adresse par défaut
+   560→  address      String?
+   561→  postalCode   String?
+   562→  city         String?
+   563→  country      String   @default("France")
+   564→  // Marketing
+   565→  newsletter   Boolean  @default(false)
+   566→  lastVisitAt  DateTime?
+   567→  createdAt    DateTime @default(now())
+   568→  updatedAt    DateTime @updatedAt
+   569→
+   570→  orders       BoutiqueOrder[]
+   571→  messages     BoutiqueMessage[]
+   572→}
+   573→
+   574→// Commande boutique (groupe plusieurs articles / ventes)
+   575→model BoutiqueOrder {
+   576→  id            String   @id @default(cuid())
+   577→  orderId       String   @unique  // "CMD-..."
+   578→  clientId      String?
+   579→  client        BoutiqueClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+   580→  // Snapshot client (au cas où pas de compte)
+   581→  customerSnapshot String  // JSON: { firstName, lastName, email, phone, address, ... }
+   582→  items         String   // JSON array of items
+   583→  shippingMethod String
+   584→  shippingCost  Float
+   585→  paymentMethod String?  // code du PaymentMethod utilisé
+   586→  subtotal      Float
+   587→  total         Float
+   588→  notes         String?
+   589→  status        String   @default("pending")  // pending | paid | shipped | delivered | cancelled
+   590→  // Liste des numéros de facture Reseller OS (pour retrouver les Sales)
+   591→  invoiceNumbers String  // JSON array
+   592→  // Point relais (livraison Mondial Relay)
+   593→  relayId        String?
+   594→  relayName      String?
+   595→  relayAddress   String?  // JSON: {address, postalCode, city, lat, lng}
+   596→  createdAt      DateTime @default(now())
+   597→  updatedAt      DateTime @updatedAt
+   598→
+   599→  @@index([clientId])
+   600→  @@index([createdAt])
+   601→}
+   602→
+   603→// Message interne (entre client et admin)
+   604→model BoutiqueMessage {
+   605→  id          String   @id @default(cuid())
+   606→  clientId    String
+   607→  client      BoutiqueClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+   608→  // Si fromClient=true: client → admin, sinon admin → client
+   609→  fromClient  Boolean
+   610→  subject     String
+   611→  body        String
+   612→  read        Boolean  @default(false)
+   613→  createdAt   DateTime @default(now())
+   614→
+   615→  @@index([clientId, read])
+   616→  @@index([createdAt])
+   617→}
+   618→
+   619→// Mode de paiement (CRUD admin — Stripe, PayPal, CB, virement, etc.)
+   620→model PaymentMethod {
+   621→  id          String   @id @default(cuid())
+   622→  code        String   @unique  // 'stripe' | 'paypal' | 'cb_demo' | 'virement' | custom
+   623→  label       String              // "Carte bancaire (Stripe)"
+   624→  description String?             // "Paiement sécurisé par carte"
+   625→  icon        String?             // emoji ou nom d'icône
+   626→  // Type: demo (simulation), stripe (vraie intégration), paypal, manual
+   627→  provider     String   @default("demo")
+   628→  // Pour stripe/paypal: clés API stockées séparément (BoutiqueSettings)
+   629→  active      Boolean  @default(true)
+   630→  order       Int      @default(0)
+   631→  createdAt   DateTime @default(now())
+   632→  updatedAt   DateTime @updatedAt
+   633→}
+   634→
+   635→// ─────────────────────────────────────────────
+   636→// Email SMTP Configuration
+   637→// ─────────────────────────────────────────────
+   638→model EmailSettings {
+   639→  id              String   @id @default(cuid())
+   640→  userId          String   @unique
+   641→  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   642→  
+   643→  // SMTP server
+   644→  smtpHost        String?
+   645→  smtpPort        Int      @default(587)
+   646→  smtpUser        String?
+   647→  smtpPassword    String?
+   648→  smtpSecure      Boolean  @default(false)  // true for 465, false for 587
+   649→  
+   650→  // From
+   651→  fromEmail       String?
+   652→  fromName        String?
+   653→  
+   654→  // Email templates (customizable)
+   655→  templateRegister     String?  // inscription client
+   656→  templateValidate     String?  // validation inscription
+   657→  templatePasswordLost String?  // mot de passe perdu
+   658→  templateOrder        String?  // nouvelle commande
+   659→  templateOrderStatus  String?  // changement status commande
+   660→  
+   661→  createdAt       DateTime @default(now())
+   662→  updatedAt       DateTime @updatedAt
+   663→}
+   664→
+   665→// ─────────────────────────────────────────────
+   666→// Boutique — Tranches de poids pour frais de port
+   667→// ─────────────────────────────────────────────
+   668→model ShippingWeightRule {
+   669→  id              String   @id @default(cuid())
+   670→  shippingMethodId String
+   671→  shippingMethod  ShippingMethod @relation(fields: [shippingMethodId], references: [id], onDelete: Cascade)
+   672→  weightMin       Float    // en grammes (ex: 0)
+   673→  weightMax       Float    // en grammes (ex: 500)
+   674→  price           Float    // prix pour cette tranche
+   675→  createdAt       DateTime @default(now())
+   676→  updatedAt       DateTime @updatedAt
+   677→
+   678→  @@index([shippingMethodId])
+   679→}
+   680→
+   681→// ═══════════════════════════════════════════════════════════════════════
+   682→// PRODUCT TREND — Recherches de produits tendance sur marketplaces
+   683→// ═══════════════════════════════════════════════════════════════════════
+   684→
+   685→// Recherche sauvegardée par l'utilisateur pour suivi régulier
+   686→model ProductTrendSearch {
+   687→  id          String   @id @default(cuid())
+   688→  userId      String
+   689→  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   690→  name        String               // nom donné par l'utilisateur ("Sneakers Nike femme")
+   691→  keyword     String               // mot-clé recherché
+   692→  category    String?              // vetements | chaussures | accessoires | luxe | maison
+   693→  platform    String   @default("all")  // vinted | ebay | etsy | leboncoin | all
+   694→  country     String   @default("fr")   // code pays (fr, be, es, it, de, uk, us)
+   695→  period      String   @default("30d")  // 7d | 30d | 90d | 12m
+   696→  priceMin    Float?
+   697→  priceMax    Float?
+   698→  createdAt   DateTime @default(now())
+   699→  updatedAt   DateTime @updatedAt
+   700→  snapshots   ProductTrendSnapshot[]
+   701→
+   702→  @@index([userId])
+   703→}
+   704→
+   705→// Snapshot ponctuel des résultats d'une recherche (pour l'historique de tendance)
+   706→model ProductTrendSnapshot {
+   707→  id          String   @id @default(cuid())
+   708→  searchId    String
+   709→  search      ProductTrendSearch @relation(fields: [searchId], references: [id], onDelete: Cascade)
+   710→  capturedAt  DateTime @default(now())
+   711→  totalResults Int                // nombre total d'annonces trouvées
+   712→  avgPrice    Float               // prix moyen (€)
+   713→  minPrice    Float?
+   714→  maxPrice    Float?
+   715→  medianPrice Float?
+   716→  topScore    Int      @default(0) // score de tendance global (0-100)
+   717→  topItems    String              // JSON array des top produits [{title, image, price, url, platform}]
+   718→  createdAt   DateTime @default(now())
+   719→
+   720→  @@index([searchId])
+   721→}
+   722→

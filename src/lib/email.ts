@@ -453,3 +453,153 @@ ${siteUrl ? `<a href="${siteUrl}/boutique/compte" style="display:inline-block;ba
     console.error('[email] notifyClientRegistration error:', e?.message)
   }
 }
+
+// ── Password reset request (forgot password) ───────────────────────────
+// Uses the admin's custom `templatePasswordLost` if defined as HTML,
+// otherwise falls back to the same buildEmailTemplate() wrapper used by
+// notifyNewOrder / notifyOrderStatusChange so the visual style is consistent.
+export async function notifyPasswordResetRequest(
+  clientEmail: string,
+  clientFirstName: string,
+  resetUrl: string,
+) {
+  try {
+    console.log('[email] notifyPasswordResetRequest triggered for:', clientEmail)
+    const config = await getEmailConfig()
+    const bs = await getBoutiqueSettings()
+    const siteUrl = bs.shareSiteUrl || ''
+    const logoText = bs.logoText || 'Boutique'
+
+    const template = config?.templatePasswordLost || null
+    const defaultText = `Bonjour ${clientFirstName},\n\nVous avez demandé à réinitialiser votre mot de passe.\n\nCliquez sur ce lien pour choisir un nouveau mot de passe :\n${resetUrl}\n\nCe lien expirera dans 1 heure.\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez cet email.\n\nÀ bientôt !`
+    const text = applyTemplate(template, defaultText, {
+      firstName: clientFirstName,
+      resetUrl,
+    })
+
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      // Custom HTML template — replace variables {firstName}, {resetUrl}
+      let processedTemplate = template
+      const vars: Record<string, string> = {
+        firstName: clientFirstName,
+        resetUrl,
+        email: clientEmail,
+      }
+      for (const [key, value] of Object.entries(vars)) {
+        processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      // Only append the reset button if the template doesn't already contain a reset link
+      const hasResetLink = processedTemplate.includes('/boutique/reinitialiser-mot-de-passe')
+        || processedTemplate.includes('{resetUrl}')
+      const resetButton = resetUrl && !hasResetLink
+        ? `<div style="margin-top:16px;text-align:center;"><a href="${resetUrl}" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:12px 32px;border-radius:6px;font-weight:600;font-size:15px;">Réinitialiser mon mot de passe →</a></div>`
+        : ''
+      html = processedTemplate + resetButton
+    } else {
+      // Use standard HTML template (same wrapper as order emails)
+      const bodyHtml = `
+<p style="margin:0 0 12px 0;">Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour en choisir un nouveau :</p>
+<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Adresse email</p>
+<p style="margin:0;font-weight:600;">${clientEmail}</p>
+</div>
+<p style="margin:12px 0 0 0;font-size:13px;color:#6b7280;">⏰ Ce lien expirera dans 1 heure.</p>
+<p style="margin:8px 0 0 0;font-size:13px;color:#6b7280;">Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email — votre mot de passe restera inchangé.</p>`
+
+      const result = buildEmailTemplate({
+        title: 'Réinitialisation de votre mot de passe',
+        headerColor: '#007bff',
+        firstName: clientFirstName,
+        bodyHtml,
+        siteUrl,
+        buttonText: resetUrl ? 'Réinitialiser mon mot de passe →' : undefined,
+        buttonUrl: resetUrl || undefined,
+        logoText,
+      })
+      html = result.html
+    }
+
+    await sendEmail({
+      to: clientEmail,
+      subject: 'Réinitialisation de votre mot de passe',
+      text,
+      html,
+    })
+  } catch (e: any) {
+    console.error('[email] notifyPasswordResetRequest error:', e?.message)
+  }
+}
+
+// ── Password changed confirmation ──────────────────────────────────────
+// Uses the admin's custom `templatePasswordChanged` if defined as HTML,
+// otherwise falls back to the same buildEmailTemplate() wrapper used by
+// notifyNewOrder / notifyOrderStatusChange so the visual style is consistent.
+export async function notifyPasswordChanged(
+  clientEmail: string,
+  clientFirstName: string,
+) {
+  try {
+    console.log('[email] notifyPasswordChanged triggered for:', clientEmail)
+    const config = await getEmailConfig()
+    const bs = await getBoutiqueSettings()
+    const siteUrl = bs.shareSiteUrl || ''
+    const logoText = bs.logoText || 'Boutique'
+    const loginUrl = siteUrl ? `${siteUrl}/boutique/connexion` : ''
+
+    const template = config?.templatePasswordChanged || null
+    const defaultText = `Bonjour ${clientFirstName},\n\nVotre mot de passe a été modifié avec succès.\n\nVous pouvez maintenant vous connecter avec votre nouveau mot de passe.\n${loginUrl}\n\nSi vous n'êtes pas à l'origine de ce changement, contactez-nous immédiatement.\n\nÀ bientôt !`
+    const text = applyTemplate(template, defaultText, {
+      firstName: clientFirstName,
+    })
+
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      // Custom HTML template — replace {firstName}
+      let processedTemplate = template
+      const vars: Record<string, string> = {
+        firstName: clientFirstName,
+        email: clientEmail,
+      }
+      for (const [key, value] of Object.entries(vars)) {
+        processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      // Only append the login button if the template doesn't already link to /boutique/connexion
+      const hasLoginLink = processedTemplate.includes('/boutique/connexion')
+      const loginButton = loginUrl && !hasLoginLink
+        ? `<div style="margin-top:16px;text-align:center;"><a href="${loginUrl}" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;padding:12px 32px;border-radius:6px;font-weight:600;font-size:15px;">Se connecter →</a></div>`
+        : ''
+      html = processedTemplate + loginButton
+    } else {
+      // Use standard HTML template (same wrapper as order emails)
+      const bodyHtml = `
+<p style="margin:0 0 12px 0;">Votre mot de passe a été modifié avec succès. Vous pouvez maintenant vous connecter à votre compte avec votre nouveau mot de passe.</p>
+<div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:16px;margin:12px 0;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#047857;text-transform:uppercase;">Statut</p>
+<p style="margin:0;font-weight:600;color:#047857;">✓ Mot de passe modifié</p>
+</div>
+<p style="margin:12px 0 0 0;font-size:13px;color:#6b7280;">🔒 Si vous n'êtes pas à l'origine de ce changement, contactez-nous immédiatement.</p>`
+
+      const result = buildEmailTemplate({
+        title: 'Mot de passe modifié ✓',
+        headerColor: '#10b981',
+        firstName: clientFirstName,
+        bodyHtml,
+        siteUrl,
+        buttonText: loginUrl ? 'Se connecter →' : undefined,
+        buttonUrl: loginUrl || undefined,
+        logoText,
+      })
+      html = result.html
+    }
+
+    await sendEmail({
+      to: clientEmail,
+      subject: 'Votre mot de passe a été modifié',
+      text,
+      html,
+    })
+  } catch (e: any) {
+    console.error('[email] notifyPasswordChanged error:', e?.message)
+  }
+}

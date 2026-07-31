@@ -870,11 +870,12 @@ model EmailSettings {
   fromName        String?
   
   // Email templates (customizable)
-  templateRegister     String?  // inscription client
-  templateValidate     String?  // validation inscription
-  templatePasswordLost String?  // mot de passe perdu
-  templateOrder        String?  // nouvelle commande
-  templateOrderStatus  String?  // changement status commande
+  templateRegister         String?  // inscription client
+  templateValidate         String?  // validation inscription
+  templatePasswordLost     String?  // mot de passe perdu (lien de réinitialisation)
+  templatePasswordChanged  String?  // mot de passe modifié (confirmation après changement)
+  templateOrder            String?  // nouvelle commande
+  templateOrderStatus      String?  // changement status commande
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

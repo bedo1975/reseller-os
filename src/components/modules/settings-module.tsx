@@ -2358,6 +2358,7 @@ interface EmailSettingsData {
   templateRegister: string | null
   templateValidate: string | null
   templatePasswordLost: string | null
+  templatePasswordChanged: string | null
   templateOrder: string | null
   templateOrderStatus: string | null
 }
@@ -2415,6 +2416,13 @@ ${footerBlock}
         'Réinitialisation de votre mot de passe',
         '<p>Bonjour {firstName},</p><p>Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour en choisir un nouveau. Ce lien est valable 1 heure.</p>',
         'Réinitialiser mon mot de passe',
+        '/boutique/connexion',
+      )
+    case 'templatePasswordChanged':
+      return wrap(
+        'Mot de passe modifié ✓',
+        '<p>Bonjour {firstName},</p><p>Votre mot de passe a été modifié avec succès. Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.</p><p>Si vous n’êtes pas à l’origine de ce changement, contactez-nous immédiatement.</p>',
+        'Se connecter',
         '/boutique/connexion',
       )
     case 'templateOrder':
@@ -2615,13 +2623,14 @@ function EmailSection() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Modèles d'emails</CardTitle>
-          <CardDescription>Personnalisez les emails envoyés automatiquement (HTML autorisé). Variables : {`{firstName}, {lastName}, {email}, {orderId}, {total}, {status}`}</CardDescription>
+          <CardDescription>Personnalisez les emails envoyés automatiquement (HTML autorisé). Variables : {`{firstName}, {lastName}, {email}, {orderId}, {total}, {status}, {resetUrl}`}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {[
             { key: 'templateRegister' as const, label: 'Inscription client', placeholder: 'Bienvenue {firstName} ! Votre compte a été créé avec succès.' },
             { key: 'templateValidate' as const, label: 'Validation du compte', placeholder: 'Bonjour {firstName}, veuillez valider votre adresse email…' },
             { key: 'templatePasswordLost' as const, label: 'Mot de passe perdu', placeholder: 'Bonjour {firstName}, voici votre lien de réinitialisation…' },
+            { key: 'templatePasswordChanged' as const, label: 'Mot de passe modifié', placeholder: 'Bonjour {firstName}, votre mot de passe a été modifié avec succès.' },
             { key: 'templateOrder' as const, label: 'Nouvelle commande', placeholder: 'Merci {firstName} ! Votre commande {orderId} d\'un montant de {total}€ a bien été enregistrée.' },
             { key: 'templateOrderStatus' as const, label: 'Changement de statut commande', placeholder: 'Bonjour {firstName}, le statut de votre commande {orderId} est maintenant : {status}.' },
           ].map(t => (

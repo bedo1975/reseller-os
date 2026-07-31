@@ -30,6 +30,18 @@ const blueIcon = L.divIcon({
   popupAnchor: [0, -24],
 })
 
+// User location icon (red dot with pulse — shows where the search is centered)
+const userLocationIcon = L.divIcon({
+  html: `<div style="position:relative;width:30px;height:30px;">
+    <div style="position:absolute;inset:0;background:#dc2626;border-radius:50%;opacity:0.3;animation:pulse 2s infinite;"></div>
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#dc2626;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>
+  </div>
+  <style>@keyframes pulse{0%{transform:scale(0.8);opacity:0.5}50%{transform:scale(1.4);opacity:0.2}100%{transform:scale(0.8);opacity:0.5}}</style>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+  popupAnchor: [0, -15],
+})
+
 export interface RelayPoint {
   id: string
   name: string
@@ -51,14 +63,19 @@ interface RelayMapProps {
 }
 
 // Helper component to recenter the map when relays change
-function Recenter({ relays }: { relays: RelayPoint[] }) {
+function Recenter({ relays, searchLocation }: { relays: RelayPoint[]; searchLocation?: { lat: number; lng: number } | null }) {
   const map = useMap()
   useEffect(() => {
     if (relays.length > 0) {
-      const bounds = L.latLngBounds(relays.map(r => [r.lat, r.lng]))
+      const points: [number, number][] = relays.map(r => [r.lat, r.lng])
+      // Include the search location in the bounds so the user's position is visible
+      if (searchLocation) {
+        points.push([searchLocation.lat, searchLocation.lng])
+      }
+      const bounds = L.latLngBounds(points)
       map.fitBounds(bounds, { padding: [40, 40] })
     }
-  }, [relays, map])
+  }, [relays, searchLocation, map])
   return null
 }
 
@@ -68,6 +85,7 @@ export function RelayMap({ postalCode, city, carrier, onSelect, selectedRelayId 
   const [error, setError] = useState<string | null>(null)
   const [noResults, setNoResults] = useState(false)
   const [source, setSource] = useState<string>('')
+  const [searchLocation, setSearchLocation] = useState<{ lat: number; lng: number; city: string } | null>(null)
 
   useEffect(() => {
     if (!postalCode || postalCode.length < 4) return
@@ -97,13 +115,13 @@ export function RelayMap({ postalCode, city, carrier, onSelect, selectedRelayId 
             setSource(data.source || '')
             setNoResults(false)
             setError(null)
+            setSearchLocation(data.searchLocation || null)
           } else if (data.relays && data.relays.length === 0) {
             setRelays([])
             setNoResults(true)
             setSource(data.source || '')
+            setSearchLocation(data.searchLocation || null)
           } else {
-            // Error from API — but don't clear existing results if we have them
-            // Only show the error if we had no results before
             setError(data.error || data.message || 'Erreur')
           }
         })
@@ -153,7 +171,27 @@ export function RelayMap({ postalCode, city, carrier, onSelect, selectedRelayId 
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; OpenStreetMap contributors'
             />
-            <Recenter relays={relays} />
+            <Recenter relays={relays} searchLocation={searchLocation} />
+            {/* User search location marker (red dot) */}
+            {searchLocation && (
+              <Marker
+                position={[searchLocation.lat, searchLocation.lng]}
+                icon={userLocationIcon}
+                zIndexOffset={1000}
+              >
+                <Popup>
+                  <div style={{ minWidth: '150px' }}>
+                    <p style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>📍 Votre position</p>
+                    <p style={{ fontSize: '12px', color: '#555' }}>
+                      {searchLocation.city || postalCode}{searchLocation.city ? ` (${postalCode})` : ''}
+                    </p>
+                    <p style={{ fontSize: '11px', color: '#777', marginTop: '4px' }}>
+                      Les distances sont calculées depuis ce point.
+                    </p>
+                  </div>
+                </Popup>
+              </Marker>
+            )}
             {relays.map(relay => (
               <Marker
                 key={relay.id}
