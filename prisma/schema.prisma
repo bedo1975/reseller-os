@@ -772,6 +772,9 @@ model BoutiqueClient {
   // Marketing
   newsletter   Boolean  @default(false)
   lastVisitAt  DateTime?
+  // Reset mot de passe
+  resetToken   String?
+  resetTokenExpiry DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

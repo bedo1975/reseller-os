@@ -146,7 +146,14 @@ export default function ConnexionPage() {
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="password">Mot de passe *</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Mot de passe *</Label>
+              {mode === 'login' && (
+                <Link href="/boutique/mot-de-passe-oublie" className="text-xs text-[#007bff] hover:underline">
+                  Mot de passe oublié ?
+                </Link>
+              )}
+            </div>
             <div className="relative">
               <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
