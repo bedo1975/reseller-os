@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { usePermissions } from '@/hooks/use-permissions'
 import {
   TrendingUp, Search, Save, Download, Trash2, History, ExternalLink,
   Star, Filter, X, RefreshCw, Package, AlertCircle, Eye,
@@ -100,6 +101,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 }
 
 export function ProductTrendModule() {
+  const { can } = usePermissions()
   const [activeTab, setActiveTab] = useState<'search' | 'saved'>('search')
 
   // Search form state
@@ -472,9 +474,11 @@ export function ProductTrendModule() {
               </div>
 
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" size="sm" onClick={() => setSaveDialogOpen(!saveDialogOpen)}>
-                  <Save className="h-4 w-4 mr-1" /> Sauvegarder
-                </Button>
+                {can('product-trend', 'create') && (
+                  <Button variant="outline" size="sm" onClick={() => setSaveDialogOpen(!saveDialogOpen)}>
+                    <Save className="h-4 w-4 mr-1" /> Sauvegarder
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={exportCsv}>
                   <Download className="h-4 w-4 mr-1" /> Export CSV
                 </Button>

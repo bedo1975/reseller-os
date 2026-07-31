@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils'
 import { photoUrl } from '@/lib/photo-url'
 import { useConfirm } from '@/components/shared/confirm-provider'
 import { BarcodeScannerModal, QuickQuantityModal } from '@/components/stock/barcode-scanner'
+import { usePermissions } from '@/hooks/use-permissions'
 
 const PAGE_SIZE = 10
 
@@ -81,6 +82,7 @@ export function StockModule() {
   const { data: items, loading, refresh } = useFetch<StockItem[]>('/api/stock')
   const { data: suppliers } = useFetch<Supplier[]>('/api/suppliers')
   const { getByType, getLabel } = useSettings()
+  const { can } = usePermissions()
 
   const categories = getByType('category')
   const conditions = getByType('condition')
@@ -464,19 +466,25 @@ export function StockModule() {
               </Select>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Button onClick={() => { setEditingItem(null); setShowForm(true) }}>
-                <Plus className="h-4 w-4 mr-2" /> Nouvel article
-              </Button>
-              <Button
-                variant="outline"
-                className="border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                onClick={() => setShowScanner(true)}
-              >
-                <Barcode className="h-4 w-4 mr-2" /> Scanner code-barres
-              </Button>
-              <Button variant="outline" onClick={() => setShowPurchaseForm(true)}>
-                <Plus className="h-4 w-4 mr-2" /> Achat hors stock
-              </Button>
+              {can('stock', 'create') && (
+                <Button onClick={() => { setEditingItem(null); setShowForm(true) }}>
+                  <Plus className="h-4 w-4 mr-2" /> Nouvel article
+                </Button>
+              )}
+              {can('stock', 'scan') && (
+                <Button
+                  variant="outline"
+                  className="border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                  onClick={() => setShowScanner(true)}
+                >
+                  <Barcode className="h-4 w-4 mr-2" /> Scanner code-barres
+                </Button>
+              )}
+              {can('stock', 'purchase') && (
+                <Button variant="outline" onClick={() => setShowPurchaseForm(true)}>
+                  <Plus className="h-4 w-4 mr-2" /> Achat hors stock
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>

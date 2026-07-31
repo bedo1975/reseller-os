@@ -23,6 +23,7 @@ import {
   Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { usePermissions } from '@/hooks/use-permissions'
 import { formatEUR, SUPPLIER_TYPES, getSupplierTypeLabel } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { useConfirm } from '@/components/shared/confirm-provider'
@@ -56,6 +57,7 @@ const TYPE_COLORS: Record<string, string> = {
 export function SourcingModule() {
   const confirm = useConfirm()
   const { data: suppliers, loading, refresh } = useFetch<SupplierStat[]>('/api/suppliers')
+  const { can } = usePermissions()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [showForm, setShowForm] = useState(false)
@@ -165,9 +167,11 @@ export function SourcingModule() {
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={() => { setEditing(null); setShowForm(true) }}>
-              <Plus className="h-4 w-4 mr-2" /> Nouveau fournisseur
-            </Button>
+            {can('sourcing', 'create') && (
+              <Button onClick={() => { setEditing(null); setShowForm(true) }}>
+                <Plus className="h-4 w-4 mr-2" /> Nouveau fournisseur
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

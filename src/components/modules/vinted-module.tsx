@@ -16,6 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { usePermissions } from '@/hooks/use-permissions'
 import { cn } from '@/lib/utils'
 
 interface VintedItem {
@@ -219,6 +220,7 @@ function ItemCard({ item }: { item: VintedItem }) {
 }
 
 export function VintedModule() {
+  const { can } = usePermissions()
   const [tab, setTab] = useState<Tab>('search')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
@@ -656,7 +658,7 @@ export function VintedModule() {
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               {tab === 'search' ? 'Rechercher' : 'Trouver deals'}
             </Button>
-            {tab !== 'alerts' && (
+            {tab !== 'alerts' && can('vinted', 'create') && (
               <Button variant="outline" onClick={openSaveDialog} title="Sauvegarder cette recherche avec alertes">
                 <Save className="h-4 w-4" />
                 Sauvegarder

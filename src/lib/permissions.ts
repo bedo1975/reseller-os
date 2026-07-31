@@ -20,15 +20,34 @@ export const ALL_MODULES = [
 ] as const
 
 // All possible actions
-export const ALL_ACTIONS = ['view', 'create', 'edit', 'delete', 'export'] as const
+export const ALL_ACTIONS = ['view', 'create', 'edit', 'delete', 'export', 'scan', 'purchase'] as const
 
 // Modules that only support "view" (no create/edit/delete)
 export const VIEW_ONLY_MODULES = ['dashboard', 'bi', 'statistics']
 
+// Actions available per module (controls what's shown in the permission grid)
+export const MODULE_ACTIONS: Record<string, string[]> = {
+  dashboard: ['view'],
+  stock: ['view', 'create', 'edit', 'delete', 'export', 'scan', 'purchase'],
+  sourcing: ['view', 'create', 'edit', 'delete'],
+  publication: ['view', 'edit', 'create'],
+  sales: ['view', 'create', 'edit', 'delete', 'export'],
+  parcels: ['view', 'edit'],
+  profitability: ['view', 'export'],
+  taxes: ['view', 'export'],
+  bi: ['view', 'export'],
+  vinted: ['view', 'create'],
+  'product-trend': ['view', 'create'],
+  photos: ['view', 'create', 'edit', 'delete'],
+  'boutique-admin': ['view', 'create', 'edit', 'delete', 'export'],
+  statistics: ['view', 'export'],
+  settings: ['view', 'edit'],
+}
+
 // Default actions for each module when a staff user is created
 export const DEFAULT_STAFF_ACTIONS: Record<string, string[]> = {
   dashboard: ['view'],
-  stock: ['view', 'create', 'edit'],
+  stock: ['view', 'create', 'edit', 'scan'],
   sourcing: ['view', 'create', 'edit'],
   publication: ['view', 'edit'],
   sales: ['view', 'create', 'edit', 'export'],
@@ -36,12 +55,12 @@ export const DEFAULT_STAFF_ACTIONS: Record<string, string[]> = {
   profitability: ['view'],
   taxes: ['view', 'export'],
   bi: ['view'],
-  vinted: ['view'],
-  'product-trend': ['view'],
+  vinted: ['view', 'create'],
+  'product-trend': ['view', 'create'],
   photos: ['view', 'create', 'edit'],
-  'boutique-admin': [],  // no access by default
-  statistics: [],        // no access by default
-  settings: [],          // no access by default
+  'boutique-admin': [],
+  statistics: [],
+  settings: [],
 }
 
 // Cache for permissions (per request)
@@ -57,7 +76,7 @@ export async function getUserPermissions(userId: string, userRole: string): Prom
   if (userRole === 'admin') {
     const allPerms: Record<string, string[]> = {}
     for (const m of ALL_MODULES) {
-      allPerms[m] = VIEW_ONLY_MODULES.includes(m) ? ['view'] : [...ALL_ACTIONS]
+      allPerms[m] = MODULE_ACTIONS[m] || ['view']
     }
     return allPerms
   }
@@ -82,7 +101,6 @@ export async function getUserPermissions(userId: string, userRole: string): Prom
         result[m] = []
       }
     } else {
-      // No explicit permission = use defaults
       result[m] = DEFAULT_STAFF_ACTIONS[m] || []
     }
   }
@@ -96,7 +114,6 @@ export async function getUserPermissions(userId: string, userRole: string): Prom
 
 /**
  * Check if a user has a specific permission.
- * Usage: const can = await canUser(userId, role, 'stock', 'edit')
  */
 export async function canUser(
   userId: string,

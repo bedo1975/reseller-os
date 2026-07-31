@@ -51,9 +51,30 @@ const ALL_ACTIONS = [
   { key: 'view', label: 'Voir' },
   { key: 'create', label: 'Créer' },
   { key: 'edit', label: 'Éditer' },
-  { key: 'delete', label: 'Supprimer' },
-  { key: 'export', label: 'Exporter' },
+  { key: 'delete', label: 'Suppr.' },
+  { key: 'export', label: 'Export' },
+  { key: 'scan', label: 'Scanner' },
+  { key: 'purchase', label: 'Achat HS' },
 ]
+
+// Actions available per module (determines which columns are shown)
+const MODULE_ACTIONS_MAP: Record<string, string[]> = {
+  dashboard: ['view'],
+  stock: ['view', 'create', 'edit', 'delete', 'export', 'scan', 'purchase'],
+  sourcing: ['view', 'create', 'edit', 'delete'],
+  publication: ['view', 'edit', 'create'],
+  sales: ['view', 'create', 'edit', 'delete', 'export'],
+  parcels: ['view', 'edit'],
+  profitability: ['view', 'export'],
+  taxes: ['view', 'export'],
+  bi: ['view', 'export'],
+  vinted: ['view', 'create'],
+  'product-trend': ['view', 'create'],
+  photos: ['view', 'create', 'edit', 'delete'],
+  'boutique-admin': ['view', 'create', 'edit', 'delete', 'export'],
+  statistics: ['view', 'export'],
+  settings: ['view', 'edit'],
+}
 
 interface UserRow {
   id: string
@@ -159,7 +180,7 @@ export function UsersManagement() {
     setPermData(prev => ({
       ...prev,
       [module]: checked
-        ? (MODULES_CONFIG.find(m => m.key === module)?.viewOnly ? ['view'] : ALL_ACTIONS.map(a => a.key))
+        ? (MODULE_ACTIONS_MAP[module] || ['view'])
         : [],
     }))
   }
@@ -357,7 +378,7 @@ export function UsersManagement() {
           ) : (
             <div className="space-y-2 py-2">
               {/* Header row */}
-              <div className="grid grid-cols-[1fr_repeat(5,auto)] gap-2 items-center px-2 pb-2 border-b text-[10px] text-muted-foreground uppercase font-medium">
+              <div className="grid grid-cols-[1fr_repeat(7,auto)] gap-2 items-center px-2 pb-2 border-b text-[10px] text-muted-foreground uppercase font-medium">
                 <span>Module</span>
                 {ALL_ACTIONS.map(a => <span key={a.key} className="text-center w-12">{a.label}</span>)}
                 <span className="text-center w-12">Tout</span>
@@ -365,17 +386,17 @@ export function UsersManagement() {
 
               {MODULES_CONFIG.map(mod => {
                 const actions = permData[mod.key] || []
-                const isViewOnly = mod.viewOnly
+                const modActions = MODULE_ACTIONS_MAP[mod.key] || ['view']
                 return (
-                  <div key={mod.key} className="grid grid-cols-[1fr_repeat(5,auto)] gap-2 items-center px-2 py-1.5 rounded hover:bg-muted/30">
+                  <div key={mod.key} className="grid grid-cols-[1fr_repeat(7,auto)] gap-2 items-center px-2 py-1.5 rounded hover:bg-muted/30">
                     <span className="text-sm flex items-center gap-2">
                       <span>{mod.icon}</span>
                       <span className="font-medium">{mod.label}</span>
                     </span>
                     {ALL_ACTIONS.map(a => {
-                      // For viewOnly modules, only 'view' is available
-                      if (isViewOnly && a.key !== 'view') {
-                        return <div key={a.key} className="w-12 text-center text-muted-foreground/30">—</div>
+                      // Only show actions that are available for this module
+                      if (!modActions.includes(a.key)) {
+                        return <div key={a.key} className="w-12 text-center text-muted-foreground/20">·</div>
                       }
                       const checked = actions.includes(a.key)
                       return (
@@ -392,7 +413,7 @@ export function UsersManagement() {
                       <input
                         type="checkbox"
                         className="h-4 w-4 rounded"
-                        checked={actions.length > 0 && (isViewOnly ? actions.includes('view') : ALL_ACTIONS.every(a => actions.includes(a.key)))}
+                        checked={modActions.length > 0 && modActions.every(a => actions.includes(a))}
                         onChange={(e) => toggleAllPerm(mod.key, e.target.checked)}
                       />
                     </div>
@@ -405,7 +426,7 @@ export function UsersManagement() {
                 <Button variant="outline" size="sm" onClick={() => {
                   const all: Record<string, string[]> = {}
                   for (const m of MODULES_CONFIG) {
-                    all[m.key] = m.viewOnly ? ['view'] : ALL_ACTIONS.map(a => a.key)
+                    all[m.key] = MODULE_ACTIONS_MAP[m.key] || ['view']
                   }
                   setPermData(all)
                 }}>

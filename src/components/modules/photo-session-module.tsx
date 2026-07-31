@@ -14,6 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { usePermissions } from '@/hooks/use-permissions'
 import { cn } from '@/lib/utils'
 import { photoUrl } from '@/lib/photo-url'
 
@@ -36,6 +37,7 @@ interface Session {
 }
 
 export function PhotoSessionModule() {
+  const { can } = usePermissions()
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
@@ -320,10 +322,12 @@ export function PhotoSessionModule() {
             Capturez vos produits pendant le shooting, puis rattachez les photos aux fiches stock
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Nouvelle session
-        </Button>
+        {can('photos', 'create') && (
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Nouvelle session
+          </Button>
+        )}
       </div>
 
       {/* Sessions grid */}
@@ -336,10 +340,12 @@ export function PhotoSessionModule() {
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Camera className="h-12 w-12 text-muted-foreground mb-3" />
             <p className="text-muted-foreground mb-3">Aucune session de shooting</p>
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" />
-              Créer ma première session
-            </Button>
+            {can('photos', 'create') && (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Créer ma première session
+              </Button>
+            )}
             <p className="text-xs text-muted-foreground mt-3 max-w-md">
               Le workflow : créez une session avec un nom mémo (ex: "T-shirt Nike M noir"),
               prenez vos photos pendant le shooting, puis rattachez-les à la fiche stock plus tard.
