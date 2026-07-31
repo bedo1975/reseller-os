@@ -140,7 +140,7 @@ export default function MesCommandesPage() {
                 </div>
 
                 {/* Timeline de statut */}
-                <div className="flex items-center gap-1 mb-4">
+                <div className="flex items-center justify-between mb-4 px-2">
                   {[
                     { key: 'pending', label: 'Reçue', icon: Clock },
                     { key: 'paid', label: 'Payée', icon: CheckCircle2 },
@@ -156,29 +156,27 @@ export default function MesCommandesPage() {
 
                     if (isCancelled) {
                       return (
-                        <div key={step.key} className="flex items-center gap-1">
-                          {i > 0 && <div className="w-4 h-0.5 bg-gray-200" />}
-                          <div className="flex flex-col items-center gap-0.5">
-                            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
-                              <XCircle className="h-3 w-3 text-gray-400" />
-                            </div>
-                            <span className="text-[8px] text-gray-400">{step.label}</span>
+                        <div key={step.key} className="flex flex-col items-center gap-1 flex-1">
+                          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                            <XCircle className="h-5 w-5 text-gray-400" />
                           </div>
+                          <span className="text-[10px] text-gray-400">{step.label}</span>
+                          {i < arr.length - 1 && <div className="hidden">—</div>}
                         </div>
                       )
                     }
 
                     return (
-                      <div key={step.key} className="flex items-center gap-1">
-                        {i > 0 && <div className={`w-4 h-0.5 ${isDone ? 'bg-green-500' : 'bg-gray-200'}`} />}
-                        <div className="flex flex-col items-center gap-0.5">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                            isDone ? (isCurrent ? 'bg-[#007bff] text-white ring-2 ring-blue-200' : 'bg-green-500 text-white') : 'bg-gray-200 text-gray-400'
-                          }`}>
-                            <step.icon className="h-3 w-3" />
-                          </div>
-                          <span className={`text-[8px] ${isDone ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>{step.label}</span>
+                      <div key={step.key} className="flex flex-col items-center gap-1 flex-1 relative">
+                        {i < arr.length - 1 && (
+                          <div className={`absolute top-5 left-1/2 w-full h-0.5 ${isDone && currentIdx > stepIdx ? 'bg-green-500' : 'bg-gray-200'}`} />
+                        )}
+                        <div className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                          isDone ? (isCurrent ? 'bg-[#007bff] text-white ring-4 ring-blue-100' : 'bg-green-500 text-white') : 'bg-gray-200 text-gray-400'
+                        }`}>
+                          <step.icon className="h-5 w-5" />
                         </div>
+                        <span className={`text-[10px] text-center ${isDone ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>{step.label}</span>
                       </div>
                     )
                   })}

@@ -33,6 +33,7 @@ import { StatisticsModule } from '@/components/modules/statistics-module'
 import { StaffMessagingModule } from '@/components/modules/staff-messaging-module'
 import { SettingsModule } from '@/components/modules/settings-module'
 import { ReminderPopup } from '@/components/shared/reminder-popup'
+import { StaffMessageNotifier } from '@/components/shared/staff-message-notifier'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -453,6 +454,7 @@ export default function Home() {
 
       {/* Popup de rappels automatiques */}
       <ReminderPopup />
+      <StaffMessageNotifier />
     </div>
   )
 }

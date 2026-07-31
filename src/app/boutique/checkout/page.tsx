@@ -163,6 +163,26 @@ export default function CheckoutPage() {
         if (methods.length > 0 && !paymentMethod) setPaymentMethod(methods[0].code)
       })
       .catch(() => {})
+
+    // Try to fetch the client profile to pre-fill the form
+    fetch('/api/boutique/client/me')
+      .then(r => { if (r.ok) return r.json(); return null })
+      .then(data => {
+        if (data && data.id) {
+          setForm(prev => ({
+            ...prev,
+            firstName: data.firstName || prev.firstName,
+            lastName: data.lastName || prev.lastName,
+            email: data.email || prev.email,
+            phone: data.phone || prev.phone,
+            address: data.address || prev.address,
+            postalCode: data.postalCode || prev.postalCode,
+            city: data.city || prev.city,
+            country: data.country || prev.country,
+          }))
+        }
+      })
+      .catch(() => {})
   }, [router])
 
   const subtotal = cart.reduce((s, i) => s + (i.price || 0) * i.qty, 0)

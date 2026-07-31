@@ -163,33 +163,65 @@ export async function notifyAdminReply(clientId: string, subject: string, body: 
   }
 }
 
-export async function notifyNewOrder(clientEmail: string, clientFirstName: string, orderId: string, total: number) {
-  try {
-    console.log('[email] notifyNewOrder triggered:', orderId, 'to', clientEmail)
-    const config = await getEmailConfig()
-    const settings = await getBoutiqueSettings()
-    const siteUrl = settings.shareSiteUrl || ''
+// ── Shared email template builder ─────────────────────────────────────────
+function buildEmailTemplate(opts: {
+  title: string
+  headerColor: string
+  firstName: string
+  bodyHtml: string
+  siteUrl?: string
+  buttonText?: string
+  buttonUrl?: string
+  logoText?: string
+}): { html: string; text: string } {
+  const { title, headerColor, firstName, bodyHtml, siteUrl, buttonText, buttonUrl, logoText } = opts
 
-    const text = `Bonjour ${clientFirstName},\n\nMerci pour votre commande !\n\nNuméro de commande : ${orderId}\nMontant total : ${total.toFixed(2)} €\n\nVous pouvez suivre votre commande dans votre espace client.\n${siteUrl ? siteUrl + '/boutique/compte/commandes' : ''}\n\nÀ bientôt !`
-
-    const html = `<!DOCTYPE html>
-<html><body style="font-family:system-ui,sans-serif;color:#1a1a1a;background:#f3f4f6;padding:20px;margin:0;">
+  const html = `<!DOCTYPE html>
+<html><body style="font-family:system-ui,-apple-system,sans-serif;color:#1a1a1a;background:#f3f4f6;padding:20px;margin:0;">
 <table style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-<tr><td style="background:#007bff;color:#fff;padding:20px;text-align:center;"><h1 style="margin:0;font-size:20px;">Merci pour votre commande !</h1></td></tr>
+<tr><td style="background:${headerColor};color:#fff;padding:20px 24px;text-align:center;">
+<h1 style="margin:0;font-size:20px;font-weight:600;">${title}</h1>
+</td></tr>
 <tr><td style="padding:24px;">
-<p>Bonjour ${clientFirstName},</p>
-<p>Nous avons bien reçu votre commande et nous vous en remercions !</p>
-<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:16px 0;">
-<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;">Numéro de commande</p>
-<p style="margin:0 0 12px 0;font-family:monospace;font-weight:600;">${orderId}</p>
-<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;">Montant total</p>
-<p style="margin:0;font-size:18px;font-weight:700;color:#007bff;">${total.toFixed(2)} €</p>
-</div>
-${siteUrl ? `<a href="${siteUrl}/boutique/compte/commandes" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:600;font-size:14px;">Suivre ma commande →</a>` : ''}
-<p style="margin-top:16px;font-size:12px;color:#9ca3af;">À bientôt sur ${settings.logoText || 'notre boutique'} !</p>
+<p style="margin:0 0 12px 0;">Bonjour ${firstName},</p>
+${bodyHtml}
+${buttonText && buttonUrl ? `<a href="${buttonUrl}" style="display:inline-block;background:${headerColor};color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:600;font-size:14px;margin-top:12px;">${buttonText}</a>` : ''}
+<p style="margin-top:20px;font-size:12px;color:#9ca3af;">À bientôt sur ${logoText || 'notre boutique'} !</p>
 </td></tr>
 </table>
 </body></html>`
+
+  return { html, text: '' }
+}
+
+export async function notifyNewOrder(clientEmail: string, clientFirstName: string, orderId: string, total: number) {
+  try {
+    console.log('[email] notifyNewOrder triggered:', orderId, 'to', clientEmail)
+    const settings = await getBoutiqueSettings()
+    const siteUrl = settings.shareSiteUrl || ''
+    const logoText = settings.logoText || 'Boutique'
+
+    const text = `Bonjour ${clientFirstName},\n\nMerci pour votre commande !\n\nNuméro de commande : ${orderId}\nMontant total : ${total.toFixed(2)} €\n\nVous pouvez suivre votre commande dans votre espace client.\n${siteUrl ? siteUrl + '/boutique/compte/commandes' : ''}\n\nÀ bientôt !`
+
+    const bodyHtml = `
+<p style="margin:0 0 12px 0;">Nous avons bien reçu votre commande et nous vous en remercions !</p>
+<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Numéro de commande</p>
+<p style="margin:0 0 12px 0;font-family:monospace;font-weight:600;font-size:15px;">${orderId}</p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Montant total</p>
+<p style="margin:0;font-size:20px;font-weight:700;color:#007bff;">${total.toFixed(2)} €</p>
+</div>`
+
+    const { html } = buildEmailTemplate({
+      title: 'Merci pour votre commande !',
+      headerColor: '#007bff',
+      firstName: clientFirstName,
+      bodyHtml,
+      siteUrl,
+      buttonText: siteUrl ? 'Suivre ma commande →' : undefined,
+      buttonUrl: siteUrl ? `${siteUrl}/boutique/compte/commandes` : undefined,
+      logoText,
+    })
 
     await sendEmail({
       to: clientEmail,
@@ -198,14 +230,38 @@ ${siteUrl ? `<a href="${siteUrl}/boutique/compte/commandes" style="display:inlin
       html,
     })
 
-    // Also notify admin
+    // Also notify admin with HTML template
     const adminUser = await db.user.findFirst({ where: { role: 'admin' } })
     if (adminUser?.email) {
       console.log('[email] notifyNewOrder: also notifying admin:', adminUser.email)
+
+      const adminBodyHtml = `
+<p style="margin:0 0 12px 0;">Une nouvelle commande vient d'être passée sur la boutique.</p>
+<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Client</p>
+<p style="margin:0 0 12px 0;font-weight:600;">${clientFirstName}</p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Commande</p>
+<p style="margin:0 0 12px 0;font-family:monospace;font-weight:600;">${orderId}</p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Montant</p>
+<p style="margin:0;font-size:20px;font-weight:700;color:#10b981;">${total.toFixed(2)} €</p>
+</div>`
+
+      const { html: adminHtml } = buildEmailTemplate({
+        title: '🛒 Nouvelle commande boutique',
+        headerColor: '#10b981',
+        firstName: adminUser.name || 'Admin',
+        bodyHtml: adminBodyHtml,
+        siteUrl,
+        buttonText: siteUrl ? 'Traiter la commande →' : undefined,
+        buttonUrl: siteUrl ? `${siteUrl}/?module=boutique-admin` : undefined,
+        logoText,
+      })
+
       await sendEmail({
         to: adminUser.email,
-        subject: `Nouvelle commande boutique ${orderId}`,
-        text: `Nouvelle commande reçue.\n\nClient : ${clientFirstName}\nCommande : ${orderId}\nMontant : ${total.toFixed(2)} €\n\nConnectez-vous au back-office pour la traiter.`,
+        subject: `🛒 Nouvelle commande ${orderId} — ${total.toFixed(2)} €`,
+        text: `Nouvelle commande reçue.\n\nClient : ${clientFirstName}\nCommande : ${orderId}\nMontant : ${total.toFixed(2)} €`,
+        html: adminHtml,
       })
     }
   } catch (e: any) {
