@@ -210,23 +210,20 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
     // If template is HTML, use it directly with variables replaced; otherwise use our standard HTML template
     let html: string
     if (template && /<[a-z][\s\S]*>/i.test(template)) {
-      // Template is HTML — replace variables {firstName}, {orderId}, {total} etc.
+      // Template is HTML — replace variables {firstName}, {orderId}, {total}, {ordersUrl} etc.
+      const ordersUrl = siteUrl ? `${siteUrl}/boutique/compte/commandes` : ''
       let processedTemplate = template
       const vars: Record<string, string> = {
         firstName: clientFirstName,
         orderId,
         total: total.toFixed(2) + ' €',
         email: clientEmail,
+        ordersUrl,
       }
       for (const [key, value] of Object.entries(vars)) {
         processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
       }
-      // Only append the follow button if the template doesn't already contain a link to /boutique/compte/commandes
-      const hasOrderLink = processedTemplate.includes('/boutique/compte/commandes')
-      const followButton = siteUrl && !hasOrderLink
-        ? `<div style="margin-top:16px;text-align:center;"><a href="${siteUrl}/boutique/compte/commandes" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:12px 32px;border-radius:6px;font-weight:600;font-size:15px;">Suivre ma commande →</a></div>`
-        : ''
-      html = processedTemplate + followButton
+      html = processedTemplate
     } else {
       // Use standard HTML template
       const bodyHtml = `
@@ -363,22 +360,19 @@ export async function notifyOrderStatusChange(
     // If custom template is HTML, use it with variables replaced; otherwise use standard template
     let html: string
     if (template && /<[a-z][\s\S]*>/i.test(template)) {
-      // Template is HTML — replace variables
+      // Template is HTML — replace variables {firstName}, {orderId}, {status}, {ordersUrl}
+      const ordersUrl = siteUrl ? `${siteUrl}/boutique/compte/commandes` : ''
       let processedTemplate = template
       const vars: Record<string, string> = {
         firstName: clientFirstName,
         orderId,
         status: statusLabel,
+        ordersUrl,
       }
       for (const [key, value] of Object.entries(vars)) {
         processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
       }
-      // Append tracking info and follow button only if not already in template
-      const hasOrderLink = processedTemplate.includes('/boutique/compte/commandes')
-      const followButton = siteUrl && !hasOrderLink
-        ? `<div style="margin-top:16px;text-align:center;"><a href="${siteUrl}/boutique/compte/commandes" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:12px 32px;border-radius:6px;font-weight:600;font-size:15px;">Suivre ma commande →</a></div>`
-        : ''
-      html = processedTemplate + trackingHtml + followButton
+      html = processedTemplate + trackingHtml
     } else {
       // Use standard HTML template
       const bodyHtml = `
@@ -422,26 +416,48 @@ export async function notifyClientRegistration(clientEmail: string, clientFirstN
     const template = config?.templateRegister || null
     const bs = await getBoutiqueSettings()
     const siteUrl = bs.shareSiteUrl || ''
+    const logoText = bs.logoText || 'Boutique'
+    const loginUrl = siteUrl ? `${siteUrl}/boutique/connexion` : ''
 
-    const text = `Bienvenue ${clientFirstName} !\n\nVotre compte a été créé avec succès.\n\nVous pouvez maintenant passer commande, suivre vos commandes et nous contacter via la messagerie.\n${siteUrl ? 'Accédez à votre compte : ' + siteUrl + '/boutique/compte' : ''}\n\nÀ bientôt !`
+    const defaultText = `Bienvenue ${clientFirstName} !\n\nVotre compte a été créé avec succès.\n\nVous pouvez maintenant passer commande, suivre vos commandes et nous contacter via la messagerie.\n${siteUrl ? 'Accédez à votre compte : ' + siteUrl + '/boutique/compte' : ''}\n\nÀ bientôt !`
+    const text = applyTemplate(template, defaultText, { firstName: clientFirstName })
 
-    const html = `<!DOCTYPE html>
-<html><body style="font-family:system-ui,sans-serif;color:#1a1a1a;background:#f3f4f6;padding:20px;margin:0;">
-<table style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-<tr><td style="background:#10b981;color:#fff;padding:20px;text-align:center;"><h1 style="margin:0;font-size:20px;">Bienvenue ! 🎉</h1></td></tr>
-<tr><td style="padding:24px;">
-<p>Bonjour ${clientFirstName},</p>
-<p>Votre compte a été créé avec succès. Vous pouvez maintenant :</p>
-<ul style="margin:8px 0;padding-left:20px;">
-<li>🛍️ Passer commande sur notre boutique</li>
-<li>📦 Suivre vos commandes en temps réel</li>
-<li>💬 Nous contacter via la messagerie</li>
-</ul>
-${siteUrl ? `<a href="${siteUrl}/boutique/compte" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:600;font-size:14px;margin-top:12px;">Accéder à mon compte →</a>` : ''}
-<p style="margin-top:16px;font-size:12px;color:#9ca3af;">À bientôt sur ${bs.logoText || 'notre boutique'} !</p>
-</td></tr>
-</table>
-</body></html>`
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      // Custom HTML template — substitute {firstName}, {email}, {loginUrl}.
+      // The admin is responsible for the CTA button (preset already includes one).
+      let processedTemplate = template
+      const vars: Record<string, string> = {
+        firstName: clientFirstName,
+        email: clientEmail,
+        loginUrl,
+      }
+      for (const [key, value] of Object.entries(vars)) {
+        processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      html = processedTemplate
+    } else {
+      // Use standard HTML template (same wrapper as order emails)
+      const bodyHtml = `
+<p style="margin:0 0 12px 0;">Votre compte a été créé avec succès. Vous pouvez maintenant :</p>
+<ul style="margin:8px 0;padding-left:20px;color:#495057;">
+<li style="margin:4px 0;">🛍️ Passer commande sur notre boutique</li>
+<li style="margin:4px 0;">📦 Suivre vos commandes en temps réel</li>
+<li style="margin:4px 0;">💬 Nous contacter via la messagerie</li>
+</ul>`
+
+      const result = buildEmailTemplate({
+        title: 'Bienvenue ! 🎉',
+        headerColor: '#10b981',
+        firstName: clientFirstName,
+        bodyHtml,
+        siteUrl,
+        buttonText: loginUrl ? 'Accéder à mon compte →' : undefined,
+        buttonUrl: loginUrl || undefined,
+        logoText,
+      })
+      html = result.html
+    }
 
     await sendEmail({
       to: clientEmail,
@@ -562,6 +578,7 @@ export async function notifyPasswordChanged(
       const vars: Record<string, string> = {
         firstName: clientFirstName,
         email: clientEmail,
+        loginUrl,
       }
       for (const [key, value] of Object.entries(vars)) {
         processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)

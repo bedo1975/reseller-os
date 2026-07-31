@@ -1621,3 +1621,45 @@ Both functions follow the EXACT same pattern as `notifyNewOrder` / `notifyOrderS
 - `npx next build --webpack`: ✓ Compiled successfully (109/109 static pages). No new TS errors.
 - `bash scripts/make-zip.sh`: zip = 1039 KB, MD5: `1999bd1c03d00e769d0adf3a09fe18b3`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: password-email-duplicate-buttons-fix
+Agent: main
+Task: Remove duplicate CTA buttons in password reset & password changed emails — user reported seeing 2 buttons ("Réinitialiser mon mot de passe" / "Se connecter") and wanted only the big centered one kept.
+
+## Root cause
+In `notifyPasswordResetRequest` and `notifyPasswordChanged` (email.ts), I had logic that appended a fallback CTA button after the admin's custom template "if the template doesn't already contain a link to /boutique/...". The detection was fragile:
+- For password-lost: the preset's button linked to `/boutique/connexion` (login page, NOT the reset URL), but the detection looked for `/boutique/reinitialiser-mot-de-passe` → detection failed → 2nd button appended → duplicate.
+- For password-changed: similar issue if the admin's custom template didn't literally contain the string `/boutique/connexion`.
+
+On top of that, the preset for `templatePasswordLost` was wrong — the "Réinitialiser mon mot de passe" button pointed to the login page, not the actual reset URL with token. Clicking it would have taken the user to the login form, not the password reset form.
+
+## Fix
+1. **`src/lib/email.ts`** — `notifyPasswordResetRequest`:
+   - Removed the entire "append button if missing" block (`hasResetLink` check + `resetButton` HTML).
+   - When admin has a custom HTML template → just replace variables `{firstName}`, `{resetUrl}`, `{email}` and use the template as-is. Admin is responsible for the button (preset already includes one).
+   - When no custom template → fall back to `buildEmailTemplate()` which adds exactly one button.
+
+2. **`src/lib/email.ts`** — `notifyPasswordChanged`:
+   - Removed the entire "append button if missing" block (`hasLoginLink` check + `loginButton` HTML).
+   - Same logic: custom template used as-is with variable substitution; fallback uses `buildEmailTemplate()` with one button.
+
+3. **`src/components/modules/settings-module.tsx`** — preset for `templatePasswordLost`:
+   - Changed button link from `/boutique/connexion` → `{resetUrl}` placeholder.
+   - Now when admin clicks "Charger un modèle", the preset button uses `{resetUrl}` which gets replaced at send-time with the actual `https://site.com/boutique/reinitialiser-mot-de-passe?token=xxx` URL.
+   - The button now actually works (takes user to the reset form, not the login form).
+
+## Result
+- Password-lost email: exactly ONE button (the big centered preset button OR the buildEmailTemplate fallback button — never both).
+- Password-changed email: exactly ONE button (same logic).
+- The preset's "Réinitialiser mon mot de passe" button now points to the real reset URL with token.
+
+## Note for the admin
+If the admin already loaded the OLD preset (with button linking to `/boutique/connexion`) into their `templatePasswordLost` field, they need to either:
+- Click "Charger un modèle" again to refresh the preset (now uses `{resetUrl}`), OR
+- Manually edit the button's `href` in the WYSIWYG editor to `{resetUrl}`.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (109/109 static pages).
+- `bash scripts/make-zip.sh`: zip = 1039 KB, MD5: `619d09eaa1782dd52d79279fb8a5629f`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

@@ -2402,14 +2402,14 @@ ${footerBlock}
         'Bienvenue {firstName} ! 👋',
         '<p>Nous sommes ravis de vous compter parmi nos clients.</p><p>Votre compte a été créé avec succès. Connectez-vous à tout moment pour suivre vos commandes et gérer vos informations.</p>',
         'Accéder à mon compte',
-        '/boutique/connexion',
+        '{loginUrl}',
       )
     case 'templateValidate':
       return wrap(
         'Validez votre compte',
         '<p>Bonjour {firstName},</p><p>Pour activer votre compte et profiter de toutes nos offres, veuillez valider votre adresse email en cliquant sur le bouton ci-dessous.</p>',
         'Valider mon compte',
-        '/boutique/connexion',
+        '{loginUrl}',
       )
     case 'templatePasswordLost':
       return wrap(
@@ -2423,21 +2423,21 @@ ${footerBlock}
         'Mot de passe modifié ✓',
         '<p>Bonjour {firstName},</p><p>Votre mot de passe a été modifié avec succès. Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.</p><p>Si vous n’êtes pas à l’origine de ce changement, contactez-nous immédiatement.</p>',
         'Se connecter',
-        '/boutique/connexion',
+        '{loginUrl}',
       )
     case 'templateOrder':
       return wrap(
         'Merci pour votre commande ! 🎉',
         '<p>Bonjour {firstName},</p><p>Nous confirmons la bonne réception de votre commande <strong>{orderId}</strong> d\'un montant de <strong>{total}</strong>.</p><p>Nous préparons votre colis avec soin et vous tiendrons informé(e) de son expédition.</p>',
         'Suivre ma commande',
-        '/boutique/compte/commandes',
+        '{ordersUrl}',
       )
     case 'templateOrderStatus':
       return wrap(
         'Mise à jour de votre commande {orderId}',
         '<p>Bonjour {firstName},</p><p>Le statut de votre commande <strong>{orderId}</strong> a été mis à jour :</p><p style="display:inline-block;background:#e7f1ff;color:' + accent + ';padding:6px 16px;border-radius:16px;font-weight:600;">{status}</p><p>Connectez-vous à votre espace client pour plus de détails.</p>',
         'Voir ma commande',
-        '/boutique/compte/commandes',
+        '{ordersUrl}',
       )
     default:
       return wrap('Bonjour {firstName}', '<p>Votre message ici.</p>')
@@ -2623,7 +2623,7 @@ function EmailSection() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Modèles d'emails</CardTitle>
-          <CardDescription>Personnalisez les emails envoyés automatiquement (HTML autorisé). Variables : {`{firstName}, {lastName}, {email}, {orderId}, {total}, {status}, {resetUrl}`}</CardDescription>
+          <CardDescription>Personnalisez les emails envoyés automatiquement (HTML autorisé). Variables : {`{firstName}, {lastName}, {email}, {orderId}, {total}, {status}, {resetUrl}, {loginUrl}, {ordersUrl}`}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {[
