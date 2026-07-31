@@ -14,7 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog'
 import {
-  Mail, Send, Plus, Reply, Loader2, Inbox, CheckCircle2, Users as UsersIcon,
+  Mail, Send, Plus, Reply, Loader2, Inbox, CheckCircle2, Users as UsersIcon, Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -80,6 +80,18 @@ export function StaffMessagingModule() {
   const openMessage = (msg: Message) => {
     setSelectedMessage(msg)
     markAsRead(msg)
+  }
+
+  const deleteMessage = async (msg: Message) => {
+    if (!confirm('Supprimer ce message ?')) return
+    const res = await fetch(`/api/staff/messages/${msg.id}`, { method: 'DELETE' })
+    if (res.ok) {
+      toast.success('Message supprimé')
+      setSelectedMessage(null)
+      fetchMessages()
+    } else {
+      toast.error('Erreur')
+    }
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -200,6 +212,9 @@ export function StaffMessagingModule() {
                   <Button variant="ghost" size="sm" className="shrink-0" onClick={(e) => { e.stopPropagation(); startReply(msg) }}>
                     <Reply className="h-3.5 w-3.5" />
                   </Button>
+                  <Button variant="ghost" size="sm" className="shrink-0 text-red-600" onClick={(e) => { e.stopPropagation(); deleteMessage(msg) }}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -236,9 +251,12 @@ export function StaffMessagingModule() {
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => selectedMessage && startReply(selectedMessage)}>
               <Reply className="h-4 w-4 mr-2" /> Répondre
+            </Button>
+            <Button variant="outline" className="text-red-600" onClick={() => selectedMessage && deleteMessage(selectedMessage)}>
+              <Trash2 className="h-4 w-4 mr-2" /> Supprimer
             </Button>
           </DialogFooter>
         </DialogContent>

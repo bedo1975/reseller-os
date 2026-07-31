@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth, requireAdmin } from '@/lib/session'
 import { db } from '@/lib/db'
 
-// GET — list all boutique clients (admin)
+// GET — list all boutique clients (authenticated staff)
 export async function GET() {
   try {
-    await requireAdmin()
+    await requireAuth()
     const clients = await db.boutiqueClient.findMany({
       orderBy: { createdAt: 'desc' },
       include: {

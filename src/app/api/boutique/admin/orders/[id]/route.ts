@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth, requireAdmin } from '@/lib/session'
 import { db } from '@/lib/db'
 import { notifyOrderStatusChange } from '@/lib/email'
 
@@ -61,7 +61,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { id } = await params
     const body = await req.json()
     const { status, notes, trackingNumber, carrier } = body

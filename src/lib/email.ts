@@ -197,13 +197,27 @@ ${buttonText && buttonUrl ? `<a href="${buttonUrl}" style="display:inline-block;
 export async function notifyNewOrder(clientEmail: string, clientFirstName: string, orderId: string, total: number) {
   try {
     console.log('[email] notifyNewOrder triggered:', orderId, 'to', clientEmail)
+    const config = await getEmailConfig()
     const settings = await getBoutiqueSettings()
     const siteUrl = settings.shareSiteUrl || ''
     const logoText = settings.logoText || 'Boutique'
 
-    const text = `Bonjour ${clientFirstName},\n\nMerci pour votre commande !\n\nNuméro de commande : ${orderId}\nMontant total : ${total.toFixed(2)} €\n\nVous pouvez suivre votre commande dans votre espace client.\n${siteUrl ? siteUrl + '/boutique/compte/commandes' : ''}\n\nÀ bientôt !`
+    // Use custom template if defined, otherwise use default
+    const template = config?.templateOrder || null
+    const defaultText = `Bonjour ${clientFirstName},\n\nMerci pour votre commande !\n\nNuméro de commande : ${orderId}\nMontant total : ${total.toFixed(2)} €\n\nVous pouvez suivre votre commande dans votre espace client.\n${siteUrl ? siteUrl + '/boutique/compte/commandes' : ''}\n\nÀ bientôt !`
+    const text = applyTemplate(template, defaultText, { firstName: clientFirstName, orderId, total: total.toFixed(2) + ' €' })
 
-    const bodyHtml = `
+    // If template is HTML, use it directly; otherwise use our standard HTML template
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      // Template is HTML — use it with appended button
+      const followButton = siteUrl
+        ? `<div style="margin-top:16px;"><a href="${siteUrl}/boutique/compte/commandes" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:600;font-size:14px;">Suivre ma commande →</a></div>`
+        : ''
+      html = template + followButton
+    } else {
+      // Use standard HTML template
+      const bodyHtml = `
 <p style="margin:0 0 12px 0;">Nous avons bien reçu votre commande et nous vous en remercions !</p>
 <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
 <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Numéro de commande</p>
@@ -212,16 +226,18 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
 <p style="margin:0;font-size:20px;font-weight:700;color:#007bff;">${total.toFixed(2)} €</p>
 </div>`
 
-    const { html } = buildEmailTemplate({
-      title: 'Merci pour votre commande !',
-      headerColor: '#007bff',
-      firstName: clientFirstName,
-      bodyHtml,
-      siteUrl,
-      buttonText: siteUrl ? 'Suivre ma commande →' : undefined,
-      buttonUrl: siteUrl ? `${siteUrl}/boutique/compte/commandes` : undefined,
-      logoText,
-    })
+      const result = buildEmailTemplate({
+        title: 'Merci pour votre commande !',
+        headerColor: '#007bff',
+        firstName: clientFirstName,
+        bodyHtml,
+        siteUrl,
+        buttonText: siteUrl ? 'Suivre ma commande →' : undefined,
+        buttonUrl: siteUrl ? `${siteUrl}/boutique/compte/commandes` : undefined,
+        logoText,
+      })
+      html = result.html
+    }
 
     await sendEmail({
       to: clientEmail,
