@@ -33,7 +33,7 @@ import { StatisticsModule } from '@/components/modules/statistics-module'
 import { StaffMessagingModule } from '@/components/modules/staff-messaging-module'
 import { SettingsModule } from '@/components/modules/settings-module'
 import { ReminderPopup } from '@/components/shared/reminder-popup'
-import { StaffMessageNotifier } from '@/components/shared/staff-message-notifier'
+import { StaffMessageNotifier, useUnreadMessages } from '@/components/shared/staff-message-notifier'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -70,6 +70,16 @@ function getInitials(name?: string | null) {
   const parts = name.trim().split(/\s+/)
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   return name.slice(0, 2).toUpperCase()
+}
+
+function SidebarMessageBadge() {
+  const count = useUnreadMessages()
+  if (count === 0) return null
+  return (
+    <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse">
+      {count > 99 ? '99+' : count}
+    </span>
+  )
 }
 
 function SidebarContent() {
@@ -209,6 +219,8 @@ function SidebarContent() {
                   )}
                 </div>
               </div>
+              {/* Badge messages non-lus sur Messagerie */}
+              {item.key === 'staff-messaging' && <SidebarMessageBadge />}
               {active && <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
             </button>
           )
@@ -233,6 +245,7 @@ function SidebarContent() {
                 <div className="flex-1 text-left min-w-0">
                   <div className="truncate">{item.label}</div>
                 </div>
+                {item.key === 'staff-messaging' && <SidebarMessageBadge />}
                 {active && <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
               </button>
             )

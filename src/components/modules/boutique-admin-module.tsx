@@ -65,6 +65,9 @@ export function BoutiqueAdminModule() {
         {TABS.map(t => {
           const Icon = t.icon
           const active = tab === t.id
+          // Check if user has view permission on this sub-tab
+          const permKey = `boutique-admin:${t.id}`
+          if (!can(permKey, 'view')) return null
           return (
             <button
               key={t.id}

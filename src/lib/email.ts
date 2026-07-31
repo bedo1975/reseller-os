@@ -332,18 +332,27 @@ export async function notifyOrderStatusChange(
       { firstName: clientFirstName, orderId, status: statusLabel },
     )
 
-    let html = asHtml(text)
-    // Add a "Follow my order" button
-    const followButtonHtml = siteUrl
-      ? `<div style="margin-top:16px;"><a href="${siteUrl}/boutique/compte/commandes" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:600;font-size:14px;">Suivre ma commande →</a></div>`
-      : ''
-    // If template is HTML, append tracking HTML after the template content
-    if (template && /<[a-z][\s\S]*>/i.test(template)) {
-      html = html + trackingHtml + followButtonHtml
-    } else {
-      // Plain text template — convert tracking text too
-      html = html + trackingHtml + followButtonHtml
-    }
+    // Build the HTML body using the same template as notifyNewOrder
+    const bodyHtml = `
+<p style="margin:0 0 12px 0;">Le statut de votre commande a \u00e9t\u00e9 mis \u00e0 jour.</p>
+<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Commande</p>
+<p style="margin:0 0 12px 0;font-family:monospace;font-weight:600;font-size:15px;">${orderId}</p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Nouveau statut</p>
+<p style="margin:0;font-size:18px;font-weight:700;color:#007bff;">${statusLabel}</p>
+</div>
+${trackingHtml}`
+
+    const { html } = buildEmailTemplate({
+      title: `Mise \u00e0 jour \u2014 ${statusLabel}`,
+      headerColor: '#007bff',
+      firstName: clientFirstName,
+      bodyHtml,
+      siteUrl,
+      buttonText: siteUrl ? 'Suivre ma commande \u2192' : undefined,
+      buttonUrl: siteUrl ? `${siteUrl}/boutique/compte/commandes` : undefined,
+      logoText: bs.logoText || 'Boutique',
+    })
 
     await sendEmail({
       to: clientEmail,
