@@ -207,14 +207,26 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
     const defaultText = `Bonjour ${clientFirstName},\n\nMerci pour votre commande !\n\nNuméro de commande : ${orderId}\nMontant total : ${total.toFixed(2)} €\n\nVous pouvez suivre votre commande dans votre espace client.\n${siteUrl ? siteUrl + '/boutique/compte/commandes' : ''}\n\nÀ bientôt !`
     const text = applyTemplate(template, defaultText, { firstName: clientFirstName, orderId, total: total.toFixed(2) + ' €' })
 
-    // If template is HTML, use it directly; otherwise use our standard HTML template
+    // If template is HTML, use it directly with variables replaced; otherwise use our standard HTML template
     let html: string
     if (template && /<[a-z][\s\S]*>/i.test(template)) {
-      // Template is HTML — use it with appended button
-      const followButton = siteUrl
-        ? `<div style="margin-top:16px;"><a href="${siteUrl}/boutique/compte/commandes" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:600;font-size:14px;">Suivre ma commande →</a></div>`
+      // Template is HTML — replace variables {firstName}, {orderId}, {total} etc.
+      let processedTemplate = template
+      const vars: Record<string, string> = {
+        firstName: clientFirstName,
+        orderId,
+        total: total.toFixed(2) + ' €',
+        email: clientEmail,
+      }
+      for (const [key, value] of Object.entries(vars)) {
+        processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      // Only append the follow button if the template doesn't already contain a link to /boutique/compte/commandes
+      const hasOrderLink = processedTemplate.includes('/boutique/compte/commandes')
+      const followButton = siteUrl && !hasOrderLink
+        ? `<div style="margin-top:16px;text-align:center;"><a href="${siteUrl}/boutique/compte/commandes" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:12px 32px;border-radius:6px;font-weight:600;font-size:15px;">Suivre ma commande →</a></div>`
         : ''
-      html = template + followButton
+      html = processedTemplate + followButton
     } else {
       // Use standard HTML template
       const bodyHtml = `
@@ -348,9 +360,29 @@ export async function notifyOrderStatusChange(
       { firstName: clientFirstName, orderId, status: statusLabel },
     )
 
-    // Build the HTML body using the same template as notifyNewOrder
-    const bodyHtml = `
-<p style="margin:0 0 12px 0;">Le statut de votre commande a \u00e9t\u00e9 mis \u00e0 jour.</p>
+    // If custom template is HTML, use it with variables replaced; otherwise use standard template
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      // Template is HTML — replace variables
+      let processedTemplate = template
+      const vars: Record<string, string> = {
+        firstName: clientFirstName,
+        orderId,
+        status: statusLabel,
+      }
+      for (const [key, value] of Object.entries(vars)) {
+        processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      // Append tracking info and follow button only if not already in template
+      const hasOrderLink = processedTemplate.includes('/boutique/compte/commandes')
+      const followButton = siteUrl && !hasOrderLink
+        ? `<div style="margin-top:16px;text-align:center;"><a href="${siteUrl}/boutique/compte/commandes" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:12px 32px;border-radius:6px;font-weight:600;font-size:15px;">Suivre ma commande →</a></div>`
+        : ''
+      html = processedTemplate + trackingHtml + followButton
+    } else {
+      // Use standard HTML template
+      const bodyHtml = `
+<p style="margin:0 0 12px 0;">Le statut de votre commande a été mis à jour.</p>
 <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
 <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Commande</p>
 <p style="margin:0 0 12px 0;font-family:monospace;font-weight:600;font-size:15px;">${orderId}</p>
@@ -359,16 +391,18 @@ export async function notifyOrderStatusChange(
 </div>
 ${trackingHtml}`
 
-    const { html } = buildEmailTemplate({
-      title: `Mise \u00e0 jour \u2014 ${statusLabel}`,
-      headerColor: '#007bff',
-      firstName: clientFirstName,
-      bodyHtml,
-      siteUrl,
-      buttonText: siteUrl ? 'Suivre ma commande \u2192' : undefined,
-      buttonUrl: siteUrl ? `${siteUrl}/boutique/compte/commandes` : undefined,
-      logoText: bs.logoText || 'Boutique',
-    })
+      const result = buildEmailTemplate({
+        title: `Mise à jour — ${statusLabel}`,
+        headerColor: '#007bff',
+        firstName: clientFirstName,
+        bodyHtml,
+        siteUrl,
+        buttonText: siteUrl ? 'Suivre ma commande →' : undefined,
+        buttonUrl: siteUrl ? `${siteUrl}/boutique/compte/commandes` : undefined,
+        logoText: bs.logoText || 'Boutique',
+      })
+      html = result.html
+    }
 
     await sendEmail({
       to: clientEmail,
