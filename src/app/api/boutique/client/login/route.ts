@@ -23,6 +23,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email ou mot de passe incorrect' }, { status: 401 })
     }
 
+    // Block login if email is not yet validated.
+    // Exception: legacy accounts (created before this feature was deployed)
+    // have emailValidated=false AND validationToken=null — auto-validate them.
+    if (!client.emailValidated) {
+      if (!client.validationToken) {
+        // Legacy account — auto-validate and let login proceed
+        await db.boutiqueClient.update({
+          where: { id: client.id },
+          data: { emailValidated: true },
+        })
+      } else {
+        // Account has a pending validation token — must validate first
+        return NextResponse.json({
+          error: 'Votre compte n\'est pas encore validé. Veuillez cliquer sur le lien reçu par email pour l\'activer.',
+          needsValidation: true,
+          clientEmail: client.email,
+        }, { status: 403 })
+      }
+    }
+
     const token = await signClientToken(client)
     const res = NextResponse.json({
       id: client.id,

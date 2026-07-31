@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import bcrypt from 'bcryptjs'
-import { signClientToken, CLIENT_COOKIE_NAME } from '@/lib/boutique-client-auth'
-import { notifyClientRegistration } from '@/lib/email'
+import { getBoutiqueSettings } from '@/lib/boutique-settings'
+import { notifyAccountValidation } from '@/lib/email'
+import crypto from 'crypto'
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +24,10 @@ export async function POST(req: NextRequest) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10)
+
+    // Generate validation token (valid for 24h)
+    const validationToken = crypto.randomBytes(32).toString('hex')
+
     const client = await db.boutiqueClient.create({
       data: {
         email: emailLower,
@@ -30,28 +35,27 @@ export async function POST(req: NextRequest) {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phone: phone?.trim() || null,
+        emailValidated: false,
+        validationToken,
       },
     })
 
-    const token = await signClientToken(client)
+    // Build validation URL + send validation email
+    // Note: we do NOT auto-login the user — they must validate their email first.
+    const settings = await getBoutiqueSettings()
+    const siteUrl = settings.shareSiteUrl || ''
+    const validationUrl = siteUrl
+      ? `${siteUrl}/boutique/valider-compte?token=${validationToken}`
+      : ''
 
-    // Send welcome email
-    await notifyClientRegistration(client.email, client.firstName)
+    await notifyAccountValidation(client.email, client.firstName, validationUrl)
 
-    const res = NextResponse.json({
-      id: client.id,
-      email: client.email,
-      firstName: client.firstName,
-      lastName: client.lastName,
+    return NextResponse.json({
+      ok: true,
+      needsValidation: true,
+      message: 'Compte créé ! Un email de validation vous a été envoyé. Veuillez cliquer sur le lien dans l\'email pour activer votre compte.',
+      clientEmail: client.email,
     })
-    res.cookies.set(CLIENT_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60, // 30 days
-      path: '/',
-    })
-    return res
   } catch (error) {
     console.error('POST /api/boutique/client/register error:', error)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

@@ -775,6 +775,9 @@ model BoutiqueClient {
   // Reset mot de passe
   resetToken   String?
   resetTokenExpiry DateTime?
+  // Validation email
+  emailValidated    Boolean  @default(false)
+  validationToken   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

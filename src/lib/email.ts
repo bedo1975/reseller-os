@@ -48,6 +48,25 @@ function asHtml(text: string): string {
   return text.replace(/\n/g, '<br>')
 }
 
+/**
+ * Backward-compat: convert any relative URLs in the template to absolute URLs.
+ * Email clients cannot resolve relative URLs like "/boutique/connexion" — the
+ * link simply does nothing when clicked. This catches old saved templates that
+ * still contain relative paths and fixes them at send-time.
+ *
+ * Handles both single-quote and double-quote href attributes, and only touches
+ * paths starting with "/boutique/" (the only public-facing routes used in emails).
+ */
+function migrateRelativeUrls(html: string, siteUrl: string): string {
+  if (!siteUrl) return html
+  // Remove trailing slash from siteUrl to avoid double-slashes
+  const base = siteUrl.replace(/\/+$/, '')
+  // Match href="/boutique/..." or href='/boutique/...' (also href=/boutique/... without quotes)
+  return html
+    .replace(/(href\s*=\s*)(["']?)\/boutique\//gi, `$1$2${base}/boutique/`)
+    .replace(/(href\s*=\s*)(["']?)\/boutique$/gi, `$1$2${base}/boutique`)
+}
+
 export interface SendEmailParams {
   to: string
   subject: string
@@ -223,7 +242,7 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
       for (const [key, value] of Object.entries(vars)) {
         processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
       }
-      html = processedTemplate
+      html = migrateRelativeUrls(processedTemplate, siteUrl)
     } else {
       // Use standard HTML template
       const bodyHtml = `
@@ -372,7 +391,7 @@ export async function notifyOrderStatusChange(
       for (const [key, value] of Object.entries(vars)) {
         processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
       }
-      html = processedTemplate + trackingHtml
+      html = migrateRelativeUrls(processedTemplate, siteUrl) + trackingHtml
     } else {
       // Use standard HTML template
       const bodyHtml = `
@@ -435,7 +454,7 @@ export async function notifyClientRegistration(clientEmail: string, clientFirstN
       for (const [key, value] of Object.entries(vars)) {
         processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
       }
-      html = processedTemplate
+      html = migrateRelativeUrls(processedTemplate, siteUrl)
     } else {
       // Use standard HTML template (same wrapper as order emails)
       const bodyHtml = `
@@ -509,7 +528,7 @@ export async function notifyPasswordResetRequest(
       for (const [key, value] of Object.entries(vars)) {
         processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
       }
-      html = processedTemplate
+      html = migrateRelativeUrls(processedTemplate, siteUrl)
     } else {
       // Use standard HTML template (same wrapper as order emails)
       const bodyHtml = `
@@ -583,7 +602,7 @@ export async function notifyPasswordChanged(
       for (const [key, value] of Object.entries(vars)) {
         processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
       }
-      html = processedTemplate
+      html = migrateRelativeUrls(processedTemplate, siteUrl)
     } else {
       // Use standard HTML template (same wrapper as order emails)
       const bodyHtml = `
@@ -615,5 +634,76 @@ export async function notifyPasswordChanged(
     })
   } catch (e: any) {
     console.error('[email] notifyPasswordChanged error:', e?.message)
+  }
+}
+
+// ── Account validation (verify email on registration) ──────────────────
+// Uses the admin's custom `templateValidate` if defined as HTML,
+// otherwise falls back to the same buildEmailTemplate() wrapper used by
+// the other notification emails so the visual style is consistent.
+export async function notifyAccountValidation(
+  clientEmail: string,
+  clientFirstName: string,
+  validationUrl: string,
+) {
+  try {
+    console.log('[email] notifyAccountValidation triggered for:', clientEmail)
+    const config = await getEmailConfig()
+    const bs = await getBoutiqueSettings()
+    const siteUrl = bs.shareSiteUrl || ''
+    const logoText = bs.logoText || 'Boutique'
+
+    const template = config?.templateValidate || null
+    const defaultText = `Bonjour ${clientFirstName},\n\nMerci pour votre inscription !\n\nPour activer votre compte et finaliser votre inscription, veuillez valider votre adresse email en cliquant sur le lien ci-dessous :\n${validationUrl}\n\nCe lien est valable 24 heures.\n\nÀ bientôt !`
+    const text = applyTemplate(template, defaultText, {
+      firstName: clientFirstName,
+      validationUrl,
+    })
+
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      // Custom HTML template — substitute {firstName}, {validationUrl}, {email}.
+      let processedTemplate = template
+      const vars: Record<string, string> = {
+        firstName: clientFirstName,
+        validationUrl,
+        email: clientEmail,
+      }
+      for (const [key, value] of Object.entries(vars)) {
+        processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      html = migrateRelativeUrls(processedTemplate, siteUrl)
+    } else {
+      // Use standard HTML template (same wrapper as order emails)
+      const bodyHtml = `
+<p style="margin:0 0 12px 0;">Merci pour votre inscription ! Pour activer votre compte et finaliser votre inscription, veuillez valider votre adresse email en cliquant sur le bouton ci-dessous :</p>
+<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Adresse email</p>
+<p style="margin:0;font-weight:600;">${clientEmail}</p>
+</div>
+<p style="margin:12px 0 0 0;font-size:13px;color:#6b7280;">⏰ Ce lien est valable 24 heures.</p>
+<p style="margin:8px 0 0 0;font-size:13px;color:#6b7280;">Si vous n'êtes pas à l'origine de cette inscription, vous pouvez ignorer cet email.</p>`
+
+      const result = buildEmailTemplate({
+        title: 'Validez votre compte',
+        headerColor: '#007bff',
+        firstName: clientFirstName,
+        bodyHtml,
+        siteUrl,
+        buttonText: validationUrl ? 'Valider mon compte →' : undefined,
+        buttonUrl: validationUrl || undefined,
+        logoText,
+      })
+      html = result.html
+    }
+
+    await sendEmail({
+      to: clientEmail,
+      subject: 'Validez votre compte',
+      text,
+      html,
+    })
+  } catch (e: any) {
+    console.error('[email] notifyAccountValidation error:', e?.message)
   }
 }

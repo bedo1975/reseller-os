@@ -6,16 +6,19 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, User, Mail, Lock, Phone } from 'lucide-react'
+import { Loader2, User, Mail, Lock, Phone, MailCheck } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function ConnexionPage() {
   const router = useRouter()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [loading, setLoading] = useState(false)
+  const [resending, setResending] = useState(false)
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', password: '', phone: '',
   })
+  // When set: show the "check your email" panel instead of the form
+  const [pendingValidationEmail, setPendingValidationEmail] = useState<string | null>(null)
 
   useEffect(() => {
     // If already logged in, redirect to account
@@ -41,19 +44,111 @@ export default function ConnexionPage() {
       })
       const data = await res.json()
       if (!res.ok) {
+        // Special case: account not validated
+        if (data.needsValidation && data.clientEmail) {
+          setPendingValidationEmail(data.clientEmail)
+          setMode('login')
+        }
         toast.error(data.error || 'Erreur')
         setLoading(false)
         return
       }
-      toast.success(mode === 'login' ? 'Connexion réussie' : 'Compte créé')
-      router.push('/boutique/compte')
-      router.refresh()
+
+      if (mode === 'register') {
+        // Registration succeeded but needs validation — show "check your email" panel
+        if (data.needsValidation) {
+          setPendingValidationEmail(data.clientEmail || form.email)
+          toast.success('Compte créé ! Vérifiez vos emails pour valider votre compte.')
+        } else {
+          // Backward-compat: if for some reason no validation is needed, log in
+          toast.success('Compte créé')
+          router.push('/boutique/compte')
+          router.refresh()
+        }
+      } else {
+        toast.success('Connexion réussie')
+        router.push('/boutique/compte')
+        router.refresh()
+      }
     } catch {
       toast.error('Erreur réseau')
       setLoading(false)
     }
   }
 
+  const resendValidation = async () => {
+    if (!pendingValidationEmail) return
+    setResending(true)
+    try {
+      const res = await fetch('/api/boutique/client/resend-validation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingValidationEmail }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success('Email de validation renvoyé ! Vérifiez votre boîte de réception (et vos spams).')
+      } else {
+        toast.error(data.error || 'Erreur lors de l\'envoi')
+      }
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setResending(false)
+    }
+  }
+
+  // ── Pending validation screen ──────────────────────────────────────────
+  if (pendingValidationEmail) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-12">
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm text-center">
+          <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <MailCheck className="h-10 w-10 text-[#007bff]" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Vérifiez vos emails</h1>
+          <p className="text-sm text-gray-600 mb-2">
+            Un email de validation a été envoyé à :
+          </p>
+          <p className="text-sm font-semibold text-gray-900 mb-4 break-all">{pendingValidationEmail}</p>
+          <p className="text-sm text-gray-600 mb-6">
+            Cliquez sur le lien dans l&apos;email pour activer votre compte. Pensez à vérifier vos spams
+            si vous ne le trouvez pas.
+          </p>
+
+          <div className="space-y-2">
+            <Button
+              onClick={resendValidation}
+              disabled={resending}
+              variant="outline"
+              className="w-full h-11"
+            >
+              {resending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {resending ? 'Envoi…' : 'Renvoyer l\'email de validation'}
+            </Button>
+            <Button
+              onClick={() => {
+                setPendingValidationEmail(null)
+                setForm(prev => ({ ...prev, password: '' }))
+              }}
+              variant="ghost"
+              className="w-full h-11"
+            >
+              Retour à la connexion
+            </Button>
+          </div>
+
+          <div className="mt-6 text-center">
+            <Link href="/boutique" className="text-xs text-gray-500 hover:text-[#007bff]">
+              ← Continuer sans compte
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Standard login/register form ───────────────────────────────────────
   return (
     <div className="max-w-md mx-auto px-4 py-12">
       <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
@@ -167,7 +262,9 @@ export default function ConnexionPage() {
               />
             </div>
             {mode === 'register' && (
-              <p className="text-[11px] text-gray-400">6 caractères minimum</p>
+              <p className="text-[11px] text-gray-400">
+                6 caractères minimum. Un email de validation vous sera envoyé pour activer votre compte.
+              </p>
             )}
           </div>
 

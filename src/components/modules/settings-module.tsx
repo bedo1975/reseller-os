@@ -2407,9 +2407,9 @@ ${footerBlock}
     case 'templateValidate':
       return wrap(
         'Validez votre compte',
-        '<p>Bonjour {firstName},</p><p>Pour activer votre compte et profiter de toutes nos offres, veuillez valider votre adresse email en cliquant sur le bouton ci-dessous.</p>',
+        '<p>Bonjour {firstName},</p><p>Merci pour votre inscription ! Pour activer votre compte et profiter de toutes nos offres, veuillez valider votre adresse email en cliquant sur le bouton ci-dessous. Ce lien est valable 24 heures.</p>',
         'Valider mon compte',
-        '{loginUrl}',
+        '{validationUrl}',
       )
     case 'templatePasswordLost':
       return wrap(
@@ -2623,7 +2623,7 @@ function EmailSection() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Modèles d'emails</CardTitle>
-          <CardDescription>Personnalisez les emails envoyés automatiquement (HTML autorisé). Variables : {`{firstName}, {lastName}, {email}, {orderId}, {total}, {status}, {resetUrl}, {loginUrl}, {ordersUrl}`}</CardDescription>
+          <CardDescription>Personnalisez les emails envoyés automatiquement (HTML autorisé). Variables : {`{firstName}, {lastName}, {email}, {orderId}, {total}, {status}, {resetUrl}, {validationUrl}, {loginUrl}, {ordersUrl}`}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {[

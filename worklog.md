@@ -1663,3 +1663,71 @@ If the admin already loaded the OLD preset (with button linking to `/boutique/co
 - `npx next build --webpack`: ✓ Compiled successfully (109/109 static pages).
 - `bash scripts/make-zip.sh`: zip = 1039 KB, MD5: `619d09eaa1782dd52d79279fb8a5629f`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: email-buttons-absolute-urls
+Agent: main
+Task: Fix email CTA buttons not working — the "Se connecter" button in the password-changed email was clicking to nothing. Same root cause affected ALL admin email presets.
+
+## Root cause
+All admin email presets in `getModernPreset()` (settings-module.tsx) used **relative URLs** as button links:
+- `templateRegister` → button href: `/boutique/connexion`
+- `templateValidate` → `/boutique/connexion`
+- `templatePasswordChanged` → `/boutique/connexion`
+- `templateOrder` → `/boutique/compte/commandes`
+- `templateOrderStatus` → `/boutique/compte/commandes`
+
+In email clients (Gmail, Outlook, Apple Mail, …) **relative URLs do not work** — the email has no concept of "current site", so a click on `/boutique/connexion` resolves to `about:blank/boutique/connexion` or simply does nothing.
+
+The password-lost email was fixed earlier by using the `{resetUrl}` placeholder (substituted at send-time with the absolute `https://site.com/boutique/reinitialiser-mot-de-passe?token=xxx` URL). Same pattern needed to be applied to all the other presets.
+
+## Fix — placeholders + send-time substitution
+
+### 1. `src/components/modules/settings-module.tsx` — `getModernPreset()`
+Replaced all relative button URLs with placeholders that get substituted at send-time:
+| Preset | Old | New |
+|---|---|---|
+| `templateRegister` | `/boutique/connexion` | `{loginUrl}` |
+| `templateValidate` | `/boutique/connexion` | `{loginUrl}` |
+| `templatePasswordChanged` | `/boutique/connexion` | `{loginUrl}` |
+| `templateOrder` | `/boutique/compte/commandes` | `{ordersUrl}` |
+| `templateOrderStatus` | `/boutique/compte/commandes` | `{ordersUrl}` |
+
+(`templatePasswordLost` already used `{resetUrl}` from the previous fix.)
+
+Updated CardDescription variables list: now mentions `{firstName}, {lastName}, {email}, {orderId}, {total}, {status}, {resetUrl}, {loginUrl}, {ordersUrl}`.
+
+### 2. `src/lib/email.ts` — variable substitution in notify* functions
+
+**`notifyClientRegistration`** (was hardcoded HTML, ignoring `templateRegister`):
+- **Refactored** to use the same pattern as the other notify functions:
+  - If `config.templateRegister` is HTML → use it with variable substitution.
+  - Otherwise → fall back to `buildEmailTemplate()` (same wrapper as order emails).
+- Variables substituted: `{firstName}`, `{email}`, `{loginUrl}` (= `siteUrl + /boutique/connexion`).
+- Also removed the previous "append button if missing" logic — admin's custom template is used as-is (preset already has the button).
+
+**`notifyPasswordChanged`**:
+- Added `{loginUrl}` to the substitution vars.
+
+**`notifyNewOrder`**:
+- Added `{ordersUrl}` (= `siteUrl + /boutique/compte/commandes`) to the substitution vars.
+- Removed the "append follow button if template doesn't have /boutique/compte/commandes" logic — admin's custom template is used as-is. (This was the same duplicate-button issue as the password emails; user didn't notice because the preset's button text was different but the link was broken too.)
+
+**`notifyOrderStatusChange`**:
+- Added `{ordersUrl}` to the substitution vars.
+- Removed the "append follow button" logic — same reason.
+- Tracking info HTML (`trackingHtml`) is still appended after the template (it's not a button, it's the carrier/tracking number block).
+
+## Result
+- All 6 email types now use absolute URLs in their CTA buttons.
+- Custom admin templates work as-is (preset includes a button using `{loginUrl}` / `{ordersUrl}` / `{resetUrl}` placeholder → substituted at send-time).
+- No more duplicate buttons (removed all "append button if missing" logic).
+- Fallback `buildEmailTemplate()` (used when admin leaves template empty) already used absolute `siteUrl` — still works.
+
+## ⚠️ Required admin action
+The admin must **re-click "Charger un modèle"** on each template in *Réglages → Email → Modèles d'emails* to refresh the preset with the new placeholders. Otherwise the old preset (with relative URLs) stays saved in the DB and buttons remain broken.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (109/109 static pages).
+- `bash scripts/make-zip.sh`: zip = 1039 KB, MD5: `1ffa86f4f8eab1ebe1a287cebcf0ec18`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
