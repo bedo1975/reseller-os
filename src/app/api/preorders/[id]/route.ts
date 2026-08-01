@@ -135,13 +135,26 @@ export async function DELETE(
       return NextResponse.json({ error: 'Pré-commande introuvable (ou non supprimable)' }, { status: 404 })
     }
 
-    // If validated, also delete the linked Purchase to keep accounting consistent
-    if (existing.status === 'validated' && existing.purchaseId) {
+    // If validated or received, also delete the linked Purchase to keep accounting consistent
+    // (the Purchase was created on validation and appears in the ACHATS register)
+    if ((existing.status === 'validated' || existing.status === 'received') && existing.purchaseId) {
       try {
         await db.purchase.delete({ where: { id: existing.purchaseId } })
       } catch (e) {
         console.error('[preorders/delete] Failed to delete linked Purchase:', e)
         // Continue anyway — the pre-order deletion is the main action
+      }
+    }
+
+    // If received, also delete the StockItems created from this pre-order (preOrderId = id)
+    // These items were created with status "A_CONTROLER" and purchaseCost = 0.
+    // We delete them because they came from this pre-order and shouldn't linger after deletion.
+    if (existing.status === 'received') {
+      try {
+        await db.stockItem.deleteMany({ where: { preOrderId: id } })
+      } catch (e) {
+        console.error('[preorders/delete] Failed to delete linked StockItems:', e)
+        // Continue anyway
       }
     }
 

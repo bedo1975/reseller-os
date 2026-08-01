@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
     const where: any = {
       status: 'PUBLIE',
-      quantity: { gt: 0 },
+      // Allow quantity = 0 (out-of-stock products are shown with "Indisponible" badge)
       // Only items with a price
       suggestedPrice: { gt: 0 },
     }
@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
         photos: photos.map(p => p.startsWith('/uploads/') ? `/api${p}` : p),
         mainPhoto: photos[0] ? (photos[0].startsWith('/uploads/') ? `/api${photos[0]}` : photos[0]) : null,
         weight: item.weight || 0,
-        quantity: item.quantity || 1,
+        quantity: item.quantity ?? 1,
         createdAt: item.createdAt,
       }
     })

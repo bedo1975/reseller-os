@@ -147,11 +147,7 @@ function SyntheseTab({ year }: { year: number }) {
   }, [purchases, year, month])
 
   const totalCA = yearSales.reduce((s, x) => s + x.salePrice + (x.shippingCost || 0), 0)
-  // Use the accounting API's total (includes ALL stock items purchased in the period,
-  // not just sold ones, AND all Purchase/hors-stock entries, AND correctly multiplies
-  // purchaseCost by quantity). Falls back to sold-only calculation if the API hasn't loaded.
-  // NOTE: achatsData.total already includes BOTH stock items and Purchase entries, so we
-  // must NOT add totalHorsStockPurchases on top (that would double-count).
+  // Total purchases (for the "Achats" card — includes ALL items purchased in the period, sold or not)
   const totalHorsStockPurchases = yearPurchases.reduce((s, p) => s + (p.amount || 0), 0)
   const totalPurchases = achatsData?.total ?? (yearSales.reduce((s, x) => s + x.stockItem.purchaseCost * (x.stockItem.quantity || 1), 0) + totalHorsStockPurchases)
   const totalPlatformFees = yearSales.reduce((s, x) => s + (x.platformFees || 0) + (x.platformFixedFees || 0), 0)
@@ -159,18 +155,17 @@ function SyntheseTab({ year }: { year: number }) {
   const totalShippingBilled = yearSales.reduce((s, x) => s + x.shippingCost, 0)
   // Frais de port RÉELS payés au transporteur (charge déductible)
   const totalCarrierShipping = yearSales.reduce((s, x) => s + (x.carrierShippingCost || 0), 0)
-  // Frais bancaires (Stripe, PayPal...) — déduits du CA (charge déductible, déjà dans le profit par vente)
+  // Frais bancaires (Stripe, PayPal...) — déduits du CA (charge déductible)
   const totalPaymentFees = yearSales.reduce((s, x) => s + (x.paymentFees || 0), 0)
   const totalOtherExpenses = yearExpenses.reduce((s, e) => s + e.amount, 0)
   const taxRate = taxSettings?.taxRate || 0
   const urssafCotisation = totalCA * taxRate / 100
-  // Net profit = CA - (all purchases in the period) - platform fees - carrier shipping - payment fees - other expenses - URSSAF
-  // We use achatsData.total (which includes ALL stock items purchased + Purchase entries, multiplied by quantity)
-  // instead of the old `Σ profit by sale - hors stock` formula which missed non-sold stock items.
-  // The old formula double-counted: profit per sale already deducts purchaseCost, AND we deducted hors stock on top.
-  // New formula: CA - totalPurchases - fees - expenses - URSSAF (clean, no double counting)
+  // Bénéfice net = CA - Total des charges (tous les décaissements)
+  // En micro-entreprise, on déduit TOUTES les charges au moment du paiement (pas au moment de la vente).
+  // Les achats (stock + hors stock) sont des charges décaissées, même si les articles ne sont pas encore vendus.
+  // Total des charges = achats + frais plateforme + frais port transporteur + frais bancaires + autres dépenses + URSSAF
   const totalProfit = totalCA
-    - (achatsData?.total ?? totalPurchases)  // all purchases (stock items + hors stock)
+    - (achatsData?.total ?? totalPurchases)  // tous les achats (stock + hors stock, × quantité)
     - totalPlatformFees
     - totalCarrierShipping
     - totalPaymentFees

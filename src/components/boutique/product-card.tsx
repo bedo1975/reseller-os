@@ -16,6 +16,7 @@ interface ProductCardProps {
     originalPrice?: number | null
     saleActive?: boolean
     mainPhoto?: string | null
+    quantity?: number
   }
 }
 
@@ -35,10 +36,11 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 export function ProductCard({ product }: ProductCardProps) {
+  const outOfStock = product.quantity != null && product.quantity <= 0
   return (
     <Link
       href={`/boutique/produit/${product.sku}`}
-      className="group bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg hover:border-[#007bff] transition-all"
+      className={`group bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg hover:border-[#007bff] transition-all relative ${outOfStock ? 'opacity-75' : ''}`}
     >
       <div className="aspect-square bg-gray-50 relative overflow-hidden">
         {product.mainPhoto ? (
@@ -57,6 +59,11 @@ export function ProductCard({ product }: ProductCardProps) {
         {product.condition && (
           <span className="absolute top-2 left-2 bg-white/95 text-[10px] font-semibold px-2 py-1 rounded-full text-gray-700 uppercase">
             {CONDITION_LABELS[product.condition] || product.condition}
+          </span>
+        )}
+        {outOfStock && (
+          <span className="absolute top-2 right-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase">
+            Indisponible
           </span>
         )}
       </div>
@@ -85,6 +92,9 @@ export function ProductCard({ product }: ProductCardProps) {
             <p className="text-lg font-bold text-[#007bff]">
               {product.price != null ? `${product.price.toFixed(2)} €` : '—'}
             </p>
+          )}
+          {outOfStock && (
+            <span className="text-[10px] text-red-600 font-medium ml-auto">Rupture de stock</span>
           )}
         </div>
       </div>

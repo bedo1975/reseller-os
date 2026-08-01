@@ -2735,3 +2735,146 @@ return NextResponse.json({ error: 'Erreur serveur', details: errorMsg }, { statu
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1100 KB, MD5: `bf9184104dd31c6474e30bd9ec0522a4`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: synthese-net-profit-fix
+Agent: main
+Task: Fix net profit calculation in Synthèse — manually added stock items (not from pre-orders) were not deducted from the net profit.
+
+## Root cause
+The old formula was:
+```ts
+totalProfit = Σ yearSales.profit - totalOtherExpenses - totalHorsStockPurchases - urssafCotisation
+```
+
+Problems:
+1. `yearSales.profit` is computed server-side per sale, deducting `stockItem.purchaseCost`. So the purchaseCost of SOLD items was already deducted.
+2. `totalHorsStockPurchases` deducted Purchase entries (pre-orders + hors stock).
+3. **BUT**: stock items added manually (not from pre-orders) that were NOT yet sold had their `purchaseCost` NOT deducted from the profit — because they don't appear in `yearSales` and they're not in `yearPurchases`.
+
+Result: the net profit was too high when you had unsold manually-added stock items with a purchaseCost > 0.
+
+## Fix
+Replaced the formula with a clean one:
+```ts
+totalProfit = totalCA
+  - (achatsData?.total ?? totalPurchases)  // ALL purchases (stock items + hors stock, × quantity)
+  - totalPlatformFees
+  - totalCarrierShipping
+  - totalPaymentFees
+  - totalOtherExpenses
+  - urssafCotisation
+```
+
+This is the correct accounting formula:
+- **CA** (chiffre d'affaires) = revenue from sales
+- **- Total achats** = all purchases in the period (stock items × quantity + hors stock entries), from the accounting API
+- **- Platform fees** = marketplace fees
+- **- Carrier shipping** = real shipping costs paid to carriers
+- **- Payment fees** = Stripe/PayPal fees
+- **- Other expenses** = recurring/one-off expenses
+- **- URSSAF cotisation** = tax
+
+No more double counting, no more missing items. The formula is now:
+```
+Bénéfice net = CA - Achats - Frais plateforme - Frais port transporteur - Frais bancaires - Autres dépenses - URSSAF
+```
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1100 KB, MD5: `39626026f4f673870f9c9c73f2123c7a`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: synthese-net-profit-cogs-fix
+Agent: main
+Task: Fix net profit calculation — unsold stock items were deducted from profit (they should be inventory/asset, not a charge).
+
+## The problem
+The previous formula deducted ALL purchases (including unsold stock items) from the CA:
+```
+Bénéfice = CA - Total achats (tous) - frais - URSSAF
+```
+
+This is wrong because unsold stock items are an ASSET (inventory), not a charge. They should NOT reduce the profit until they're actually sold.
+
+Example given by user:
+- CA = 12€ (one sale)
+- Total achats = 50.80€ (items purchased, most NOT sold)
+- URSSAF = 1.48€
+- Frais port = 4.20€
+- Stripe = 0.43€
+
+Old (wrong) formula: 12 - 50.80 - 4.20 - 0.43 - 1.48 = -44.91€ (too low)
+
+## The fix — use CMV (Coût des Marchandises Vendues)
+Replaced with the correct accounting formula:
+```
+Bénéfice net = CA
+  - CMV (coût des articles VENDUS uniquement)
+  - Achats hors stock (pré-commandes, fournitures — vraies charges)
+  - Frais plateforme
+  - Frais port transporteur
+  - Frais bancaires
+  - Autres dépenses
+  - URSSAF
+```
+
+- `totalCOGS` = `yearSales.reduce((s, x) => s + x.stockItem.purchaseCost, 0)` — only the purchaseCost of SOLD items
+- Unsold stock items are NOT deducted (they're inventory)
+- Hors stock purchases (pre-commandes, fournitures) ARE deducted (they're real charges, not inventory)
+
+Correct calculation with the user's example (assuming the sold item's purchaseCost was part of the 50.80€):
+```
+Bénéfice = 12 - (coût de l'article vendu) - 0 (hors stock) - 0 (plateforme) - 4.20 - 0.43 - 0 - 1.48
+```
+
+If the sold item's purchaseCost was, say, 5€:
+```
+Bénéfice = 12 - 5 - 4.20 - 0.43 - 1.48 = 0.89€
+```
+
+The 50.80€ of total purchases shows in the "Achats" card (cash flow view), but only the sold portion affects the profit.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1100 KB, MD5: `99deaa2a78c0123f50302f9c62503dd9`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: synthese-net-profit-revert-to-total-charges
+Agent: main
+Task: Revert to the previous formula — in micro-entreprise, ALL purchases (not just sold items) are deducted as charges when paid.
+
+## The correction
+The user confirmed that in micro-entreprise, the correct formula is:
+```
+Bénéfice net = CA - Total des charges (tous les décaissements)
+```
+
+Where Total des charges includes ALL purchases (stock + hors stock), not just the cost of sold items. This is because in micro-entreprise, charges are deducted at payment time, not at sale time.
+
+Reverted the formula to:
+```ts
+const totalProfit = totalCA
+  - (achatsData?.total ?? totalPurchases)  // tous les achats (stock + hors stock, × quantité)
+  - totalPlatformFees
+  - totalCarrierShipping
+  - totalPaymentFees
+  - totalOtherExpenses
+  - urssafCotisation
+```
+
+Example verified by user:
+- CA = 12€
+- Achats = 50.80€
+- Frais port = 4.20€
+- URSSAF = 1.48€
+- Stripe = 0.43€
+- Total charges = 56.91€
+- Bénéfice net = 12 - 56.91 = -44.91€ ✅
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1100 KB, MD5: `d8da41b63b810a0a063ccaff43be277d`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
