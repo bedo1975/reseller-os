@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useFetch } from '@/hooks/use-fetch'
+import { useSettings } from '@/hooks/use-settings'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,7 +16,7 @@ import {
 } from '@/components/ui/select'
 import {
   Plus, Trash2, Loader2, ArrowLeft, ClipboardList, CheckCircle2, Clock,
-  XCircle, Package, Edit3, FileText, ShoppingCart,
+  XCircle, Package, Edit3, FileText, ShoppingCart, PackagePlus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -238,7 +239,13 @@ export function PreOrderModule() {
 function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreated: () => void }) {
   const { data: suppliers } = useFetch<Supplier[]>('/api/suppliers')
   const { data: stockItems } = useFetch<StockItemLite[]>('/api/stock')
+  const { getByType } = useSettings()
+  const sizes = getByType('size')
+  const colors = getByType('color')
+  const conditions = getByType('condition')
+  const categories = getByType('category')
   const [saving, setSaving] = useState(false)
+  const [creatingArticleIdx, setCreatingArticleIdx] = useState<number | null>(null)
 
   const [name, setName] = useState('')
   const [supplierId, setSupplierId] = useState<string>('')
@@ -323,6 +330,49 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
     }
   }
 
+  // Create a StockItem from the current article line (qty = 0, status = A_PHOTOGRAPHIER)
+  // and link it back to the pre-order item.
+  const createStockItem = async (idx: number) => {
+    const item = items[idx]
+    if (!item.designation.trim()) {
+      toast.error('Veuillez saisir une désignation avant de créer l\'article')
+      return
+    }
+    setCreatingArticleIdx(idx)
+    try {
+      // Generate a unique SKU
+      const sku = `ART-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
+      const res = await fetch('/api/stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sku,
+          title: item.designation.trim(),
+          brand: item.designation.trim().split(' ')[0] || 'Article',  // first word as brand fallback
+          category: categories[0]?.code || 'vetements',
+          size: item.size || null,
+          color: item.color || null,
+          condition: item.condition || conditions[0]?.code || 'bon',
+          purchaseCost: Number(item.unitPrice) || 0,
+          purchaseDate: orderDate,
+          supplierId: supplierId || null,
+          quantity: 0,  // quantité = 0 comme demandé
+          description: item.description || null,
+          status: 'A_PHOTOGRAPHIER',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erreur lors de la création'); return }
+      // Link the created StockItem back to the pre-order item
+      updateItem(idx, 'stockItemId', data.id)
+      toast.success(`Article créé dans le stock (SKU: ${sku}, quantité: 0)`)
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setCreatingArticleIdx(null)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -366,7 +416,7 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-base">Articles</CardTitle>
-              <CardDescription className="text-xs">Ajoutez autant d'articles que nécessaire. Sélectionnez un article existant ou saisissez-le manuellement.</CardDescription>
+              <CardDescription className="text-xs">Ajoutez autant d'articles que nécessaire. Sélectionnez un article existant, saisissez-le manuellement, ou créez-le directement dans le stock.</CardDescription>
             </div>
             <Button size="sm" variant="outline" onClick={addItem}>
               <Plus className="h-4 w-4 mr-1" /> Ajouter un article
@@ -377,12 +427,27 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
           {items.map((item, idx) => (
             <div key={idx} className="border rounded-lg p-4 space-y-3 relative">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Article {idx + 1}</span>
-                {items.length > 1 && (
-                  <Button size="sm" variant="ghost" onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-600">
-                    <Trash2 className="h-4 w-4" />
+                <span className="text-xs font-medium text-muted-foreground">
+                  Article {idx + 1}
+                  {item.stockItemId && <span className="ml-2 text-green-600">✓ lié au stock</span>}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => createStockItem(idx)}
+                    disabled={creatingArticleIdx === idx || !!item.stockItemId}
+                    title={item.stockItemId ? 'Article déjà créé dans le stock' : 'Créer cet article dans le stock (quantité = 0)'}
+                  >
+                    {creatingArticleIdx === idx ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <PackagePlus className="h-4 w-4 mr-1" />}
+                    Créer l'article
                   </Button>
-                )}
+                  {items.length > 1 && (
+                    <Button size="sm" variant="ghost" onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-600">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Sélection article existant OU saisie manuelle */}
@@ -411,15 +476,33 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Taille</Label>
-                  <Input value={item.size} onChange={e => updateItem(idx, 'size', e.target.value)} placeholder="M" />
+                  <Select value={item.size || ''} onValueChange={(v) => updateItem(idx, 'size', v === '__none__' ? '' : v)}>
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Aucune —</SelectItem>
+                      {sizes.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Couleur</Label>
-                  <Input value={item.color} onChange={e => updateItem(idx, 'color', e.target.value)} placeholder="Blanc" />
+                  <Select value={item.color || ''} onValueChange={(v) => updateItem(idx, 'color', v === '__none__' ? '' : v)}>
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Aucune —</SelectItem>
+                      {colors.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">État</Label>
-                  <Input value={item.condition} onChange={e => updateItem(idx, 'condition', e.target.value)} placeholder="Neuf avec étiquette" />
+                  <Select value={item.condition || ''} onValueChange={(v) => updateItem(idx, 'condition', v === '__none__' ? '' : v)}>
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Aucun —</SelectItem>
+                      {conditions.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Quantité</Label>
@@ -490,7 +573,9 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { data: preorder, loading, refresh } = useFetch<PreOrder>(`/api/preorders/${id}`)
   const [saving, setSaving] = useState(false)
   const [validating, setValidating] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [showValidateDialog, setShowValidateDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [orderNumber, setOrderNumber] = useState('')
   const [invoiceNumber, setInvoiceNumber] = useState('')
 
@@ -498,6 +583,7 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const cfg = preorder ? (STATUS_CONFIG[preorder.status] || STATUS_CONFIG.pending) : null
   const isValidated = preorder?.status === 'validated'
   const isCancelled = preorder?.status === 'cancelled'
+  const isPending = preorder?.status === 'pending'
 
   const save = async (patch: any) => {
     setSaving(true)
@@ -515,6 +601,22 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
       toast.error('Erreur réseau')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const deletePreorder = async () => {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/preorders/${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+      toast.success('Pré-commande supprimée')
+      onBack()
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setDeleting(false)
+      setShowDeleteDialog(false)
     }
   }
 
@@ -565,11 +667,25 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
             <p className="text-sm text-muted-foreground font-mono">{preorder.reference}</p>
           </div>
         </div>
-        {!isValidated && !isCancelled && (
-          <Button onClick={() => setShowValidateDialog(true)} className="bg-green-600 hover:bg-green-700">
-            <CheckCircle2 className="h-4 w-4 mr-2" /> Valider la pré-commande
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {isPending && (
+            <Button
+              onClick={() => setShowValidateDialog(true)}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <CheckCircle2 className="h-4 w-4 mr-2" /> Valider la pré-commande
+            </Button>
+          )}
+          {isPending && (
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteDialog(true)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+            >
+              <Trash2 className="h-4 w-4 mr-2" /> Supprimer
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Alerte si validée */}
@@ -747,6 +863,26 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
             <Button onClick={validate} disabled={validating} className="bg-green-600 hover:bg-green-700">
               {validating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
               {validating ? 'Validation...' : 'Valider et convertir en commande'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogue de suppression */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Supprimer la pré-commande</DialogTitle>
+            <DialogDescription>
+              Êtes-vous sûr de vouloir supprimer la pré-commande <strong>{preorder.reference}</strong> ?
+              Cette action est irréversible. Les articles créés dans le stock ne seront pas supprimés.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Annuler</Button>
+            <Button onClick={deletePreorder} disabled={deleting} variant="destructive">
+              {deleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              {deleting ? 'Suppression...' : 'Supprimer définitivement'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1967,3 +1967,150 @@ The validation email link was failing for an unknown reason in production (possi
 - `npx next build --webpack`: ✓ Compiled successfully (112/112 static pages).
 - `bash scripts/make-zip.sh`: zip = 1045 KB, MD5: `9f7ece92eee0ab5af68e53257c2b1b06`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: preorder-module + document-customization + sales-fix
+Agent: main
+Task: 4 combined tasks — (1) bon de préparation subtitle modifiable, (2) facture footer modifiable, (3) fix sales module "Nouvelle vente" button greyed out, (4) CREATE pre-order module with conversion to order + compta ACHATS.
+
+## Part 1 — Bon de préparation subtitle modifiable
+
+### Schema (`prisma/schema.prisma`)
+- Added `preparationSlipSubtitle String @default("DBoxPro Boutique")` to `BoutiqueSettings` model.
+
+### API (`src/app/api/boutique/admin/orders/[id]/preparation/route.ts`)
+- Imported `getBoutiqueSettings`.
+- After fetching the order, fetch boutique settings: `const settings = await getBoutiqueSettings()`.
+- Replaced hardcoded `<div class="subtitle">DBoxPro Boutique</div>` with `<div class="subtitle">${escapeHtml(subtitleText)}</div>` where `subtitleText = settings.preparationSlipSubtitle || 'DBoxPro Boutique'`.
+
+### Admin UI (`src/components/modules/boutique-admin-module.tsx`)
+- Added `preparationSlipSubtitle: string` to `BoutiqueSettingsData` interface.
+- Added a new "Documents — Bon de préparation & Facture" card in the Apparence → Horaires/CGV sub-tab, with an Input for "Sous-titre du bon de préparation".
+
+### Settings API (`src/app/api/boutique/admin/settings/route.ts`)
+- Added `preparationSlipSubtitle` to destructured body + save logic.
+
+## Part 2 — Facture footer modifiable (date conservée)
+
+### Schema
+- Added `invoiceFooterText String?` to `BoutiqueSettings` (nullable — null = use default text).
+
+### API — 2 routes updated
+
+**`src/app/api/invoices/[id]/pdf/route.ts`** (admin authenticated):
+- Imported `getBoutiqueSettings`.
+- After fetching invoice settings, fetch boutique settings.
+- Compute `footerText = boutiqueSettings.invoiceFooterText ? "${invoiceFooterText} — ${todayStr}" : null`.
+- Updated footer rendering: if `footerText` is set → use it; else fall back to existing logic (legalMentions or default "Document généré électroniquement...").
+
+**`src/app/api/invoices/by-number/[number]/pdf/route.ts`** (public, boutique client access):
+- Imported `getBoutiqueSettings`.
+- Fetch boutique settings.
+- Compute `footerText` the same way (always set — falls back to default if invoiceFooterText is null).
+- Replaced hardcoded footer with `${escapeHtml(footerText)}`.
+
+**Date is always appended at the end** — format: "votre texte personnalisé — 31/07/2026" or "Document généré électroniquement par Reseller OS le 31/07/2026." (default).
+
+### Admin UI
+- Added a Textarea for "Pied de page des factures" in the same "Documents" card as Part 1.
+- Help text: "La date du jour sera automatiquement ajoutée à la fin. Laissez vide pour utiliser le texte par défaut."
+
+## Part 3 — Module vente bouton grisé (FIX)
+
+### Root cause
+`src/components/modules/sales-module.tsx` line 73:
+```ts
+const availableItems = (stockItems || []).filter(i => i.status === 'PUBLIE' || i.status === 'RESERVE')
+```
+The "Nouvelle vente" button is disabled when `availableItems.length === 0`. If no stock items have status `PUBLIE` or `RESERVE`, the button stays greyed out.
+
+### Fix
+Relaxed the filter to allow ALL non-sold items:
+```ts
+const availableItems = (stockItems || []).filter(i => i.status !== 'VENDU')
+```
+Now any stock item that isn't already sold can be attached to a new sale.
+
+## Part 4 — CRÉATION Module Pré-commande
+
+### Schema — new `PreOrder` model
+```prisma
+model PreOrder {
+  id, reference (unique "PC-2026-001"), name, supplierId (FK→Supplier), supplierName,
+  orderDate, items (JSON), subtotal, shippingCost, total, notes,
+  status ("pending"|"validated"|"cancelled"),
+  orderNumber, invoiceNumber, purchaseId (FK→Purchase), validatedAt,
+  userId, createdAt, updatedAt
+}
+```
+- Added `preorders PreOrder[]` relation to `User` and `Supplier` models.
+- `bunx prisma db push` — DB in sync.
+
+### API routes (3 files)
+
+**`/api/preorders`** (GET list, POST create):
+- GET: list all pre-orders for current user, ordered by createdAt desc.
+- POST: create a new pre-order. Auto-generates reference `PC-{year}-{seq}`. Computes subtotal + total from items + shippingCost.
+
+**`/api/preorders/[id]`** (GET, PATCH, DELETE):
+- GET: fetch single pre-order.
+- PATCH: update fields (name, supplier, date, items, shipping, notes, orderNumber, invoiceNumber, status). Recomputes subtotal + total if items/shipping change. Blocked if status === 'cancelled'.
+- DELETE: delete a pre-order (only if pending, not validated).
+
+**`/api/preorders/[id]/validate`** (POST):
+- Converts a pending pre-order into a validated order.
+- Creates a `Purchase` entry (category: `precommande`) with:
+  - designation = "Pré-commande {ref} — {name} ({items summary})"
+  - amount = pre-order total
+  - supplierId/supplierName from the pre-order
+  - invoiceNumber from the validation dialog (if provided)
+  - notes = link back to pre-order reference + order number
+- Links the Purchase to the pre-order (purchaseId field).
+- Sets pre-order status to "validated" + validatedAt timestamp.
+- The Purchase automatically appears in Fiscalité → ACHATS.
+
+### Frontend — `src/components/modules/preorder-module.tsx` (new file, ~600 lines)
+
+**3 views:**
+1. **List view** — table of all pre-orders (reference, name, supplier, date, total, status badge, edit button). Stats cards at top (en attente count, validées count, montant total validées).
+2. **Create form** (`CreatePreOrderForm`):
+   - General info: name (required), date, supplier dropdown (from `/api/suppliers`)
+   - Articles: dynamic list, each with:
+     - Article existant dropdown (from `/api/stock`) — auto-fills designation/size/color/condition
+     - Désignation (required), URL article, Taille, Couleur, État, Quantité, Tarif unitaire, Description
+     - "Ajouter un article" / "Supprimer" buttons
+   - Totaux: subtotal (auto-computed), frais de port (input), total (auto-computed)
+   - Notes
+   - Status: "En attente" (fixed)
+3. **Detail view** (`PreOrderDetail`):
+   - Shows all pre-order info + items table
+   - If pending: "Valider la pré-commande" button → opens dialog with orderNumber/invoiceNumber inputs
+   - If validated: green banner showing "Commande validée le {date}" + purchase info + editable orderNumber/invoiceNumber fields (saved on blur)
+   - Editable name, date, notes (saved on blur) — only if pending
+   - Articles table (read-only): designation, attributs, qté, prix unit, total
+
+### Sidebar — added "Pré-commandes" module
+- `src/lib/store.ts`: added `'preorders'` to `ModuleKey` union type.
+- `src/app/page.tsx`:
+  - Imported `ClipboardList` icon from lucide-react.
+  - Imported `PreOrderModule` from `@/components/modules/preorder-module`.
+  - Added NAV_ITEMS entry: `{ key: 'preorders', label: 'Pré-commandes', short: 'Pré-commandes', icon: ClipboardList, description: 'Commandes fournisseurs en attente' }` (after "Colis").
+  - Added module switch: `{activeModule === 'preorders' && <PreOrderModule />}`.
+
+### Accounting integration
+- `src/app/api/accounting/route.ts`: Added `precommande: 'Pré-commande fournisseur'` to `purchaseCategoryLabels` so the new entries display with a proper label in the ACHATS tab.
+- The accounting API fetches ALL purchases (no category filter) — so pre-order entries automatically appear in Fiscalité → Registre des achats.
+
+## Workflow summary
+1. Admin creates a pre-order (name + supplier + articles + shipping) → status: **pending**
+2. Admin reviews the pre-order → clicks "Valider la pré-commande"
+3. Optionally enters supplier order/invoice numbers in the dialog
+4. Pre-order status → **validated** + a Purchase entry is created (category: `precommande`, amount = total)
+5. The Purchase appears in Fiscalité → ACHATS (registre des achats)
+6. Admin can edit the order/invoice numbers on the validated pre-order (saved on blur)
+
+## Build & zip
+- `bunx prisma db push`: ✓ schema in sync (PreOrder model + BoutiqueSettings fields added)
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages — was 112, +1 for new API routes).
+- `bash scripts/make-zip.sh`: zip = 1069 KB, MD5: `ad8cd0a663e573cf92262c3ad8fea3a9`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

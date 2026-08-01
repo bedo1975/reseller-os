@@ -56,6 +56,11 @@ export async function POST(
 
     const designation = `Pré-commande ${existing.reference} — ${existing.name} (${itemsSummary})`
 
+    // The accounting API (ACHATS tab) filters purchases by adminUser.id, so we
+    // must attach the Purchase to the admin (not the staff member who clicked validate).
+    const adminUser = await db.user.findFirst({ where: { role: 'admin' } })
+    const purchaseUserId = adminUser?.id || user.id
+
     // Create the Purchase entry (appears in Fiscalité → ACHATS)
     const purchase = await db.purchase.create({
       data: {
@@ -68,7 +73,7 @@ export async function POST(
         invoiceNumber: invoiceNumber || null,
         paymentMethod: null,
         notes: `Pré-commande ${existing.reference}${orderNumber ? ` — Cmd fournisseur: ${orderNumber}` : ''}`,
-        userId: user.id,
+        userId: purchaseUserId,
       },
     })
 
