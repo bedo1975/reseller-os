@@ -93,6 +93,8 @@ export async function POST(
             supplierId: existing.supplierId || null,
             quantity: qty,
             description,
+            photos: JSON.stringify([]),  // required field — empty array
+            platforms: JSON.stringify([]),  // required field — empty array
             status: 'A_CONTROLER',
             userId: stockUserId,
           },
@@ -112,6 +114,8 @@ export async function POST(
     if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+    // Return the actual error message to help diagnose issues
+    const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue'
+    return NextResponse.json({ error: 'Erreur serveur', details: errorMsg }, { status: 500 })
   }
 }

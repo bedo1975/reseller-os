@@ -2422,3 +2422,94 @@ If an item was purchased but not yet sold, its purchaseCost was NOT counted in t
 1. **Quantity in register**: Stock → Nouvel article → set quantity=10, purchaseCost=5€ → Fiscalité → Registre des achats → the row shows "Brand Category (×10)" with montant=50€ (not 5€).
 2. **Synthèse total**: same article (not sold) → Fiscalité → Synthèse → the "Achats" card shows 50€ (was 0€ before because the item wasn't sold).
 3. **Synthèse = Registre**: the Synthèse "Achats" total should now equal the Registre des achats total.
+
+---
+Task ID: preorder-payment-method + order-number + receive-button
+Agent: main
+Task: 4 improvements — (1) add payment method in pre-order form, (2) add "Commande fournisseur" status visible in register, (3) verify Synthèse CA, (4) add "Commande reçue" button.
+
+## 1. Payment method in pre-order form
+
+### Schema
+- Added `paymentMethod String?` to `PreOrder` model (especes | carte_bancaire | virement | cheque | paypal).
+- Added `orderNumber String?` to `Purchase` model (n° commande fournisseur).
+- `bunx prisma db push` — DB in sync.
+
+### Pre-order form (`preorder-module.tsx`)
+- Added `paymentMethod` state + Select dropdown (Espèces, Carte bancaire, Virement, Chèque, PayPal).
+- The payment method is saved on the PreOrder at creation time.
+- Displayed on the detail page (read-only Input showing the French label).
+
+### APIs
+- POST `/api/preorders` — accepts + stores `paymentMethod`.
+- PATCH `/api/preorders/[id]` — accepts + updates `paymentMethod`.
+- POST `/api/preorders/[id]/validate` — passes `existing.paymentMethod` to the Purchase's `paymentMethod` field, AND passes `orderNumber` to the Purchase's `orderNumber` field.
+
+## 2. "Commande fournisseur" in the Registre des achats
+
+### Accounting API (`/api/accounting/route.ts`)
+- Purchase entries now include `orderNumber: p.orderNumber || '—'`.
+- StockItem entries include `orderNumber: '—'` (they don't have a supplier order number).
+
+### Register UI (`taxes-module.tsx`)
+- Added `orderNumber?: string` to the `AchatEntry` interface.
+- Added a new column "N° cmd four." in the register table (hidden on small screens via `hidden xl:table-cell`).
+- The column shows the order number in an amber badge (vs sky blue for invoice number).
+- Updated the colspan in the totals row (8 with VAT, 7 without — was 7/6).
+- Updated the PDF export to include the "N° cmd four." column + row data.
+
+### Result
+When a pre-order is validated with an order number + payment method, both appear in:
+- The Registre des achats table (N° cmd four. column + Paiement column)
+- The PDF export of the register
+
+## 3. Verify Synthèse CA
+
+### Verification
+The Synthèse CA (chiffre d'affaires) is computed as:
+```ts
+const totalCA = yearSales.reduce((s, x) => s + x.salePrice + (x.shippingCost || 0), 0)
+```
+This ONLY sums up `Sale` records. Pre-orders and manually added stock items do NOT affect the CA. ✅ Correct.
+
+The "Achats" total uses `achatsData?.total` from `/api/accounting?type=achats`, which includes:
+- ALL stock items purchased in the period (purchaseCost × quantity, sold or not)
+- ALL Purchase entries (including pre-order validations)
+✅ Correct — no change needed.
+
+## 4. "Commande reçue" button
+
+### New API: POST `/api/preorders/[id]/receive`
+- Only works on validated pre-orders.
+- For each article in the pre-order:
+  - If `stockItemId` exists (created via "Créer l'article"): update the existing StockItem (quantity, status = "A_CONTROLER", purchaseCost = 0).
+  - If no `stockItemId`: create a new StockItem (quantity, status = "A_CONTROLER", purchaseCost = 0).
+- `purchaseCost` is always 0 to avoid double counting (the pre-order Purchase already accounts for the cost).
+- Returns counts: `createdCount`, `updatedCount`.
+
+### Frontend (`preorder-module.tsx`)
+- Added `receiving` state + `showReceiveDialog` state.
+- Added `receiveOrder()` function — calls the API, shows success toast with the message.
+- Added "Commande reçue" button (blue, Package icon) on the detail page — only visible when `isValidated`.
+- Added a confirmation dialog showing:
+  - "Tous les articles seront ajoutés au stock avec le statut « À contrôler »"
+  - Count of articles that will be updated vs created
+  - "Annuler" / "Confirmer la réception" buttons
+
+### Result
+When the user clicks "Commande reçue":
+1. All articles from the pre-order are added to/updated in the stock with status "A_CONTROLER".
+2. The user can then go to the Stock module to control each article (check condition, photos, etc.).
+3. No double counting in accounting (purchaseCost = 0).
+
+## Build & zip
+- `bunx prisma db push`: ✓ schema in sync (PreOrder.paymentMethod + Purchase.orderNumber added).
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages — new /receive route added).
+- `bash scripts/make-zip.sh`: zip = 1092 KB, MD5: `a53c60674b0002610d91992661f0c66a`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+## Testing notes
+1. **Payment method**: Create a pre-order → select "Carte bancaire" → validate → check Registre des achats → the "Paiement" column shows "Carte bancaire".
+2. **Order number**: In the validate dialog, enter "CMD-12345" → validate → check Registre des achats → the "N° cmd four." column shows "CMD-12345".
+3. **Synthèse CA**: The CA should only reflect actual sales (not pre-orders or stock items). ✅ Verified.
+4. **Commande reçue**: Validate a pre-order → click "Commande reçue" → confirm → go to Stock → the articles appear with status "À contrôler" and the correct quantity.
