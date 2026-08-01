@@ -863,6 +863,8 @@ interface BoutiqueSettingsData {
   paypalSecret: string | null
   mondialRelayEnseigne: string | null
   mondialRelayApiKey: string | null
+  preparationSlipSubtitle: string
+  invoiceFooterText: string | null
 }
 
 function AppearanceTab() {
@@ -1727,6 +1729,41 @@ function AppearanceTab() {
         </CardContent>
       </Card>
       )}
+
+      {/* Documents — bon de préparation + facture */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4" /> Documents — Bon de préparation & Facture</CardTitle>
+          <CardDescription className="text-xs">
+            Personnalisez le sous-titre du bon de préparation et le pied de page des factures.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Sous-titre du bon de préparation</Label>
+            <Input
+              value={form.preparationSlipSubtitle || ''}
+              onChange={e => set('preparationSlipSubtitle', e.target.value)}
+              placeholder="DBoxPro Boutique"
+            />
+            <p className="text-[11px] text-muted-foreground">Affiché sous "BON DE PRÉPARATION" en haut du document imprimable.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Pied de page des factures</Label>
+            <Textarea
+              value={form.invoiceFooterText || ''}
+              onChange={e => set('invoiceFooterText', e.target.value)}
+              rows={2}
+              placeholder="Document généré électroniquement par Reseller OS"
+              className="text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              La date du jour sera automatiquement ajoutée à la fin (ex: « votre texte — 31/07/2026 »).
+              Laissez vide pour utiliser le texte par défaut.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="sticky bottom-4 z-20 flex justify-end bg-gradient-to-t from-background via-background/95 to-transparent pt-4 pb-2 -mx-2 px-2">
         <Button onClick={save} disabled={saving} size="lg" className="shadow-lg">

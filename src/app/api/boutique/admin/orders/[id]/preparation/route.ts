@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/session'
 import { db } from '@/lib/db'
+import { getBoutiqueSettings } from '@/lib/boutique-settings'
 
 function escapeHtml(str: string): string {
   return String(str || '')
@@ -32,6 +33,10 @@ export async function GET(
     }
 
     const items = JSON.parse(order.items) as any[]
+
+    // Fetch boutique settings for the configurable subtitle
+    const settings = await getBoutiqueSettings()
+    const subtitleText = settings.preparationSlipSubtitle || 'DBoxPro Boutique'
 
     // Fetch descriptions from StockItems
     const skus = items.map(i => i.sku).filter(Boolean)
@@ -127,7 +132,7 @@ export async function GET(
   <div class="header">
     <div>
       <div class="title">BON DE PRÉPARATION</div>
-      <div class="subtitle">DBoxPro Boutique</div>
+      <div class="subtitle">${escapeHtml(subtitleText)}</div>
     </div>
     <div class="order-meta">
       <strong>${escapeHtml(order.orderId)}</strong><br>

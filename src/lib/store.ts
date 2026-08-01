@@ -9,6 +9,7 @@ export type ModuleKey =
   | 'publication'
   | 'sales'
   | 'parcels'
+  | 'preorders'
   | 'profitability'
   | 'taxes'
   | 'bi'

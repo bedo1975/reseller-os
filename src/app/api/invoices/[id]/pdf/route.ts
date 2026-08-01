@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/session'
+import { getBoutiqueSettings } from '@/lib/boutique-settings'
 
 // Helper pour récupérer ou créer les paramètres de facturation
 async function getOrCreateInvoiceSettings(userId: string) {
@@ -63,6 +64,13 @@ export async function GET(
     }
 
     const settings = await getOrCreateInvoiceSettings(user.id)
+
+    // Fetch boutique settings for the configurable footer text
+    const boutiqueSettings = await getBoutiqueSettings()
+    const todayStr = new Date().toLocaleDateString('fr-FR')
+    const footerText = boutiqueSettings.invoiceFooterText
+      ? `${boutiqueSettings.invoiceFooterText} — ${todayStr}`
+      : null  // null → use existing logic (legalMentions or default)
 
     // Si pas de n° de facture, on en génère un rétroactivement
     let invoiceNumber = sale.invoiceNumber
@@ -306,7 +314,9 @@ export async function GET(
   }
 
   <div class="footer">
-    ${settings.legalMentions ? `
+    ${footerText ? `
+      <div class="legal">${escapeHtml(footerText)}</div>
+    ` : settings.legalMentions ? `
       <div class="legal">${escapeHtml(settings.legalMentions)}</div>
     ` : `
       <div class="legal">Document généré électroniquement par Reseller OS le ${new Date().toLocaleDateString('fr-FR')}.</div>

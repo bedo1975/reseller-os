@@ -70,7 +70,7 @@ export function SalesModule() {
   const [showForm, setShowForm] = useState(false)
   const [editingSale, setEditingSale] = useState<Sale | null>(null)
 
-  const availableItems = (stockItems || []).filter(i => i.status === 'PUBLIE' || i.status === 'RESERVE')
+  const availableItems = (stockItems || []).filter(i => i.status !== 'VENDU')
 
   const filtered = useMemo(() => {
     if (!sales) return []

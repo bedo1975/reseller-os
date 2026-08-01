@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getBoutiqueSettings } from '@/lib/boutique-settings'
 
 function escapeHtml(str: string): string {
   return String(str || '')
@@ -40,6 +41,13 @@ export async function GET(
     if (!settings) {
       return new NextResponse('Paramètres de facturation manquants', { status: 500 })
     }
+
+    // Fetch boutique settings for the configurable footer text
+    const boutiqueSettings = await getBoutiqueSettings()
+    const todayStr = new Date().toLocaleDateString('fr-FR')
+    const footerText = boutiqueSettings.invoiceFooterText
+      ? `${boutiqueSettings.invoiceFooterText} — ${todayStr}`
+      : `Document généré électroniquement par Reseller OS le ${todayStr}.`
 
     const invoiceNumber = sale.invoiceNumber || number
     const saleDate = new Date(sale.saleDate)
@@ -263,7 +271,7 @@ export async function GET(
   }
 
   <div class="footer">
-    <div class="legal">Document généré électroniquement par Reseller OS le ${new Date().toLocaleDateString('fr-FR')}.</div>
+    <div class="legal">${escapeHtml(footerText)}</div>
   </div>
 
   <script>window.onload = () => { setTimeout(() => window.print(), 300); }</script>

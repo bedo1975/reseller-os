@@ -48,6 +48,7 @@ export async function PUT(req: NextRequest) {
       gdprEnabled, gdprBannerTitle, gdprBannerMessage, gdprPrivacyPolicyUrl, gdprCookiesJson,
       shareEnabled, shareColor, shareCollectEmails, shareSiteUrl, shareSubject, shareMessage, shareButtonText,
       newsletterEnabled, newsletterTitle, newsletterSubtitle, newsletterButtonText, newsletterPlaceholder, newsletterSuccessMessage, newsletterColor,
+      preparationSlipSubtitle, invoiceFooterText,
     } = body
 
     const data: any = {}
@@ -147,6 +148,9 @@ export async function PUT(req: NextRequest) {
     if (typeof newsletterPlaceholder === 'string') data.newsletterPlaceholder = newsletterPlaceholder
     if (typeof newsletterSuccessMessage === 'string') data.newsletterSuccessMessage = newsletterSuccessMessage
     if (typeof newsletterColor === 'string') data.newsletterColor = newsletterColor
+    // Documents
+    if (typeof preparationSlipSubtitle === 'string') data.preparationSlipSubtitle = preparationSlipSubtitle
+    if (typeof invoiceFooterText === 'string') data.invoiceFooterText = invoiceFooterText || null
 
     const settings = await db.boutiqueSettings.upsert({
       where: { id: 'default' },

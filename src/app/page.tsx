@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Boxes, Truck, FileText, ShoppingCart, Package,
   TrendingUp, Receipt, BarChart3, Menu, Store, Sparkles, RotateCw, Settings,
   LogOut, Crown, UserCircle, Loader2, ShieldAlert, QrCode, Search, Camera, ShoppingBag, Mail,
+  ClipboardList,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +23,7 @@ import { SourcingModule } from '@/components/modules/sourcing-module'
 import { PublicationModule } from '@/components/modules/publication-module'
 import { SalesModule } from '@/components/modules/sales-module'
 import { ParcelsModule } from '@/components/modules/parcels-module'
+import { PreOrderModule } from '@/components/modules/preorder-module'
 import { ProfitabilityModule } from '@/components/modules/profitability-module'
 import { TaxesModule } from '@/components/modules/taxes-module'
 import { BiModule } from '@/components/modules/bi-module'
@@ -53,6 +55,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'publication', label: 'Publication', short: 'Publication', icon: FileText, description: 'Workflow de mise en ligne' },
   { key: 'sales', label: 'Ventes', short: 'Ventes', icon: ShoppingCart, description: 'Historique complet' },
   { key: 'parcels', label: 'Colis', short: 'Colis', icon: Package, description: 'Vue Kanban expéditions' },
+  { key: 'preorders', label: 'Pré-commandes', short: 'Pré-commandes', icon: ClipboardList, description: 'Commandes fournisseurs en attente' },
   { key: 'profitability', label: 'Rentabilité', short: 'Rentabilité', icon: TrendingUp, description: 'Dashboard financier', adminOnly: true },
   { key: 'taxes', label: 'Fiscalité', short: 'Fiscalité', icon: Receipt, description: 'Suivi & exports', adminOnly: true },
   { key: 'bi', label: 'Intelligence métier', short: 'BI', icon: BarChart3, description: 'Analyses & tendances' },
@@ -451,6 +454,7 @@ export default function Home() {
             {activeModule === 'publication' && <PublicationModule />}
             {activeModule === 'sales' && <SalesModule />}
             {activeModule === 'parcels' && <ParcelsModule />}
+            {activeModule === 'preorders' && <PreOrderModule />}
             {activeModule === 'profitability' && isAdmin && <ProfitabilityModule />}
             {activeModule === 'taxes' && isAdmin && <TaxesModule />}
             {activeModule === 'bi' && <BiModule />}

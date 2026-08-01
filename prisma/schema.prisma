@@ -27,6 +27,7 @@ model User {
   suppliers       Supplier[]
   expenses        Expense[]
   purchases       Purchase[]
+  preorders       PreOrder[]
   invoiceSettings InvoiceSettings?
   aiConfig        AIConfig?
   taxSettings     TaxSettings?
@@ -178,6 +179,7 @@ model Supplier {
 
   stockItems  StockItem[]
   purchases   Purchase[]
+  preorders   PreOrder[]
 }
 
 // ─────────────────────────────────────────────
@@ -362,6 +364,36 @@ model Purchase {
   invoiceNumber   String?  // n° facture fournisseur
   paymentMethod   String?  // especes | carte_bancaire | virement | cheque | paypal
   notes           String?
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// Module Pré-commandes — Commandes fournisseurs avant validation
+// ─────────────────────────────────────────────
+model PreOrder {
+  id              String   @id @default(cuid())
+  reference       String   @unique  // "PC-2026-001"
+  name            String   // nom libre donné par l'utilisateur (ex: "Achat rentrée septembre")
+  supplierId      String?
+  supplier        Supplier? @relation(fields: [supplierId], references: [id])
+  supplierName    String?  // nom libre si pas de fournisseur sélectionné
+  orderDate       DateTime @default(now())  // date de la pré-commande
+  // Items stockés en JSON (comme BoutiqueOrder.items) — chaque item: { designation, url, description, size, color, condition, quantity, unitPrice, stockItemId? }
+  items           String   @default("[]")
+  subtotal        Float    @default(0)
+  shippingCost    Float    @default(0)
+  total           Float    @default(0)
+  notes           String?
+  // pending = en attente (brouillon), validated = validée → convertie en commande (Purchase créé)
+  status          String   @default("pending")  // pending | validated | cancelled
+  // Champs remplis lors de la validation (conversion en commande)
+  orderNumber     String?  // n° commande fournisseur (saisi après validation)
+  invoiceNumber   String?  // n° facture fournisseur (saisi après validation)
+  purchaseId      String?  // lien vers le Purchase créé dans la compta ACHATS
+  validatedAt     DateTime?
   userId          String?
   user            User?    @relation(fields: [userId], references: [id])
   createdAt       DateTime @default(now())
@@ -600,6 +632,11 @@ model BoutiqueSettings {
   newsletterPlaceholder    String   @default("Votre adresse email") // placeholder du champ email
   newsletterSuccessMessage String   @default("Merci ! Vous êtes maintenant inscrit(e) à notre newsletter.") // message de succès
   newsletterColor          String   @default("#007bff")   // couleur d'accent du bloc newsletter
+
+  // ── Documents (bon de préparation + facture) ──
+  preparationSlipSubtitle  String   @default("DBoxPro Boutique")  // sous-titre du bon de préparation
+  invoiceFooterText        String?  // texte personnalisé du footer de facture (avant la date). Si null → texte par défaut.
+
   updatedAt       DateTime @updatedAt
 }
 

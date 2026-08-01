@@ -213,6 +213,7 @@ export async function GET(req: NextRequest) {
         emballage: 'Emballage',
         outil: 'Outil',
         materiel: 'Matériel',
+        precommande: 'Pré-commande fournisseur',
         autre: 'Autre',
       }
 
