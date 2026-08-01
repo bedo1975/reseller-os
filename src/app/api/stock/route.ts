@@ -83,7 +83,10 @@ export async function POST(req: NextRequest) {
         shelf: shelf || null,
         bin: bin || null,
         weight: weight ? parseFloat(weight) : null,
-        quantity: parseInt(quantity) || 1,
+        quantity: (() => {
+          const parsed = parseInt(String(quantity))
+          return Number.isNaN(parsed) ? 1 : Math.max(0, parsed)
+        })(),
         description: description || null,
         suggestedPrice: suggestedPrice ? parseFloat(suggestedPrice) : null,
         salePrice: salePrice ? parseFloat(salePrice) : null,

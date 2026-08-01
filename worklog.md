@@ -2543,3 +2543,50 @@ return NextResponse.json({ error: 'Erreur serveur', details: errorMsg }, { statu
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1092 KB, MD5: `84c4cd4988770d5c469d002bb5d3c40b`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: preOrderId-exclusion-fix
+Agent: main
+Task: Fix double counting — when a user edits a stock item (created from a pre-order) to set a selling price, the purchaseCost was being counted again in the ACHATS register on top of the pre-order Purchase.
+
+## Root cause
+Stock items created via "Commande reçue" had `purchaseCost = 0`, but when the user edits the article in the stock module, they might set a `purchaseCost` (because the field is visible in the edit form). Once `purchaseCost > 0`, the article appears in the ACHATS register (via `db.stockItem.findMany({ where: { purchaseDate: dateFilter } })`) — ON TOP of the Purchase entry created when the pre-order was validated. Double counting.
+
+## Fix — add `preOrderId` field to StockItem
+
+### Schema
+- Added `preOrderId String?` to the `StockItem` model.
+- This field links the stock item to the pre-order it came from.
+- Articles with `preOrderId !== null` are EXCLUDED from the ACHATS register (their cost is already counted via the Purchase entry from the pre-order validation).
+- `bunx prisma db push` — DB in sync.
+
+### Receive API (`/api/preorders/[id]/receive`)
+- When creating/updating StockItems, now sets `preOrderId: existing.id` (the pre-order's ID).
+- Both the "create new" and "update existing" paths set this field.
+
+### Accounting API (`/api/accounting/route.ts`)
+- Main query: added `preOrderId: null` to the `where` clause → excludes pre-order items.
+- Monthly totals query: also added `preOrderId: null`.
+- Result: StockItems from pre-orders are invisible in the ACHATS register. Only the Purchase entry (created on validation) counts the total.
+
+### How it works now
+1. Pre-order created with articles (10 t-shirts × 5€ = 50€)
+2. Pre-order validated → Purchase created with amount=50€ → appears in ACHATS register
+3. "Commande reçue" → StockItem created with preOrderId=preorder.id, purchaseCost=0, status=A_CONTROLER
+4. User edits the StockItem → sets selling price (suggestedPrice) + maybe purchaseCost=5€ → saves
+5. ACHATS register: StockItem is EXCLUDED (preOrderId !== null) → only the Purchase (50€) is counted ✅
+6. No double counting, even if the user sets a purchaseCost on the stock item.
+
+### Note for existing articles
+Articles already received before this fix don't have `preOrderId` set. To fix them, the user would need to either:
+- Receive the pre-order again (won't work — already received), OR
+- Manually set `preOrderId` in the DB, OR
+- Delete the stock items and re-receive the pre-order.
+
+This is a one-time migration concern — new articles received after this update will have `preOrderId` set automatically.
+
+## Build & zip
+- `bunx prisma db push`: ✓ schema in sync (StockItem.preOrderId added).
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1095 KB, MD5: `3243d9e37231a44aec7a0fa6249e7d72`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

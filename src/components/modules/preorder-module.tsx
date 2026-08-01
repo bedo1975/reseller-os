@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select'
 import {
   Plus, Trash2, Loader2, ArrowLeft, ClipboardList, CheckCircle2, Clock,
-  XCircle, Package, Edit3, FileText, ShoppingCart, PackagePlus,
+  XCircle, Package, Edit3, FileText, ShoppingCart, PackagePlus, PackageCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -79,6 +79,7 @@ interface PreOrder {
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: 'En attente', color: 'bg-amber-100 text-amber-700', icon: Clock },
   validated: { label: 'Validée', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
+  received: { label: 'Reçue', color: 'bg-blue-100 text-blue-700', icon: PackageCheck },
   cancelled: { label: 'Annulée', color: 'bg-red-100 text-red-700', icon: XCircle },
 }
 
@@ -670,6 +671,7 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const isValidated = preorder?.status === 'validated'
   const isCancelled = preorder?.status === 'cancelled'
   const isPending = preorder?.status === 'pending'
+  const isReceived = preorder?.status === 'received'
 
   const save = async (patch: any) => {
     setSaving(true)
@@ -813,6 +815,26 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
               </p>
               {preorder.orderNumber && <p className="text-green-700 dark:text-green-300">N° commande fournisseur: <strong>{preorder.orderNumber}</strong></p>}
               {preorder.invoiceNumber && <p className="text-green-700 dark:text-green-300">N° facture fournisseur: <strong>{preorder.invoiceNumber}</strong></p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alerte si reçue */}
+      {isReceived && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-4 text-sm">
+          <div className="flex items-start gap-2">
+            <PackageCheck className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-semibold text-blue-800 dark:text-blue-200">
+                Commande reçue — articles ajoutés au stock
+              </p>
+              <p className="text-blue-700 dark:text-blue-300">
+                Tous les articles de cette pré-commande ont été ajoutés au stock avec le statut <strong>« À contrôler »</strong>.
+                Une entrée de <strong>{fmtMoney(preorder.total)}</strong> est comptabilisée dans <strong>Fiscalité → ACHATS</strong>.
+              </p>
+              {preorder.orderNumber && <p className="text-blue-700 dark:text-blue-300">N° commande fournisseur: <strong>{preorder.orderNumber}</strong></p>}
+              {preorder.invoiceNumber && <p className="text-blue-700 dark:text-blue-300">N° facture fournisseur: <strong>{preorder.invoiceNumber}</strong></p>}
             </div>
           </div>
         </div>

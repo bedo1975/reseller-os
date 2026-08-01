@@ -229,9 +229,20 @@ export async function GET(req: NextRequest) {
         autre: 'Autre',
       }
 
+      // Check which purchases are linked to received pre-orders (to show "En stock" instead of "HS")
+      const purchaseIds = purchases.map(p => p.id).filter(Boolean)
+      const receivedPreOrders = purchaseIds.length > 0
+        ? await db.preOrder.findMany({
+            where: { purchaseId: { in: purchaseIds }, status: 'received' },
+            select: { purchaseId: true },
+          })
+        : []
+      const receivedPurchaseIds = new Set(receivedPreOrders.map(po => po.purchaseId))
+
       const purchaseEntries = purchases.map((p, idx) => {
         const purchaseMontantTTC = p.amount
         const purchaseMontantHT = vatEnabled ? purchaseMontantTTC / (1 + vatRate / 100) : purchaseMontantTTC
+        const isPreOrderReceived = receivedPurchaseIds.has(p.id)
         return {
           numero: entries.length + idx + 1,
           date: p.date,
@@ -247,7 +258,8 @@ export async function GET(req: NextRequest) {
           montantHT: parseFloat(purchaseMontantHT.toFixed(2)),
           sku: '—',
           prixVente: null,
-          isHorsStock: true,
+          isHorsStock: !isPreOrderReceived,  // show "HS" only for non-received pre-orders
+          isPreOrderReceived,  // new flag: show "En stock" for received pre-orders
         }
       })
 

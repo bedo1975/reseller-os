@@ -257,12 +257,17 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
               <span className="text-gray-500">Référence</span>
               <span className="font-mono text-xs text-gray-700">{product.sku}</span>
             </div>
-            {product.quantity != null && product.quantity > 0 && (
+            {product.quantity != null && product.quantity > 0 ? (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Disponibilité</span>
                 <span className="font-medium text-green-600">
                   {product.quantity > 1 ? `${product.quantity} en stock` : 'Dernier exemplaire !'}
                 </span>
+              </div>
+            ) : (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Disponibilité</span>
+                <span className="font-medium text-red-600">Non disponible actuellement</span>
               </div>
             )}
           </div>
@@ -285,7 +290,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
                 {settings.boutiqueClosedMessage || 'La boutique est temporairement fermée. Revenez bientôt !'}
               </span>
             </div>
-          ) : (
+          ) : product.quantity != null && product.quantity > 0 ? (
             <div className="flex gap-3 mb-3">
               <Button
                 onClick={addToCart}
@@ -300,6 +305,13 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
               >
                 Acheter maintenant
               </Button>
+            </div>
+          ) : (
+            <div className="mb-6 rounded-lg border border-red-300 bg-red-50 text-red-800 px-4 py-3 text-sm flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+              <span>
+                Cet article est actuellement en rupture de stock. Revenez bientôt !
+              </span>
             </div>
           )}
 

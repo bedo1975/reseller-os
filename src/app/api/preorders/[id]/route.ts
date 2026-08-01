@@ -70,7 +70,7 @@ export async function PATCH(
     if (typeof body.orderNumber === 'string') data.orderNumber = body.orderNumber || null
     if (typeof body.invoiceNumber === 'string') data.invoiceNumber = body.invoiceNumber || null
     if (typeof body.status === 'string') {
-      if (!['pending', 'validated', 'cancelled'].includes(body.status)) {
+      if (!['pending', 'validated', 'received', 'cancelled'].includes(body.status)) {
         return NextResponse.json({ error: 'Statut invalide' }, { status: 400 })
       }
       data.status = body.status

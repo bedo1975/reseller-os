@@ -105,6 +105,12 @@ export async function POST(
       }
     }
 
+    // Mark the pre-order as received (status = "received")
+    await db.preOrder.update({
+      where: { id },
+      data: { status: 'received' },
+    })
+
     return NextResponse.json({
       ok: true,
       message: `Commande reçue. ${createdItems.length} article(s) créé(s), ${updatedItems.length} article(s) mis à jour dans le stock (statut: À contrôler).`,

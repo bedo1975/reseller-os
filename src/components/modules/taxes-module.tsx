@@ -1028,6 +1028,7 @@ interface AchatEntry {
   prixVente: number | null
   vendu?: boolean
   isHorsStock?: boolean
+  isPreOrderReceived?: boolean
   quantite?: number
 }
 
@@ -1122,7 +1123,7 @@ function AchatsTab({ year }: { year: number }) {
                 <td>${e.designation}</td>
                 <td>${e.fournisseur}${e.siret ? `<br><span style="font-size:9px; color:#888;">SIRET : ${e.siret}</span>` : ''}</td>
                 <td>${e.modePaiement}</td>
-                <td>${e.isHorsStock ? 'HS' : e.vendu ? 'Vendu' : 'En stock'}</td>
+                <td>${e.isPreOrderReceived ? 'En stock' : e.isHorsStock ? 'HS' : e.vendu ? 'Vendu' : 'En stock'}</td>
                 ${data.vatEnabled ? `<td class="right">${e.montantHT.toFixed(2)}</td>` : ''}
                 <td class="right"><strong>${e.montant.toFixed(2)}</strong></td>
               </tr>
@@ -1328,7 +1329,9 @@ function AchatsTab({ year }: { year: number }) {
                       </td>
                       <td className="px-2 py-2 hidden lg:table-cell text-muted-foreground text-[10px]">{e.modePaiement}</td>
                       <td className="px-2 py-2">
-                        {e.isHorsStock ? (
+                        {e.isPreOrderReceived ? (
+                          <span className="text-[9px] bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded font-medium">En stock</span>
+                        ) : e.isHorsStock ? (
                           <span className="text-[9px] bg-violet-100 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded font-medium">HS</span>
                         ) : e.vendu ? (
                           <span className="text-[9px] bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-medium">Vendu</span>

@@ -12,8 +12,9 @@ export async function GET(
   try {
     const { sku } = await params
 
+    // Allow quantity = 0 products to be visible (shown as "Non disponible" on the product page)
     const item = await db.stockItem.findFirst({
-      where: { sku, status: 'PUBLIE', quantity: { gt: 0 } },
+      where: { sku, status: 'PUBLIE' },
       select: {
         id: true,
         sku: true,
@@ -65,7 +66,7 @@ export async function GET(
       mainPhoto: photos[0] ? (photos[0].startsWith('/uploads/') ? `/api${photos[0]}` : photos[0]) : null,
       measurements: item.measurements,
       weight: item.weight || 0,
-      quantity: item.quantity || 1,
+      quantity: item.quantity ?? 1,
       createdAt: item.createdAt,
     }
 

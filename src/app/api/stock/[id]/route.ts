@@ -61,7 +61,10 @@ export async function PATCH(
       if (q === '' || q === null || q === undefined) {
         updateData.quantity = 1
       } else {
-        updateData.quantity = parseInt(String(q)) || 1
+        // Allow quantity = 0 (out of stock). Use Number.isNaN check instead of || 1
+        // because `0 || 1` evaluates to `1` (0 is falsy).
+        const parsed = parseInt(String(q))
+        updateData.quantity = Number.isNaN(parsed) ? 1 : Math.max(0, parsed)
       }
     }
     if ('purchaseDate' in updateData) updateData.purchaseDate = new Date(updateData.purchaseDate as string)

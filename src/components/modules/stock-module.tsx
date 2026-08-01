@@ -904,7 +904,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         purchasePaymentMethod: (item as { purchasePaymentMethod?: string }).purchasePaymentMethod || '',
         warehouse: item.warehouse || '', rack: item.rack || '', shelf: item.shelf || '', bin: item.bin || '',
         weight: (item as { weight?: number }).weight ? String(item.weight) : '',
-        quantity: String((item as { quantity?: number }).quantity || 1),
+        quantity: String((item as { quantity?: number }).quantity ?? 1),
         description: item.description || '', suggestedPrice: item.suggestedPrice ? String(item.suggestedPrice) : '',
         salePrice: (item as any).salePrice ? String((item as any).salePrice) : '',
         saleActive: (item as any).saleActive === true,
