@@ -164,9 +164,18 @@ function SyntheseTab({ year }: { year: number }) {
   const totalOtherExpenses = yearExpenses.reduce((s, e) => s + e.amount, 0)
   const taxRate = taxSettings?.taxRate || 0
   const urssafCotisation = totalCA * taxRate / 100
-  // Le profit par vente inclut déjà la déduction des frais bancaires et frais port transporteur
-  // On déduit aussi les achats hors stock (Purchase entries — pré-commandes, fournitures, etc.)
-  const totalProfit = yearSales.reduce((s, x) => s + x.profit, 0) - totalOtherExpenses - totalHorsStockPurchases - urssafCotisation
+  // Net profit = CA - (all purchases in the period) - platform fees - carrier shipping - payment fees - other expenses - URSSAF
+  // We use achatsData.total (which includes ALL stock items purchased + Purchase entries, multiplied by quantity)
+  // instead of the old `Σ profit by sale - hors stock` formula which missed non-sold stock items.
+  // The old formula double-counted: profit per sale already deducts purchaseCost, AND we deducted hors stock on top.
+  // New formula: CA - totalPurchases - fees - expenses - URSSAF (clean, no double counting)
+  const totalProfit = totalCA
+    - (achatsData?.total ?? totalPurchases)  // all purchases (stock items + hors stock)
+    - totalPlatformFees
+    - totalCarrierShipping
+    - totalPaymentFees
+    - totalOtherExpenses
+    - urssafCotisation
 
   const exportCSV = () => {
     const rows: string[][] = []

@@ -2675,3 +2675,63 @@ Task: 4 fixes — (1) allow stock quantity=0 + show "Non disponible" on boutique
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1100 KB, MD5: `75bfd8711edfb541c57ea3b4e7a5dbc7`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: stock-patch-500-fix
+Agent: main
+Task: Fix 500 error on PATCH /api/stock/[id] — occurred when editing a stock item.
+
+## Root causes (3 issues)
+
+### 1. Ownership check too strict
+The PATCH and DELETE routes checked `existing.userId !== user.id`. Since stock items created via "Commande reçue" are attached to the admin (`stockUserId = adminUser?.id`), a staff member couldn't edit them — but more importantly, the admin could also hit issues if the item was created by a different admin or via the receive flow.
+
+**Fix:** Allow admin to edit/delete any stock item:
+```ts
+if (!existing || (user.role !== 'admin' && existing.userId !== user.id)) {
+```
+
+### 2. purchaseCost parsing crash
+The original code was:
+```ts
+if ('purchaseCost' in updateData) updateData.purchaseCost = parseFloat(updateData.purchaseCost as string)
+```
+If `purchaseCost` was an empty string (common in the form when the field is cleared), `parseFloat('')` returns `NaN`. Prisma then threw a validation error because `purchaseCost` is a `Float` (non-nullable) → 500.
+
+**Fix:** Handle empty/null/NaN gracefully:
+```ts
+if ('purchaseCost' in updateData) {
+  const pc = updateData.purchaseCost
+  if (pc === '' || pc === null || pc === undefined) {
+    updateData.purchaseCost = 0
+  } else {
+    const parsed = parseFloat(String(pc))
+    updateData.purchaseCost = Number.isNaN(parsed) ? 0 : parsed
+  }
+}
+```
+
+### 3. suggestedPrice parsing crash (same issue)
+The original code only parsed suggestedPrice if it was truthy, but didn't handle empty string → null properly.
+
+**Fix:** Same pattern as purchaseCost — empty/null/NaN → null.
+
+### 4. GET /api/stock — admin couldn't see all items
+The GET route filtered by `userId: user.id`. Admin couldn't see items created by staff or via the receive flow (which attaches items to the admin).
+
+**Fix:** Admin sees all items:
+```ts
+const userIdFilter = user.role === 'admin' ? {} : { userId: user.id }
+```
+
+### 5. Better error reporting
+The 500 response now includes the actual error message in `details` to help diagnose future issues:
+```ts
+const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue'
+return NextResponse.json({ error: 'Erreur serveur', details: errorMsg }, { status: 500 })
+```
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1100 KB, MD5: `bf9184104dd31c6474e30bd9ec0522a4`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
