@@ -2196,3 +2196,70 @@ The pre-order form used free-text `<Input>` fields for Taille, Couleur, État �
 2. In the create form, Taille/Couleur/État are now dropdowns populated from Paramètres → Attributs.
 3. Click "Créer l'article" on an article line → a StockItem is created (qty=0, status=A_PHOTOGRAPHIER) and the line shows "✓ lié au stock".
 4. On a pending pre-order detail page → "Supprimer" button (red) appears next to "Valider" → click → confirmation dialog → delete.
+
+---
+Task ID: preorder-achats-fix + list-delete-button
+Agent: main
+Task: (1) Fix: pre-order total still not appearing in Fiscalité → ACHATS after validation, (2) Add delete button in pre-order list (admin only).
+
+## Fix 1 — ACHATS not showing pre-order total (root cause fix)
+
+### Diagnosis
+The accounting API (`/api/accounting?type=achats`) filters purchases with `where: { date: dateFilter, userId: adminUser.id }`. This means the Purchase MUST belong to the admin user.
+
+In the previous fix, I made the validate route create the Purchase with `adminUser.id`. However, the deeper root cause was that the PRE-ORDER itself was attached to `user.id` (the creator). If a staff member created the pre-order, then:
+- The pre-order had `userId = staff.id`
+- The validate route fetched the pre-order with `where: { id, userId: user.id }` — if the admin tried to validate, the pre-order wasn't found (404 error, validation fails silently)
+- Even if validation succeeded, the admin couldn't see the pre-order in the list (GET filtered by `userId: user.id`)
+
+### Fix — attach ALL pre-orders to the admin
+
+**`/api/preorders` POST (create)**:
+- Fetch the admin user: `const adminUser = await db.user.findFirst({ where: { role: 'admin' } })`
+- Create the pre-order with `userId: adminUser?.id || user.id` (always the admin, regardless of who creates it)
+
+**`/api/preorders` GET (list)**:
+- Admin sees ALL pre-orders: `where: user.role === 'admin' ? {} : { userId: user.id }`
+- Staff sees only their own
+
+**`/api/preorders/[id]` GET/PATCH/DELETE**:
+- Admin can access any pre-order: `where: user.role === 'admin' ? { id } : { id, userId: user.id }`
+- Staff can only access their own
+
+**`/api/preorders/[id]/validate` POST**:
+- Admin can validate any pre-order (same filter as above)
+- Purchase is still created with `adminUser.id` (unchanged from previous fix)
+
+### Why this fixes ACHATS
+1. Pre-orders are now always owned by the admin → admin can always see + validate them
+2. The Purchase created on validation is attached to `adminUser.id` → the accounting API (which filters by `adminUser.id`) finds it
+3. No more 404 errors when admin validates a pre-order created by a staff member
+
+## Fix 2 — Delete button in pre-order list (admin only)
+
+### Changes in `preorder-module.tsx`
+
+**Main `PreOrderModule` component:**
+- Added `import { useSession } from 'next-auth/react'`
+- Added `const { data: session } = useSession()` + `const isAdmin = session?.user?.role === 'admin'`
+- Added state: `deleteTarget: PreOrder | null`, `deleting: boolean`
+- Added `confirmDelete()` function — calls `DELETE /api/preorders/${deleteTarget.id}`, refreshes list on success
+
+**List table:**
+- Each row now has a delete button (Trash2 icon, red) next to the edit button
+- The delete button is only rendered when:
+  - `isAdmin === true` (admin only)
+  - `po.status === 'pending'` (can't delete validated/cancelled pre-orders)
+- Clicking the delete button opens a confirmation dialog
+- The dialog shows the reference + name + warning ("Les articles créés dans le stock ne seront pas supprimés")
+- Buttons: "Annuler" / "Supprimer définitivement" (destructive variant)
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1078 KB, MD5: `f2b318006a9b23d761e7ab48367100f4`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+## Testing notes
+1. Create a pre-order (as admin or staff) → validate it → check Fiscalité → ACHATS: the total should now appear (the pre-order and purchase are both attached to the admin)
+2. In the pre-order list, admin sees a red trash icon next to each pending pre-order → click → confirmation dialog → delete
+3. Staff members don't see the delete button in the list (only the edit button)

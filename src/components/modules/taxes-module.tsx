@@ -107,6 +107,7 @@ function SyntheseTab({ year }: { year: number }) {
   const { data: sales, loading: salesLoading } = useFetch<Sale[]>('/api/sales')
   const { data: expenses, loading: expLoading, refresh } = useFetch<Expense[]>('/api/expenses')
   const { data: taxSettings } = useFetch<{ taxRate: number }>('/api/tax-rates')
+  const { data: purchases } = useFetch<any[]>('/api/purchases')
   const [showForm, setShowForm] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetting, setResetting] = useState(false)
@@ -134,8 +135,17 @@ function SyntheseTab({ year }: { year: number }) {
     return filtered.filter(e => new Date(e.date).getMonth() + 1 === parseInt(month))
   }, [expenses, year, month])
 
+  // Achats hors stock (Purchase entries — inclut les pré-commandes validées)
+  const yearPurchases = useMemo(() => {
+    const filtered = (purchases || []).filter(p => new Date(p.date).getFullYear() === year)
+    if (month === 'all') return filtered
+    return filtered.filter(p => new Date(p.date).getMonth() + 1 === parseInt(month))
+  }, [purchases, year, month])
+
   const totalCA = yearSales.reduce((s, x) => s + x.salePrice + (x.shippingCost || 0), 0)
-  const totalPurchases = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost, 0)
+  const totalStockPurchases = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost, 0)
+  const totalHorsStockPurchases = yearPurchases.reduce((s, p) => s + (p.amount || 0), 0)
+  const totalPurchases = totalStockPurchases + totalHorsStockPurchases
   const totalPlatformFees = yearSales.reduce((s, x) => s + (x.platformFees || 0) + (x.platformFixedFees || 0), 0)
   // Frais de port FACTURÉS au client (inclus dans le CA — c'est un revenu)
   const totalShippingBilled = yearSales.reduce((s, x) => s + x.shippingCost, 0)
@@ -147,7 +157,8 @@ function SyntheseTab({ year }: { year: number }) {
   const taxRate = taxSettings?.taxRate || 0
   const urssafCotisation = totalCA * taxRate / 100
   // Le profit par vente inclut déjà la déduction des frais bancaires et frais port transporteur
-  const totalProfit = yearSales.reduce((s, x) => s + x.profit, 0) - totalOtherExpenses - urssafCotisation
+  // On déduit aussi les achats hors stock (Purchase entries — pré-commandes, fournitures, etc.)
+  const totalProfit = yearSales.reduce((s, x) => s + x.profit, 0) - totalOtherExpenses - totalHorsStockPurchases - urssafCotisation
 
   const exportCSV = () => {
     const rows: string[][] = []
@@ -164,6 +175,9 @@ function SyntheseTab({ year }: { year: number }) {
     })
     yearExpenses.forEach(e => {
       rows.push(['Dépense', formatDate(e.date), '', '', e.label, '', '', '', '', '', '', (-e.amount).toFixed(2), ''])
+    })
+    yearPurchases.forEach(p => {
+      rows.push(['Achat HS', formatDate(p.date), '', '', p.designation, '', (-p.amount).toFixed(2), '', '', '', '', (-p.amount).toFixed(2), ''])
     })
     rows.push([])
     rows.push(['TOTAUX', '', '', '', '', totalCA.toFixed(2), totalPurchases.toFixed(2), totalPlatformFees.toFixed(2), totalShippingBilled.toFixed(2), totalCarrierShipping.toFixed(2), totalProfit.toFixed(2), ''])

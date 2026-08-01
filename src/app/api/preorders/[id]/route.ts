@@ -108,7 +108,14 @@ export async function PATCH(
 
 /**
  * DELETE /api/preorders/[id]
- * Auth — delete a pre-order (only if pending).
+ * Auth — delete a pre-order.
+ *
+ * - Admin can delete any pre-order (pending OR validated).
+ * - Staff can only delete their own pending pre-orders.
+ *
+ * If the pre-order was validated (has a linked Purchase), the Purchase is also
+ * deleted to keep the accounting (ACHATS) consistent — otherwise the purchase
+ * would remain in the registry pointing to a non-existent pre-order.
  */
 export async function DELETE(
   _req: NextRequest,
@@ -118,17 +125,23 @@ export async function DELETE(
     const user = await requireAuth()
     const { id } = await params
 
-    // Admin can delete any pre-order; staff only their own
-    const existing = await db.preOrder.findFirst({
-      where: user.role === 'admin' ? { id } : { id, userId: user.id },
-    })
+    // Admin can delete any pre-order; staff only their own pending ones
+    const where = user.role === 'admin'
+      ? { id }
+      : { id, userId: user.id, status: 'pending' as const }
+    const existing = await db.preOrder.findFirst({ where })
     if (!existing) {
-      return NextResponse.json({ error: 'Pré-commande introuvable' }, { status: 404 })
+      return NextResponse.json({ error: 'Pré-commande introuvable (ou non supprimable)' }, { status: 404 })
     }
-    if (existing.status === 'validated') {
-      return NextResponse.json({
-        error: 'Impossible de supprimer une pré-commande validée. Annulez-la à la place.',
-      }, { status: 400 })
+
+    // If validated, also delete the linked Purchase to keep accounting consistent
+    if (existing.status === 'validated' && existing.purchaseId) {
+      try {
+        await db.purchase.delete({ where: { id: existing.purchaseId } })
+      } catch (e) {
+        console.error('[preorders/delete] Failed to delete linked Purchase:', e)
+        // Continue anyway — the pre-order deletion is the main action
+      }
     }
 
     await db.preOrder.delete({ where: { id } })

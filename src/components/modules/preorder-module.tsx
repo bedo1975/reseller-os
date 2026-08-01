@@ -242,13 +242,13 @@ export function PreOrderModule() {
                           <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); openDetail(po.id) }} title="Voir / modifier">
                             <Edit3 className="h-4 w-4" />
                           </Button>
-                          {isAdmin && po.status === 'pending' && (
+                          {isAdmin && (
                             <Button
                               size="sm"
                               variant="ghost"
                               className="text-red-500 hover:text-red-600 hover:bg-red-50"
                               onClick={(e) => { e.stopPropagation(); setDeleteTarget(po) }}
-                              title="Supprimer (admin)"
+                              title={po.status === 'validated' ? 'Supprimer (admin) — le Purchase lié sera aussi supprimé' : 'Supprimer (admin)'}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -272,6 +272,11 @@ export function PreOrderModule() {
             <DialogDescription>
               Êtes-vous sûr de vouloir supprimer la pré-commande <strong>{deleteTarget?.reference}</strong> ({deleteTarget?.name}) ?
               Cette action est irréversible. Les articles créés dans le stock ne seront pas supprimés.
+              {deleteTarget?.status === 'validated' && (
+                <span className="block mt-2 text-amber-600 font-medium">
+                  ⚠️ Cette pré-commande est validée. L'entrée comptable associée (dans Fiscalité → ACHATS) sera également supprimée.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -385,6 +390,14 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
 
   // Create a StockItem from the current article line (qty = 0, status = A_PHOTOGRAPHIER)
   // and link it back to the pre-order item.
+  //
+  // IMPORTANT: purchaseCost is set to 0 (not item.unitPrice) to avoid double counting.
+  // When the pre-order is validated, a Purchase entry is created with the pre-order total
+  // (which includes this item's cost). If we also set purchaseCost > 0 on the StockItem,
+  // the accounting API would count it TWICE in the ACHATS register:
+  //   1. Once via StockItem.purchaseCost (in the stock-items-with-purchaseDate-in-period query)
+  //   2. Once via Purchase.amount (the pre-order total)
+  // By setting purchaseCost = 0, only the Purchase entry counts — which is correct.
   const createStockItem = async (idx: number) => {
     const item = items[idx]
     if (!item.designation.trim()) {
@@ -406,7 +419,7 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
           size: item.size || null,
           color: item.color || null,
           condition: item.condition || conditions[0]?.code || 'bon',
-          purchaseCost: Number(item.unitPrice) || 0,
+          purchaseCost: 0,  // 0 to avoid double counting (pre-order Purchase already accounts for the cost)
           purchaseDate: orderDate,
           supplierId: supplierId || null,
           quantity: 0,  // quantité = 0 comme demandé
@@ -418,7 +431,7 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
       if (!res.ok) { toast.error(data.error || 'Erreur lors de la création'); return }
       // Link the created StockItem back to the pre-order item
       updateItem(idx, 'stockItemId', data.id)
-      toast.success(`Article créé dans le stock (SKU: ${sku}, quantité: 0)`)
+      toast.success(`Article créé dans le stock (SKU: ${sku}, qté: 0, coût: 0€ — comptabilisé via la pré-commande)`)
     } catch {
       toast.error('Erreur réseau')
     } finally {
@@ -623,6 +636,8 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
 // ── Detail / edit ──────────────────────────────────────────────────────────
 
 function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === 'admin'
   const { data: preorder, loading, refresh } = useFetch<PreOrder>(`/api/preorders/${id}`)
   const [saving, setSaving] = useState(false)
   const [validating, setValidating] = useState(false)
@@ -729,7 +744,7 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
               <CheckCircle2 className="h-4 w-4 mr-2" /> Valider la pré-commande
             </Button>
           )}
-          {isPending && (
+          {isAdmin && !isCancelled && (
             <Button
               variant="outline"
               onClick={() => setShowDeleteDialog(true)}
@@ -929,6 +944,11 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
             <DialogDescription>
               Êtes-vous sûr de vouloir supprimer la pré-commande <strong>{preorder.reference}</strong> ?
               Cette action est irréversible. Les articles créés dans le stock ne seront pas supprimés.
+              {isValidated && (
+                <span className="block mt-2 text-amber-600 font-medium">
+                  ⚠️ Cette pré-commande est validée. L'entrée comptable associée (dans Fiscalité → ACHATS) sera également supprimée.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
