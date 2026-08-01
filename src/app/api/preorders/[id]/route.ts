@@ -14,8 +14,10 @@ export async function GET(
     const user = await requireAuth()
     const { id } = await params
 
+    // Admin sees any pre-order; staff sees only their own
+    const where = user.role === 'admin' ? { id } : { id, userId: user.id }
     const preorder = await db.preOrder.findFirst({
-      where: { id, userId: user.id },
+      where,
       include: { supplier: true },
     })
     if (!preorder) {
@@ -47,8 +49,9 @@ export async function PATCH(
     const { id } = await params
     const body = await req.json()
 
+    // Admin can edit any pre-order; staff only their own
     const existing = await db.preOrder.findFirst({
-      where: { id, userId: user.id },
+      where: user.role === 'admin' ? { id } : { id, userId: user.id },
     })
     if (!existing) {
       return NextResponse.json({ error: 'Pré-commande introuvable' }, { status: 404 })
@@ -115,8 +118,9 @@ export async function DELETE(
     const user = await requireAuth()
     const { id } = await params
 
+    // Admin can delete any pre-order; staff only their own
     const existing = await db.preOrder.findFirst({
-      where: { id, userId: user.id },
+      where: user.role === 'admin' ? { id } : { id, userId: user.id },
     })
     if (!existing) {
       return NextResponse.json({ error: 'Pré-commande introuvable' }, { status: 404 })

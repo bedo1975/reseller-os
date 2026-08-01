@@ -9,8 +9,10 @@ import { requireAuth } from '@/lib/session'
 export async function GET() {
   try {
     const user = await requireAuth()
+    // Admin sees all pre-orders; staff sees only their own
+    const where = user.role === 'admin' ? {} : { userId: user.id }
     const preorders = await db.preOrder.findMany({
-      where: { userId: user.id },
+      where,
       include: { supplier: true },
       orderBy: { createdAt: 'desc' },
     })
@@ -77,6 +79,12 @@ export async function POST(req: NextRequest) {
 
     const reference = await generateReference()
 
+    // Attach the pre-order to the admin (not the current user) so that:
+    // 1. The accounting API (which filters by adminUser.id) can find the Purchase created on validation
+    // 2. Admins can see all pre-orders regardless of who created them
+    const adminUser = await db.user.findFirst({ where: { role: 'admin' } })
+    const preorderUserId = adminUser?.id || user.id
+
     const preorder = await db.preOrder.create({
       data: {
         reference,
@@ -90,7 +98,7 @@ export async function POST(req: NextRequest) {
         total,
         notes: notes || null,
         status: 'pending',
-        userId: user.id,
+        userId: preorderUserId,
       },
       include: { supplier: true },
     })

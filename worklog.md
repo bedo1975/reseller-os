@@ -2114,3 +2114,85 @@ model PreOrder {
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages — was 112, +1 for new API routes).
 - `bash scripts/make-zip.sh`: zip = 1069 KB, MD5: `ad8cd0a663e573cf92262c3ad8fea3a9`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: preorder-fixes-batch
+Agent: main
+Task: 4 fixes on the pre-order module — (1) total not appearing in Fiscalité ACHATS, (2) attributes (size/color/condition) should come from settings, (3) add "Créer l'article" button, (4) add delete button on detail page.
+
+## Fix 1 — Purchase not appearing in Fiscalité ACHATS
+
+### Root cause
+`src/app/api/preorders/[id]/validate/route.ts` created the Purchase with `userId: user.id` (the user who clicked validate). But `src/app/api/accounting/route.ts` line 206 fetches purchases with `where: { date: dateFilter, userId: adminUser.id }` — it filters by the ADMIN's userId. If a staff member validates the pre-order, the Purchase is attached to the staff member and never appears in the ACHATS tab.
+
+### Fix
+In the validate route, fetch the admin user and attach the Purchase to them:
+```ts
+const adminUser = await db.user.findFirst({ where: { role: 'admin' } })
+const purchaseUserId = adminUser?.id || user.id
+// ... purchase.create({ data: { ..., userId: purchaseUserId } })
+```
+Now the Purchase always belongs to the admin, so it shows up in Fiscalité → ACHATS regardless of who validates.
+
+## Fix 2 — Attributes (size/color/condition) from settings
+
+### Root cause
+The pre-order form used free-text `<Input>` fields for Taille, Couleur, État — instead of dropdowns populated from the existing `Attribute` model (configured in Paramètres → Attributs).
+
+### Fix
+- Imported `useSettings` hook from `@/hooks/use-settings` in `preorder-module.tsx`.
+- In `CreatePreOrderForm`, added:
+  ```ts
+  const { getByType } = useSettings()
+  const sizes = getByType('size')
+  const colors = getByType('color')
+  const conditions = getByType('condition')
+  const categories = getByType('category')
+  ```
+- Replaced the 3 free-text `<Input>` fields (Taille, Couleur, État) with `<Select>` dropdowns populated from the attributes API. Each has a "— Aucune —" option (value `__none__` → empty string).
+
+## Fix 3 — "Créer l'article" button
+
+### Added in `CreatePreOrderForm`
+- New state: `creatingArticleIdx: number | null` (tracks which item is being created in stock).
+- New function `createStockItem(idx)`:
+  - Validates that the item has a designation.
+  - Generates a unique SKU: `ART-{timestamp36}-{random}`.
+  - Calls `POST /api/stock` with:
+    - `sku`, `title` = designation, `brand` = first word of designation (fallback), `category` = first category from attributes
+    - `size`, `color`, `condition` from the current item
+    - `purchaseCost` = item.unitPrice, `purchaseDate` = orderDate, `supplierId` from the form
+    - **`quantity: 0`** (as requested — articles are created with qty 0)
+    - `status: 'A_PHOTOGRAPHIER'`
+  - On success: links the created StockItem back to the pre-order item (`updateItem(idx, 'stockItemId', data.id)`).
+  - Shows toast "Article créé dans le stock (SKU: xxx, quantité: 0)".
+- UI: each article line now has a "Créer l'article" button (icon `PackagePlus`) next to the delete button. The button is disabled while creating (spinner) or if the item is already linked to a stock item.
+- When an item is linked to stock, shows a green "✓ lié au stock" badge next to the article number.
+- Imported `PackagePlus` icon from lucide-react.
+
+## Fix 4 — Delete button on detail page (pending only)
+
+### Added in `PreOrderDetail`
+- New states: `deleting: boolean`, `showDeleteDialog: boolean`.
+- New function `deletePreorder()`:
+  - Calls `DELETE /api/preorders/${id}`.
+  - On success: toast "Pré-commande supprimée" + `onBack()` (returns to list).
+- New computed: `isPending = preorder?.status === 'pending'`.
+- In the header, replaced the previous `{!isValidated && !isCancelled && ...}` button with a flex container showing:
+  - "Valider la pré-commande" button (green) — only if `isPending`
+  - "Supprimer" button (red outline) — only if `isPending`
+- Added a confirmation `Dialog` ("Supprimer la pré-commande") with:
+  - Warning text: "Cette action est irréversible. Les articles créés dans le stock ne seront pas supprimés."
+  - "Annuler" / "Supprimer définitivement" buttons (destructive variant).
+- The delete button is only visible when the pre-order status is "pending" — validated/cancelled pre-orders can't be deleted (the API already enforces this, returning 400 for validated pre-orders).
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1073 KB, MD5: `98eea3ad2ba43505f25e81238415d864`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+## Testing notes
+1. Create a pre-order → validate it → check Fiscalité → ACHATS: the total should now appear (even if a staff member validates).
+2. In the create form, Taille/Couleur/État are now dropdowns populated from Paramètres → Attributs.
+3. Click "Créer l'article" on an article line → a StockItem is created (qty=0, status=A_PHOTOGRAPHIER) and the line shows "✓ lié au stock".
+4. On a pending pre-order detail page → "Supprimer" button (red) appears next to "Valider" → click → confirmation dialog → delete.

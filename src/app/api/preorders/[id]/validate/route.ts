@@ -30,8 +30,10 @@ export async function POST(
     const { id } = await params
     const body = await req.json().catch(() => ({}))
 
+    // Fetch the pre-order — allow admin to validate any pre-order (not just their own)
+    // This fixes the case where a staff member creates the pre-order and the admin validates it (or vice versa).
     const existing = await db.preOrder.findFirst({
-      where: { id, userId: user.id },
+      where: user.role === 'admin' ? { id } : { id, userId: user.id },
       include: { supplier: true },
     })
     if (!existing) {

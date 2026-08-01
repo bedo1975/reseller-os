@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useSession } from 'next-auth/react'
 import { useFetch } from '@/hooks/use-fetch'
 import { useSettings } from '@/hooks/use-settings'
 import { Button } from '@/components/ui/button'
@@ -95,14 +96,35 @@ function parseItems(json: string): PreOrderItem[] {
 // ── Main component ─────────────────────────────────────────────────────────
 
 export function PreOrderModule() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === 'admin'
   const [view, setView] = useState<'list' | 'create' | 'detail'>('list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<PreOrder | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const { data: preorders, loading, refresh } = useFetch<PreOrder[]>('/api/preorders')
 
   const openDetail = (id: string) => {
     setSelectedId(id)
     setView('detail')
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/preorders/${deleteTarget.id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+      toast.success('Pré-commande supprimée')
+      setDeleteTarget(null)
+      refresh()
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   if (view === 'create') {
@@ -216,10 +238,21 @@ export function PreOrderModule() {
                             <Icon className="h-3 w-3" /> {cfg.label}
                           </span>
                         </td>
-                        <td className="py-2.5">
-                          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); openDetail(po.id) }}>
+                        <td className="py-2.5 flex items-center gap-1">
+                          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); openDetail(po.id) }} title="Voir / modifier">
                             <Edit3 className="h-4 w-4" />
                           </Button>
+                          {isAdmin && po.status === 'pending' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                              onClick={(e) => { e.stopPropagation(); setDeleteTarget(po) }}
+                              title="Supprimer (admin)"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     )
@@ -230,6 +263,26 @@ export function PreOrderModule() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialogue de suppression (liste) */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Supprimer la pré-commande</DialogTitle>
+            <DialogDescription>
+              Êtes-vous sûr de vouloir supprimer la pré-commande <strong>{deleteTarget?.reference}</strong> ({deleteTarget?.name}) ?
+              Cette action est irréversible. Les articles créés dans le stock ne seront pas supprimés.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Annuler</Button>
+            <Button onClick={confirmDelete} disabled={deleting} variant="destructive">
+              {deleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              {deleting ? 'Suppression...' : 'Supprimer définitivement'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
