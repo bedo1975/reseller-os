@@ -12,9 +12,11 @@ export async function GET(req: NextRequest) {
     const platform = searchParams.get('platform')
     const search = searchParams.get('search')
 
+    // Admin sees all stock items; staff sees only their own
+    const userIdFilter = user.role === 'admin' ? {} : { userId: user.id }
     const items = await db.stockItem.findMany({
       where: {
-        userId: user.id,
+        ...userIdFilter,
         AND: [
           status ? { status } : {},
           brand ? { brand } : {},

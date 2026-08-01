@@ -17,9 +17,9 @@ export async function PATCH(
     const { id } = await params
     const body = await req.json()
 
-    // Verify ownership
+    // Verify ownership — admin can edit any stock item, staff only their own
     const existing = await db.stockItem.findUnique({ where: { id } })
-    if (!existing || existing.userId !== user.id) {
+    if (!existing || (user.role !== 'admin' && existing.userId !== user.id)) {
       return NextResponse.json({ error: 'Article introuvable' }, { status: 404 })
     }
 
@@ -37,9 +37,24 @@ export async function PATCH(
     for (const key of allowed) {
       if (key in body) updateData[key] = body[key]
     }
-    if ('purchaseCost' in updateData) updateData.purchaseCost = parseFloat(updateData.purchaseCost as string)
-    if ('suggestedPrice' in updateData && updateData.suggestedPrice) {
-      updateData.suggestedPrice = parseFloat(updateData.suggestedPrice as string)
+    // Handle purchaseCost: allow empty string → 0, otherwise parse
+    if ('purchaseCost' in updateData) {
+      const pc = updateData.purchaseCost
+      if (pc === '' || pc === null || pc === undefined) {
+        updateData.purchaseCost = 0
+      } else {
+        const parsed = parseFloat(String(pc))
+        updateData.purchaseCost = Number.isNaN(parsed) ? 0 : parsed
+      }
+    }
+    if ('suggestedPrice' in updateData) {
+      const sp = updateData.suggestedPrice
+      if (sp === '' || sp === null || sp === undefined) {
+        updateData.suggestedPrice = null
+      } else {
+        const parsed = parseFloat(String(sp))
+        updateData.suggestedPrice = Number.isNaN(parsed) ? null : parsed
+      }
     }
     if ('salePrice' in updateData) {
       if (updateData.salePrice === '' || updateData.salePrice === null) {
@@ -95,7 +110,8 @@ export async function PATCH(
     if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+    const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue'
+    return NextResponse.json({ error: 'Erreur serveur', details: errorMsg }, { status: 500 })
   }
 }
 
@@ -111,7 +127,7 @@ export async function DELETE(
       where: { id },
       include: { sales: true },
     })
-    if (!existing || existing.userId !== user.id) {
+    if (!existing || (user.role !== 'admin' && existing.userId !== user.id)) {
       return NextResponse.json({ error: 'Article introuvable' }, { status: 404 })
     }
 

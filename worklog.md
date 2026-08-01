@@ -2590,3 +2590,88 @@ This is a one-time migration concern — new articles received after this update
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1095 KB, MD5: `3243d9e37231a44aec7a0fa6249e7d72`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: stock-zero + received-status + register-display
+Agent: main
+Task: 4 fixes — (1) allow stock quantity=0 + show "Non disponible" on boutique, (2) add "received" status to pre-orders, (3) verify Synthèse CA, (4) show "En stock" instead of "HS" for received pre-orders in the register.
+
+## 1. Stock quantity = 0 + "Non disponible" on boutique
+
+### Stock PATCH API (`/api/stock/[id]/route.ts`)
+- **Bug:** `parseInt(String(q)) || 1` — when q="0", parseInt returns 0, and `0 || 1` evaluates to `1` (0 is falsy). Quantity couldn't be set to 0.
+- **Fix:** `const parsed = parseInt(String(q)); updateData.quantity = Number.isNaN(parsed) ? 1 : Math.max(0, parsed)`
+- Now quantity=0 is properly stored.
+
+### Stock POST API (`/api/stock/route.ts`)
+- Same fix applied to the create route.
+
+### Stock module form (`stock-module.tsx`)
+- Fixed prefill: `quantity: String((item as { quantity?: number }).quantity || 1)` → `?? 1` (nullish coalescing instead of ||, so 0 is preserved).
+
+### Boutique product API (`/api/boutique/products/[sku]/route.ts`)
+- Removed `quantity: { gt: 0 }` filter → out-of-stock products are now visible on the boutique.
+- Fixed `quantity: item.quantity || 1` → `item.quantity ?? 1` (preserves 0).
+
+### Boutique product page (`/boutique/produit/[sku]/page.tsx`)
+- Added "Non disponible actuellement" (red) when quantity = 0.
+- Replaced add-to-cart/buy-now buttons with a red "Cet article est actuellement en rupture de stock. Revenez bientôt !" banner when quantity = 0.
+
+## 2. Pre-order "received" status
+
+### STATUS_CONFIG (`preorder-module.tsx`)
+- Added: `received: { label: 'Reçue', color: 'bg-blue-100 text-blue-700', icon: PackageCheck }`
+- Imported `PackageCheck` from lucide-react.
+
+### Receive API (`/api/preorders/[id]/receive/route.ts`)
+- After creating/updating stock items, now sets the pre-order status to `'received'`:
+  ```ts
+  await db.preOrder.update({ where: { id }, data: { status: 'received' } })
+  ```
+
+### PATCH API (`/api/preorders/[id]/route.ts`)
+- Added `'received'` to the valid status whitelist: `['pending', 'validated', 'received', 'cancelled']`
+
+### Detail page
+- Added `isReceived = preorder?.status === 'received'` boolean.
+- Added a blue alert banner for received pre-orders: "Commande reçue — articles ajoutés au stock".
+- The "Commande reçue" button only shows for `isValidated` (not `isReceived`), so received orders can't be received again.
+
+## 3. Synthèse CA verification
+- The CA (`totalCA`) is computed from `yearSales` (Sale records only): `Σ (salePrice + shippingCost)`.
+- It's recalculated on every render (no useMemo needed — `yearSales` is already memoized).
+- Stock items and pre-orders do NOT affect the CA. ✅ Correct.
+
+## 4. "En stock" instead of "HS" for received pre-orders in the register
+
+### Accounting API (`/api/accounting/route.ts`)
+- Added a query to find which purchases are linked to received pre-orders:
+  ```ts
+  const receivedPreOrders = await db.preOrder.findMany({
+    where: { purchaseId: { in: purchaseIds }, status: 'received' },
+    select: { purchaseId: true },
+  })
+  const receivedPurchaseIds = new Set(receivedPreOrders.map(po => po.purchaseId))
+  ```
+- For each purchase entry:
+  - `isPreOrderReceived = receivedPurchaseIds.has(p.id)`
+  - `isHorsStock = !isPreOrderReceived` (show "HS" only for non-received pre-orders)
+  - Added `isPreOrderReceived` flag to the entry object.
+
+### Register UI (`taxes-module.tsx`)
+- Added `isPreOrderReceived?: boolean` to the `AchatEntry` interface.
+- Updated the status column rendering:
+  - `isPreOrderReceived` → "En stock" (amber badge)
+  - `isHorsStock` → "HS" (violet badge)
+  - `vendu` → "Vendu" (emerald badge)
+  - else → "En stock" (amber badge)
+- Updated the PDF export with the same logic.
+
+### Result
+- A pre-order validated but not received → shows "HS" in the register.
+- A pre-order validated AND received → shows "En stock" in the register (because the articles are now in the stock with status A_CONTROLER).
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1100 KB, MD5: `75bfd8711edfb541c57ea3b4e7a5dbc7`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
