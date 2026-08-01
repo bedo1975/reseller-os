@@ -2263,3 +2263,92 @@ In the previous fix, I made the validate route create the Purchase with `adminUs
 1. Create a pre-order (as admin or staff) → validate it → check Fiscalité → ACHATS: the total should now appear (the pre-order and purchase are both attached to the admin)
 2. In the pre-order list, admin sees a red trash icon next to each pending pre-order → click → confirmation dialog → delete
 3. Staff members don't see the delete button in the list (only the edit button)
+
+---
+Task ID: preorder-delete-validated + synthese-fix + double-counting-fix
+Agent: main
+Task: 3 fixes — (1) delete button should appear for validated pre-orders too, (2) pre-order total should appear on Synthèse page (not just Registre des achats), (3) dissociate stock items created from pre-orders from the accounting to avoid double counting.
+
+## Fix 1 — Delete button for validated pre-orders (admin)
+
+### API — `/api/preorders/[id]` DELETE
+- Removed the `if (existing.status === 'validated') return 400` block.
+- Admin can now delete any pre-order (pending OR validated).
+- Staff can only delete their own **pending** pre-orders (the where clause now includes `status: 'pending'` for non-admins).
+- **When deleting a validated pre-order, the linked Purchase is also deleted** to keep the accounting (ACHATS) consistent:
+  ```ts
+  if (existing.status === 'validated' && existing.purchaseId) {
+    try { await db.purchase.delete({ where: { id: existing.purchaseId } }) } catch (e) { ... }
+  }
+  ```
+
+### Frontend — list view
+- The delete button now appears for **all statuses** (not just pending) when the user is admin.
+- Tooltip changes based on status: "Supprimer (admin) — le Purchase lié sera aussi supprimé" for validated pre-orders.
+- The confirmation dialog shows an amber warning when the pre-order is validated: "⚠️ Cette pré-commande est validée. L'entrée comptable associée (dans Fiscalité → ACHATS) sera également supprimée."
+
+### Frontend — detail view
+- Added `useSession` + `isAdmin` check to the `PreOrderDetail` component.
+- The delete button now shows for admin on all statuses (except cancelled).
+- Same amber warning in the detail's delete dialog for validated pre-orders.
+
+## Fix 2 — Synthèse page now includes pre-order purchases
+
+### Root cause
+The Synthèse tab computed `totalPurchases = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost, 0)` — only the purchaseCost of **sold** StockItems. It never read the `Purchase` model at all, so pre-order purchases (category `precommande`) were invisible.
+
+### Fix — `src/components/modules/taxes-module.tsx` `SyntheseTab`
+- Added `const { data: purchases } = useFetch<any[]>('/api/purchases')` — fetches all Purchase entries (hors stock).
+- Added `yearPurchases` useMemo — filters purchases by year + month (same logic as yearSales/yearExpenses).
+- Split the total: `totalStockPurchases` (sold items' purchaseCost) + `totalHorsStockPurchases` (Purchase entries).
+- `totalPurchases = totalStockPurchases + totalHorsStockPurchases` — now includes pre-order totals.
+- Updated `totalProfit` to also deduct `totalHorsStockPurchases` (these are real purchases that reduce profit).
+- CSV export: added a row per Purchase entry (type "Achat HS", designation, amount as negative).
+
+### Result
+The Synthèse "Achats" card now shows the same total as the Registre des achats tab (StockItem.purchaseCost + Purchase.amount).
+
+## Fix 3 — Double counting dissociation
+
+### Root cause
+When the user clicks "Créer l'article" on a pre-order line, the StockItem was created with `purchaseCost = item.unitPrice`. This means:
+1. The StockItem appears in the ACHATS register (via `db.stockItem.findMany({ where: { purchaseDate: dateFilter } })`) → counted once.
+2. When the pre-order is validated, a Purchase is created with `amount = pre-order total` (which includes this item's cost) → counted again.
+
+Same purchase = counted twice in the ACHATS register.
+
+### Fix — `src/components/modules/preorder-module.tsx` `createStockItem()`
+Changed `purchaseCost: Number(item.unitPrice) || 0` → `purchaseCost: 0`.
+
+Now:
+- The StockItem exists in stock (qty=0, status=A_PHOTOGRAPHIER) but has `purchaseCost = 0`.
+- The StockItem still appears in the ACHATS register, but with montant = 0€ → doesn't inflate the total.
+- The pre-order validation creates a Purchase with the real total → counted once.
+- No more double counting.
+
+Added a detailed comment explaining why purchaseCost = 0:
+```ts
+// IMPORTANT: purchaseCost is set to 0 (not item.unitPrice) to avoid double counting.
+// When the pre-order is validated, a Purchase entry is created with the pre-order total
+// (which includes this item's cost). If we also set purchaseCost > 0 on the StockItem,
+// the accounting API would count it TWICE in the ACHATS register.
+```
+
+Toast message updated: "Article créé dans le stock (SKU: xxx, qté: 0, coût: 0€ — comptabilisé via la pré-commande)".
+
+### Note for existing articles
+If the user already created articles from pre-orders with the old code (purchaseCost > 0), those articles are already in the DB with a non-zero purchaseCost. To fix the double counting for existing articles, the user would need to either:
+- Manually edit each StockItem and set purchaseCost = 0, OR
+- Delete the pre-order (which also deletes the linked Purchase) and re-validate it.
+
+This is a one-time migration concern — new articles created from pre-orders will have purchaseCost = 0 automatically.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1082 KB, MD5: `b8aa1864d19998518d5a3b27caa85e35`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+## Testing notes
+1. **Delete validated pre-order**: validate a pre-order → go back to list → click the red trash icon → confirmation dialog shows amber warning → delete → the pre-order AND the linked Purchase are both deleted.
+2. **Synthèse**: validate a pre-order → go to Fiscalité → Synthèse → the "Achats" total now includes the pre-order amount (same as the Registre des achats tab).
+3. **Double counting**: create a new pre-order → use "Créer l'article" on a line → validate the pre-order → check Fiscalité → Registre des achats → the StockItem appears with montant 0€ and the Purchase appears with the real total → no double counting.

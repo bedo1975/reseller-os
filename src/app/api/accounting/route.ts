@@ -148,14 +148,18 @@ export async function GET(req: NextRequest) {
       }
 
       const entries = items.map((item, idx) => {
-        const montantTTC = item.purchaseCost
+        // purchaseCost is the UNIT cost; multiply by quantity to get the total purchase amount.
+        // Default quantity to 1 if not set (backward compat with old items).
+        const qty = item.quantity || 1
+        const montantTTC = item.purchaseCost * qty
         const montantHT = vatEnabled ? montantTTC / (1 + vatRate / 100) : montantTTC
         const firstSale = item.sales && item.sales.length > 0 ? item.sales[0] : null
+        const designationBase = `${item.brand} ${item.category} ${item.size || ''} ${item.color || ''}`.trim().replace(/\s+/g, ' ')
         return {
           numero: idx + 1,
           date: item.purchaseDate,
           invoiceNumber: item.purchaseInvoiceNumber || firstSale?.invoiceNumber || '—',
-          designation: `${item.brand} ${item.category} ${item.size || ''} ${item.color || ''}`.trim().replace(/\s+/g, ' '),
+          designation: qty > 1 ? `${designationBase} (×${qty})` : designationBase,
           fournisseur: item.supplier?.name || '—',
           siret: item.supplier?.siret || null,
           typeFournisseur: item.supplier ? (supplierLabels[item.supplier.type] || item.supplier.type) : '—',
@@ -166,6 +170,7 @@ export async function GET(req: NextRequest) {
           sku: item.sku,
           prixVente: firstSale ? parseFloat(firstSale.salePrice.toFixed(2)) : null,
           vendu: !!firstSale,
+          quantite: qty,
         }
       })
 
@@ -187,7 +192,7 @@ export async function GET(req: NextRequest) {
           monthlyTotals.push({
             month: new Date(year, m, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
             monthNum: m + 1,
-            total: parseFloat(monthEntries.reduce((s, it) => s + it.purchaseCost, 0).toFixed(2)),
+            total: parseFloat(monthEntries.reduce((s, it) => s + it.purchaseCost * (it.quantity || 1), 0).toFixed(2)),
             count: monthEntries.length,
           })
         }

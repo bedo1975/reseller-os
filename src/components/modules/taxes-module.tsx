@@ -113,6 +113,10 @@ function SyntheseTab({ year }: { year: number }) {
   const [resetting, setResetting] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [month, setMonth] = useState<string>('all')
+  // Fetch the accounting ACHATS data (same source as the Registre des achats tab).
+  // This includes ALL stock items purchased in the period (sold or not) + all Purchase entries,
+  // and correctly multiplies purchaseCost by quantity. Used for the "Achats" total in the synthèse.
+  const { data: achatsData } = useFetch<any>(`/api/accounting?type=achats&year=${year}${month !== 'all' ? `&month=${month}` : ''}`)
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
     category: 'frais_port',
@@ -143,9 +147,13 @@ function SyntheseTab({ year }: { year: number }) {
   }, [purchases, year, month])
 
   const totalCA = yearSales.reduce((s, x) => s + x.salePrice + (x.shippingCost || 0), 0)
-  const totalStockPurchases = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost, 0)
+  // Use the accounting API's total (includes ALL stock items purchased in the period,
+  // not just sold ones, AND all Purchase/hors-stock entries, AND correctly multiplies
+  // purchaseCost by quantity). Falls back to sold-only calculation if the API hasn't loaded.
+  // NOTE: achatsData.total already includes BOTH stock items and Purchase entries, so we
+  // must NOT add totalHorsStockPurchases on top (that would double-count).
   const totalHorsStockPurchases = yearPurchases.reduce((s, p) => s + (p.amount || 0), 0)
-  const totalPurchases = totalStockPurchases + totalHorsStockPurchases
+  const totalPurchases = achatsData?.total ?? (yearSales.reduce((s, x) => s + x.stockItem.purchaseCost * (x.stockItem.quantity || 1), 0) + totalHorsStockPurchases)
   const totalPlatformFees = yearSales.reduce((s, x) => s + (x.platformFees || 0) + (x.platformFixedFees || 0), 0)
   // Frais de port FACTURÉS au client (inclus dans le CA — c'est un revenu)
   const totalShippingBilled = yearSales.reduce((s, x) => s + x.shippingCost, 0)
@@ -1019,6 +1027,7 @@ interface AchatEntry {
   prixVente: number | null
   vendu?: boolean
   isHorsStock?: boolean
+  quantite?: number
 }
 
 interface AchatsData {
