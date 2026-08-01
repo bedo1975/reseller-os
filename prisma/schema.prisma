@@ -241,6 +241,11 @@ model StockItem {
   userId        String?
   user          User?    @relation(fields: [userId], references: [id])
 
+  // Lien vers la pré-commande (si l'article a été créé via "Commande reçue")
+  // Ces articles sont EXCLUS du registre des achats car leur coût est déjà
+  // comptabilisé via le Purchase créé lors de la validation de la pré-commande.
+  preOrderId    String?
+
   // 1 StockItem peut avoir plusieurs Sales (utile pour quantité > 1)
   sales         Sale[]
 }

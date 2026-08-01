@@ -125,9 +125,13 @@ export async function GET(req: NextRequest) {
 
       // TOUS les articles achetés sur la période (vendus ou non).
       // Le livre des achats enregistre les achats au moment de l'achat, pas de la revente.
+      // EXCLUSION : les articles issus d'une pré-commande (preOrderId non null) sont exclus
+      // car leur coût est déjà comptabilisé via le Purchase créé lors de la validation de la
+      // pré-commande. Sans cette exclusion, le même achat serait compté deux fois.
       const items = await db.stockItem.findMany({
         where: {
           purchaseDate: dateFilter,
+          preOrderId: null,  // exclure les articles issus de pré-commandes
         },
         include: { supplier: true, sales: { orderBy: { saleDate: 'desc' } } },
         orderBy: { purchaseDate: 'asc' },
@@ -179,10 +183,12 @@ export async function GET(req: NextRequest) {
       const totalHT = entries.reduce((s, e) => s + e.montantHT, 0)
 
       // Totaux par mois (sur l'année complète, tous les articles achetés)
+      // Exclure aussi les articles issus de pré-commandes (preOrderId non null)
       const allYearItems = month
         ? await db.stockItem.findMany({
             where: {
               purchaseDate: { gte: new Date(`${year}-01-01T00:00:00.000Z`), lte: new Date(`${year}-12-31T23:59:59.999Z`) },
+              preOrderId: null,
             },
           })
         : items

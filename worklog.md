@@ -2513,3 +2513,33 @@ When the user clicks "Commande reçue":
 2. **Order number**: In the validate dialog, enter "CMD-12345" → validate → check Registre des achats → the "N° cmd four." column shows "CMD-12345".
 3. **Synthèse CA**: The CA should only reflect actual sales (not pre-orders or stock items). ✅ Verified.
 4. **Commande reçue**: Validate a pre-order → click "Commande reçue" → confirm → go to Stock → the articles appear with status "À contrôler" and the correct quantity.
+
+---
+Task ID: receive-route-500-fix
+Agent: main
+Task: Fix 500 error on POST /api/preorders/[id]/receive — the StockItem create was missing required fields.
+
+## Root cause
+The `/api/preorders/[id]/receive` route creates new StockItems when an article has no `stockItemId`. The `StockItem` model has two required (non-nullable, no default) string fields:
+- `photos String` — JSON array of photo URLs (required, no default)
+- `platforms String @default("[]")` — has a default but safer to pass explicitly
+
+The create call was missing `photos`, which caused Prisma to throw a validation error → 500.
+
+## Fix
+Added the missing required fields to the `db.stockItem.create()` call:
+```ts
+photos: JSON.stringify([]),  // required field — empty array
+platforms: JSON.stringify([]),  // required field — empty array
+```
+
+Also improved error handling — the 500 response now includes the actual error message in `details` to help diagnose any future issues:
+```ts
+const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue'
+return NextResponse.json({ error: 'Erreur serveur', details: errorMsg }, { status: 500 })
+```
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1092 KB, MD5: `84c4cd4988770d5c469d002bb5d3c40b`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

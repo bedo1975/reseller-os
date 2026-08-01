@@ -73,6 +73,7 @@ export async function POST(
             color: color || undefined,
             condition: condition || undefined,
             description: description || undefined,
+            preOrderId: existing.id,  // mark as coming from this pre-order → excluded from ACHATS register
           },
         })
         updatedItems.push(updated)
@@ -97,6 +98,7 @@ export async function POST(
             platforms: JSON.stringify([]),  // required field — empty array
             status: 'A_CONTROLER',
             userId: stockUserId,
+            preOrderId: existing.id,  // mark as coming from this pre-order → excluded from ACHATS register
           },
         })
         createdItems.push(created)
