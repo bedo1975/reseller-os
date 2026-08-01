@@ -356,11 +356,12 @@ model Purchase {
   id              String   @id @default(cuid())
   date            DateTime @default(now())
   designation     String   // description (ex: "Cartons d'emballage x50")
-  category        String   @default("fourniture") // fourniture | emballage | outil | materiel | autre
+  category        String   @default("fourniture") // fourniture | emballage | outil | materiel | precommande | autre
   supplierId      String?
   supplier        Supplier? @relation(fields: [supplierId], references: [id])
   supplierName    String?  // nom libre si pas de fournisseur sélectionné
   amount          Float    // montant TTC
+  orderNumber     String?  // n° commande fournisseur (pour les pré-commandes)
   invoiceNumber   String?  // n° facture fournisseur
   paymentMethod   String?  // especes | carte_bancaire | virement | cheque | paypal
   notes           String?
@@ -386,6 +387,7 @@ model PreOrder {
   subtotal        Float    @default(0)
   shippingCost    Float    @default(0)
   total           Float    @default(0)
+  paymentMethod   String?  // especes | carte_bancaire | virement | cheque | paypal (passé au Purchase lors de la validation)
   notes           String?
   // pending = en attente (brouillon), validated = validée → convertie en commande (Purchase créé)
   status          String   @default("pending")  // pending | validated | cancelled

@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth()
     const body = await req.json()
-    const { name, supplierId, supplierName, orderDate, items, shippingCost, notes } = body
+    const { name, supplierId, supplierName, orderDate, paymentMethod, items, shippingCost, notes } = body
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: 'Le nom de la pré-commande est requis' }, { status: 400 })
@@ -96,6 +96,7 @@ export async function POST(req: NextRequest) {
         subtotal,
         shippingCost: shipping,
         total,
+        paymentMethod: paymentMethod || null,
         notes: notes || null,
         status: 'pending',
         userId: preorderUserId,

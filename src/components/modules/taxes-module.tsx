@@ -1015,6 +1015,7 @@ interface AchatEntry {
   numero: number
   date: string
   invoiceNumber: string
+  orderNumber?: string
   designation: string
   fournisseur: string
   siret: string | null
@@ -1102,6 +1103,7 @@ function AchatsTab({ year }: { year: number }) {
               <th style="width: 30px;">N°</th>
               <th style="width: 70px;">Date</th>
               <th style="width: 80px;">N° facture</th>
+              <th style="width: 80px;">N° cmd four.</th>
               <th>Désignation</th>
               <th>Fournisseur</th>
               <th>Mode paiement</th>
@@ -1116,6 +1118,7 @@ function AchatsTab({ year }: { year: number }) {
                 <td class="center">${e.numero}</td>
                 <td>${formatDate(e.date)}</td>
                 <td><strong>${e.invoiceNumber}</strong></td>
+                <td>${e.orderNumber || '—'}</td>
                 <td>${e.designation}</td>
                 <td>${e.fournisseur}${e.siret ? `<br><span style="font-size:9px; color:#888;">SIRET : ${e.siret}</span>` : ''}</td>
                 <td>${e.modePaiement}</td>
@@ -1125,7 +1128,7 @@ function AchatsTab({ year }: { year: number }) {
               </tr>
             `).join('')}
             <tr class="total-row">
-              <td colspan="${data.vatEnabled ? 7 : 6}" class="right">TOTAL ${data.month ? 'MENSUEL' : 'ANNUEL'}</td>
+              <td colspan="${data.vatEnabled ? 8 : 7}" class="right">TOTAL ${data.month ? 'MENSUEL' : 'ANNUEL'}</td>
               ${data.vatEnabled ? `<td class="right">${data.totalHT.toFixed(2)}</td>` : ''}
               <td class="right">${data.total.toFixed(2)}</td>
             </tr>
@@ -1289,6 +1292,7 @@ function AchatsTab({ year }: { year: number }) {
                     <th className="px-2 py-2 font-medium">N°</th>
                     <th className="px-2 py-2 font-medium">Date</th>
                     <th className="px-2 py-2 font-medium">N° facture</th>
+                    <th className="px-2 py-2 font-medium hidden xl:table-cell">N° cmd four.</th>
                     <th className="px-2 py-2 font-medium">Désignation</th>
                     <th className="px-2 py-2 font-medium hidden md:table-cell">Fournisseur</th>
                     <th className="px-2 py-2 font-medium hidden lg:table-cell">Paiement</th>
@@ -1305,6 +1309,11 @@ function AchatsTab({ year }: { year: number }) {
                       <td className="px-2 py-2">
                         <code className="text-[10px] bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded font-mono font-semibold">
                           {e.invoiceNumber}
+                        </code>
+                      </td>
+                      <td className="px-2 py-2 hidden xl:table-cell">
+                        <code className="text-[10px] bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">
+                          {e.orderNumber || '—'}
                         </code>
                       </td>
                       <td className="px-2 py-2 max-w-[200px] truncate">
@@ -1332,7 +1341,7 @@ function AchatsTab({ year }: { year: number }) {
                     </tr>
                   ))}
                   <tr className="bg-sky-50 dark:bg-sky-950/30 border-t-2 border-sky-200 dark:border-sky-900">
-                    <td colSpan={data.vatEnabled ? 7 : 6} className="px-2 py-2.5 text-right font-semibold text-xs uppercase">
+                    <td colSpan={data.vatEnabled ? 8 : 7} className="px-2 py-2.5 text-right font-semibold text-xs uppercase">
                       Total {data.month ? 'mensuel' : 'annuel'}
                     </td>
                     {data.vatEnabled && <td className="px-2 py-2.5 text-right font-bold">{formatEUR(data.totalHT)}</td>}

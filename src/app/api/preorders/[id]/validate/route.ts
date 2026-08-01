@@ -72,9 +72,10 @@ export async function POST(
         supplierId: existing.supplierId || null,
         supplierName: existing.supplier?.name || existing.supplierName || null,
         amount: existing.total,
+        orderNumber: orderNumber || null,
         invoiceNumber: invoiceNumber || null,
-        paymentMethod: null,
-        notes: `Pré-commande ${existing.reference}${orderNumber ? ` — Cmd fournisseur: ${orderNumber}` : ''}`,
+        paymentMethod: existing.paymentMethod || null,
+        notes: `Pré-commande ${existing.reference}`,
         userId: purchaseUserId,
       },
     })

@@ -64,6 +64,7 @@ interface PreOrder {
   subtotal: number
   shippingCost: number
   total: number
+  paymentMethod: string | null
   notes: string | null
   status: string  // pending | validated | cancelled
   orderNumber: string | null
@@ -308,6 +309,7 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
   const [name, setName] = useState('')
   const [supplierId, setSupplierId] = useState<string>('')
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10))
+  const [paymentMethod, setPaymentMethod] = useState<string>('')
   const [notes, setNotes] = useState('')
   const [shippingCost, setShippingCost] = useState(0)
   const [items, setItems] = useState<PreOrderItem[]>([
@@ -372,6 +374,7 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
           supplierId: supplierId || null,
           supplierName: supplierId ? (suppliers || []).find(s => s.id === supplierId)?.name : null,
           orderDate,
+          paymentMethod: paymentMethod || null,
           items: cleanItems,
           shippingCost: Number(shippingCost) || 0,
           notes: notes.trim() || null,
@@ -470,6 +473,19 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
                 {(suppliers || []).map(s => (
                   <SelectItem key={s.id} value={s.id}>{s.name} ({s.type})</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5 md:col-span-3">
+            <Label>Méthode de paiement</Label>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <SelectTrigger><SelectValue placeholder="Sélectionner un mode de paiement (optionnel)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="especes">Espèces</SelectItem>
+                <SelectItem value="carte_bancaire">Carte bancaire</SelectItem>
+                <SelectItem value="virement">Virement</SelectItem>
+                <SelectItem value="cheque">Chèque</SelectItem>
+                <SelectItem value="paypal">PayPal</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -642,8 +658,10 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const [saving, setSaving] = useState(false)
   const [validating, setValidating] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [receiving, setReceiving] = useState(false)
   const [showValidateDialog, setShowValidateDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showReceiveDialog, setShowReceiveDialog] = useState(false)
   const [orderNumber, setOrderNumber] = useState('')
   const [invoiceNumber, setInvoiceNumber] = useState('')
 
@@ -685,6 +703,22 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
     } finally {
       setDeleting(false)
       setShowDeleteDialog(false)
+    }
+  }
+
+  const receiveOrder = async () => {
+    setReceiving(true)
+    try {
+      const res = await fetch(`/api/preorders/${id}/receive`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+      toast.success(data.message || 'Commande reçue — articles ajoutés au stock')
+      setShowReceiveDialog(false)
+      refresh()
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setReceiving(false)
     }
   }
 
@@ -742,6 +776,14 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
               className="bg-green-600 hover:bg-green-700"
             >
               <CheckCircle2 className="h-4 w-4 mr-2" /> Valider la pré-commande
+            </Button>
+          )}
+          {isValidated && (
+            <Button
+              onClick={() => setShowReceiveDialog(true)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Package className="h-4 w-4 mr-2" /> Commande reçue
             </Button>
           )}
           {isAdmin && !isCancelled && (
@@ -802,6 +844,21 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
             <Label className="text-xs">Fournisseur</Label>
             <Input
               value={preorder.supplier?.name || preorder.supplierName || ''}
+              disabled
+              className="bg-muted/50"
+            />
+          </div>
+          <div className="space-y-1.5 md:col-span-3">
+            <Label className="text-xs">Méthode de paiement</Label>
+            <Input
+              value={
+                preorder.paymentMethod === 'especes' ? 'Espèces'
+                : preorder.paymentMethod === 'carte_bancaire' ? 'Carte bancaire'
+                : preorder.paymentMethod === 'virement' ? 'Virement'
+                : preorder.paymentMethod === 'cheque' ? 'Chèque'
+                : preorder.paymentMethod === 'paypal' ? 'PayPal'
+                : '—'
+              }
               disabled
               className="bg-muted/50"
             />
@@ -956,6 +1013,36 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
             <Button onClick={deletePreorder} disabled={deleting} variant="destructive">
               {deleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
               {deleting ? 'Suppression...' : 'Supprimer définitivement'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogue de réception */}
+      <Dialog open={showReceiveDialog} onOpenChange={setShowReceiveDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Marquer la commande comme reçue</DialogTitle>
+            <DialogDescription>
+              Tous les articles de cette pré-commande seront ajoutés au stock avec le statut <strong>« À contrôler »</strong>.
+              <br /><br />
+              {items.filter(i => i.stockItemId).length > 0 && (
+                <span className="text-blue-600">
+                  ℹ️ {items.filter(i => i.stockItemId).length} article(s) déjà créé(s) seront mis à jour (quantité + statut).
+                </span>
+              )}
+              {items.filter(i => !i.stockItemId).length > 0 && (
+                <span className="text-blue-600">
+                  ℹ️ {items.filter(i => !i.stockItemId).length} nouvel(s) article(s) seront créés dans le stock.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReceiveDialog(false)}>Annuler</Button>
+            <Button onClick={receiveOrder} disabled={receiving} className="bg-blue-600 hover:bg-blue-700">
+              {receiving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Package className="h-4 w-4 mr-2" />}
+              {receiving ? 'Traitement...' : 'Confirmer la réception'}
             </Button>
           </DialogFooter>
         </DialogContent>

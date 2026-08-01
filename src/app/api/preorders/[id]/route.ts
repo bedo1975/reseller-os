@@ -65,6 +65,7 @@ export async function PATCH(
     if (typeof body.supplierId === 'string') data.supplierId = body.supplierId || null
     if (typeof body.supplierName === 'string') data.supplierName = body.supplierName || null
     if (typeof body.orderDate === 'string') data.orderDate = new Date(body.orderDate)
+    if (typeof body.paymentMethod === 'string') data.paymentMethod = body.paymentMethod || null
     if (typeof body.notes === 'string') data.notes = body.notes || null
     if (typeof body.orderNumber === 'string') data.orderNumber = body.orderNumber || null
     if (typeof body.invoiceNumber === 'string') data.invoiceNumber = body.invoiceNumber || null

@@ -2352,3 +2352,73 @@ This is a one-time migration concern — new articles created from pre-orders wi
 1. **Delete validated pre-order**: validate a pre-order → go back to list → click the red trash icon → confirmation dialog shows amber warning → delete → the pre-order AND the linked Purchase are both deleted.
 2. **Synthèse**: validate a pre-order → go to Fiscalité → Synthèse → the "Achats" total now includes the pre-order amount (same as the Registre des achats tab).
 3. **Double counting**: create a new pre-order → use "Créer l'article" on a line → validate the pre-order → check Fiscalité → Registre des achats → the StockItem appears with montant 0€ and the Purchase appears with the real total → no double counting.
+
+---
+Task ID: accounting-quantity + synthese-achats-fix
+Agent: main
+Task: 2 fixes — (1) Registre des achats only counts 1 item instead of the purchased quantity (e.g. 10), (2) Synthèse "Achats" total doesn't include non-sold stock items.
+
+## Fix 1 — Accounting API: multiply purchaseCost by quantity
+
+### Root cause
+`/api/accounting/route.ts` (the `achats` branch) computed each StockItem's montant as:
+```ts
+const montantTTC = item.purchaseCost  // unit cost, NOT total
+```
+If a StockItem has `purchaseCost = 5€` (unit cost) and `quantity = 10`, the register showed 5€ instead of 50€.
+
+### Fix — `/api/accounting/route.ts`
+1. **Entry montant** (line ~150):
+   ```ts
+   const qty = item.quantity || 1
+   const montantTTC = item.purchaseCost * qty
+   ```
+   - Added `quantite: qty` to the entry object (for display).
+   - Designation now shows `(×10)` when qty > 1: `designation: qty > 1 ? \`${designationBase} (×${qty})\` : designationBase`
+
+2. **Monthly totals** (line ~190):
+   ```ts
+   total: parseFloat(monthEntries.reduce((s, it) => s + it.purchaseCost * (it.quantity || 1), 0).toFixed(2)),
+   ```
+
+3. **Frontend interface** (`taxes-module.tsx` `AchatEntry`): added `quantite?: number` field.
+
+### Result
+- A StockItem with `purchaseCost = 5€` and `quantity = 10` now shows montant = 50€ in the register.
+- The designation shows "Brand Category Size Color (×10)" so the user can see it's a bulk purchase.
+- Monthly totals are correct.
+- The Synthèse total (which uses the same API) is also correct.
+
+## Fix 2 — Synthèse: use the accounting API total (includes non-sold items)
+
+### Root cause
+The Synthèse tab computed `totalPurchases` from `yearSales` (SOLD items only):
+```ts
+const totalStockPurchases = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost, 0)
+```
+If an item was purchased but not yet sold, its purchaseCost was NOT counted in the Synthèse. But the Registre des achats includes ALL items purchased in the period (sold or not).
+
+### Fix — `src/components/modules/taxes-module.tsx` `SyntheseTab`
+- Added: `const { data: achatsData } = useFetch<any>('/api/accounting?type=achats&year=${year}${month !== 'all' ? '&month=' + month : ''}')`
+- Changed `totalPurchases` to use the accounting API's total (which includes ALL stock items purchased in the period + all Purchase/hors-stock entries, and correctly multiplies by quantity):
+  ```ts
+  const totalPurchases = achatsData?.total ?? (fallback calculation)
+  ```
+- IMPORTANT: `achatsData.total` already includes BOTH stock items AND Purchase entries (hors stock), so we must NOT add `totalHorsStockPurchases` on top (that would double-count).
+- The `totalHorsStockPurchases` variable is kept for the profit calculation (`totalProfit` deducts it) and for the CSV export, but is NOT added to `totalPurchases`.
+
+### Result
+- The Synthèse "Achats" total now matches the Registre des achats total.
+- Non-sold stock items (purchased but still in inventory) are now counted.
+- The quantity is correctly multiplied (via Fix 1).
+- No double-counting of hors-stock purchases.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1083 KB, MD5: `29e74faad06e9e4ace5051003aea2bcd`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+## Testing notes
+1. **Quantity in register**: Stock → Nouvel article → set quantity=10, purchaseCost=5€ → Fiscalité → Registre des achats → the row shows "Brand Category (×10)" with montant=50€ (not 5€).
+2. **Synthèse total**: same article (not sold) → Fiscalité → Synthèse → the "Achats" card shows 50€ (was 0€ before because the item wasn't sold).
+3. **Synthèse = Registre**: the Synthèse "Achats" total should now equal the Registre des achats total.

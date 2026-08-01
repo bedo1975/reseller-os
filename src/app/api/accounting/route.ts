@@ -159,6 +159,7 @@ export async function GET(req: NextRequest) {
           numero: idx + 1,
           date: item.purchaseDate,
           invoiceNumber: item.purchaseInvoiceNumber || firstSale?.invoiceNumber || '—',
+          orderNumber: '—',  // les articles en stock n'ont pas de n° commande fournisseur
           designation: qty > 1 ? `${designationBase} (×${qty})` : designationBase,
           fournisseur: item.supplier?.name || '—',
           siret: item.supplier?.siret || null,
@@ -229,6 +230,7 @@ export async function GET(req: NextRequest) {
           numero: entries.length + idx + 1,
           date: p.date,
           invoiceNumber: p.invoiceNumber || '—',
+          orderNumber: p.orderNumber || '—',  // n° commande fournisseur (pour les pré-commandes)
           designation: p.designation,
           fournisseur: p.supplier?.name || p.supplierName || '—',
           siret: p.supplier?.siret || null,
