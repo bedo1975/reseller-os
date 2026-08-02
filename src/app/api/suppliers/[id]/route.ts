@@ -17,7 +17,7 @@ export async function PATCH(
     }
 
     // Only allow updatable fields (never userId)
-    const allowed = ['name', 'type', 'siret', 'contact', 'phone', 'email', 'address', 'notes']
+    const allowed = ['name', 'type', 'siret', 'contact', 'phone', 'email', 'websiteUrl', 'address', 'notes']
     const updateData: Record<string, unknown> = {}
     for (const key of allowed) {
       if (key in body) updateData[key] = body[key]

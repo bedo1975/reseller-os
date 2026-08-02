@@ -19,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
-  Plus, Truck, MapPin, Phone, Mail, TrendingUp, TrendingDown, Edit, Trash2,
+  Plus, Truck, MapPin, Phone, Mail, Globe, TrendingUp, TrendingDown, Edit, Trash2,
   Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -36,6 +36,7 @@ interface SupplierStat {
   contact: string | null
   phone: string | null
   email: string | null
+  websiteUrl: string | null
   address: string | null
   notes: string | null
   itemsCount: number
@@ -307,11 +308,19 @@ function SupplierDetail({ open, onOpenChange, supplier, onEdit }: {
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          {(supplier.contact || supplier.phone || supplier.email || supplier.address) && (
+          {(supplier.contact || supplier.phone || supplier.email || supplier.websiteUrl || supplier.address) && (
             <div className="space-y-1.5 text-sm">
               {supplier.contact && <div className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground" /> {supplier.contact}</div>}
               {supplier.phone && <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-muted-foreground" /> {supplier.phone}</div>}
               {supplier.email && <div className="flex items-center gap-2"><Mail className="h-3.5 w-3.5 text-muted-foreground" /> {supplier.email}</div>}
+              {supplier.websiteUrl && (
+                <div className="flex items-center gap-2">
+                  <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                  <a href={supplier.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">
+                    {supplier.websiteUrl}
+                  </a>
+                </div>
+              )}
               {supplier.address && <div className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-muted-foreground" /> {supplier.address}</div>}
             </div>
           )}
@@ -366,7 +375,7 @@ function SupplierForm({ open, onOpenChange, supplier, onSaved }: {
 }) {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    name: '', type: 'friperie', siret: '', contact: '', phone: '', email: '', address: '', notes: '',
+    name: '', type: 'friperie', siret: '', contact: '', phone: '', email: '', websiteUrl: '', address: '', notes: '',
   })
 
   useMemo(() => {
@@ -374,11 +383,12 @@ function SupplierForm({ open, onOpenChange, supplier, onSaved }: {
       setForm({
         name: supplier.name, type: supplier.type, siret: supplier.siret || '',
         contact: supplier.contact || '', phone: supplier.phone || '',
-        email: supplier.email || '', address: supplier.address || '', notes: supplier.notes || '',
+        email: supplier.email || '', websiteUrl: supplier.websiteUrl || '',
+        address: supplier.address || '', notes: supplier.notes || '',
       })
     } else if (open) {
       setForm({
-        name: '', type: 'friperie', siret: '', contact: '', phone: '', email: '', address: '', notes: '',
+        name: '', type: 'friperie', siret: '', contact: '', phone: '', email: '', websiteUrl: '', address: '', notes: '',
       })
     }
   }, [supplier, open])
@@ -449,6 +459,10 @@ function SupplierForm({ open, onOpenChange, supplier, onSaved }: {
               <Label className="text-xs">Email</Label>
               <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="contact@..." />
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">URL du site web</Label>
+            <Input type="url" value={form.websiteUrl} onChange={e => setForm({ ...form, websiteUrl: e.target.value })} placeholder="https://www.exemple.fr" />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Adresse</Label>

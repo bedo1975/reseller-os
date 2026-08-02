@@ -169,6 +169,7 @@ model Supplier {
   contact     String?
   phone       String?
   email       String?
+  websiteUrl  String?  // URL du site web du fournisseur
   address     String?
   notes       String?
   createdAt   DateTime @default(now())

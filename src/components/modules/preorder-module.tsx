@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useFetch } from '@/hooks/use-fetch'
 import { useSettings } from '@/hooks/use-settings'
@@ -35,9 +35,12 @@ interface StockItemLite {
   title: string | null
   brand: string
   category: string
+  subcategory: string | null
   size: string | null
   color: string | null
   condition: string
+  photos: string  // JSON array
+  quantity: number
 }
 
 interface PreOrderItem {
@@ -299,13 +302,14 @@ export function PreOrderModule() {
 function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreated: () => void }) {
   const { data: suppliers } = useFetch<Supplier[]>('/api/suppliers')
   const { data: stockItems } = useFetch<StockItemLite[]>('/api/stock')
-  const { getByType } = useSettings()
+  const { getByType, getSubcategories } = useSettings()
   const sizes = getByType('size')
   const colors = getByType('color')
   const conditions = getByType('condition')
   const categories = getByType('category')
   const [saving, setSaving] = useState(false)
   const [creatingArticleIdx, setCreatingArticleIdx] = useState<number | null>(null)
+  const [pickerIdx, setPickerIdx] = useState<number | null>(null)  // which item line is picking a product
 
   const [name, setName] = useState('')
   const [supplierId, setSupplierId] = useState<string>('')
@@ -533,19 +537,34 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
                 </div>
               </div>
 
-              {/* Sélection article existant OU saisie manuelle */}
+              {/* Sélection article existant — ouvre une popup avec filtres catégorie/sous-catégorie */}
               <div className="space-y-1.5">
                 <Label className="text-xs">Article existant (optionnel)</Label>
-                <Select value={item.stockItemId || ''} onValueChange={(v) => selectStockItem(idx, v)}>
-                  <SelectTrigger><SelectValue placeholder="— Saisie manuelle —" /></SelectTrigger>
-                  <SelectContent>
-                    {(stockItems || []).map(si => (
-                      <SelectItem key={si.id} value={si.id}>
-                        {si.title || `${si.brand} ${si.category}`.trim()} {si.size ? `· ${si.size}` : ''} {si.sku ? `(${si.sku})` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {item.stockItemId ? (
+                  <div className="flex items-center justify-between gap-2 p-2 rounded-md border bg-muted/30">
+                    <span className="text-xs text-muted-foreground">
+                      ✓ Lié : {(stockItems || []).find(si => si.id === item.stockItemId)?.title || (stockItems || []).find(si => si.id === item.stockItemId)?.brand || 'Article'}
+                    </span>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => setPickerIdx(idx)} title="Changer d'article">
+                        <Search className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="text-red-500" onClick={() => selectStockItem(idx, '')} title="Détacher">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPickerIdx(idx)}
+                    className="w-full justify-start text-muted-foreground"
+                  >
+                    <Search className="h-4 w-4 mr-2" /> Rechercher un article existant…
+                  </Button>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -646,6 +665,21 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
           {saving ? 'Création...' : 'Créer la pré-commande'}
         </Button>
       </div>
+
+      {/* Product picker modal */}
+      {pickerIdx !== null && (
+        <ProductPickerDialog
+          open={true}
+          onOpenChange={(o) => { if (!o) setPickerIdx(null) }}
+          stockItems={stockItems || []}
+          categories={categories}
+          getSubcategories={getSubcategories}
+          onPick={(stockItemId) => {
+            selectStockItem(pickerIdx, stockItemId)
+            setPickerIdx(null)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -1070,5 +1104,202 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// ── Product picker dialog ────────────────────────────────────────────────
+// Modal with category → subcategory filters, product grid (photo + name), and pagination.
+
+interface ProductPickerProps {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  stockItems: StockItemLite[]
+  categories: { id: string; code: string; value: string }[]
+  getSubcategories: (parentCode: string | null | undefined) => { id: string; code: string; value: string; parentCode: string | null }[]
+  onPick: (stockItemId: string) => void
+}
+
+const PAGE_SIZE = 12
+
+function ProductPickerDialog({ open, onOpenChange, stockItems, categories, getSubcategories, onPick }: ProductPickerProps) {
+  const [categoryFilter, setCategoryFilter] = useState<string>('')
+  const [subcategoryFilter, setSubcategoryFilter] = useState<string>('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+
+  // Reset filters when dialog opens
+  useEffect(() => {
+    if (open) {
+      setCategoryFilter('')
+      setSubcategoryFilter('')
+      setSearch('')
+      setPage(1)
+    }
+  }, [open])
+
+  const subcategories = categoryFilter ? getSubcategories(categoryFilter) : []
+
+  // Filter stock items
+  const filtered = useMemo(() => {
+    let list = stockItems
+    if (categoryFilter) list = list.filter(si => si.category === categoryFilter)
+    if (subcategoryFilter) list = list.filter(si => si.subcategory === subcategoryFilter)
+    if (search) {
+      const q = search.toLowerCase()
+      list = list.filter(si =>
+        (si.title || '').toLowerCase().includes(q) ||
+        si.brand.toLowerCase().includes(q) ||
+        si.sku.toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [stockItems, categoryFilter, subcategoryFilter, search])
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+
+  // Helper to parse first photo
+  const getPhoto = (photosJson: string): string | null => {
+    try {
+      const arr = JSON.parse(photosJson)
+      if (Array.isArray(arr) && arr.length > 0) {
+        const p = arr[0]
+        return p.startsWith('/uploads/') ? `/api${p}` : p
+      }
+    } catch {}
+    return null
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Rechercher un article existant</DialogTitle>
+          <DialogDescription>
+            Filtrez par catégorie et sous-catégorie, puis cliquez sur un article pour l'ajouter à la pré-commande.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Filters */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pb-3 border-b">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Catégorie</Label>
+            <Select
+              value={categoryFilter || '__all__'}
+              onValueChange={(v) => { setCategoryFilter(v === '__all__' ? '' : v); setSubcategoryFilter(''); setPage(1) }}
+            >
+              <SelectTrigger><SelectValue placeholder="Toutes" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Toutes les catégories</SelectItem>
+                {categories.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Sous-catégorie</Label>
+            <Select
+              value={subcategoryFilter || '__all__'}
+              onValueChange={(v) => { setSubcategoryFilter(v === '__all__' ? '' : v); setPage(1) }}
+              disabled={!categoryFilter || subcategories.length === 0}
+            >
+              <SelectTrigger><SelectValue placeholder="Toutes" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
+                {subcategories.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Recherche</Label>
+            <Input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
+              placeholder="Nom, marque, SKU…"
+            />
+          </div>
+        </div>
+
+        {/* Results count */}
+        <div className="text-xs text-muted-foreground py-2">
+          {filtered.length} article{filtered.length > 1 ? 's' : ''} trouvé{filtered.length > 1 ? 's' : ''}
+        </div>
+
+        {/* Product grid */}
+        <div className="flex-1 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Search className="h-10 w-10 mx-auto mb-2 opacity-50" />
+              <p>Aucun article trouvé. Ajustez les filtres ou créez un nouvel article.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {paginated.map(si => {
+                const photo = getPhoto(si.photos)
+                const designation = si.title || `${si.brand} ${si.category}`.trim()
+                return (
+                  <button
+                    key={si.id}
+                    type="button"
+                    onClick={() => onPick(si.id)}
+                    className="text-left border rounded-lg overflow-hidden hover:border-[#007bff] hover:shadow-md transition-all group"
+                  >
+                    <div className="aspect-square bg-gray-50 relative overflow-hidden">
+                      {photo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={photo} alt={designation} className="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-full text-gray-300">
+                          <Package className="h-8 w-8" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-2 space-y-0.5">
+                      <p className="text-xs font-medium line-clamp-2 leading-tight">{designation}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {si.brand}
+                        {si.size ? ` · ${si.size}` : ''}
+                      </p>
+                      <p className="text-[9px] text-muted-foreground font-mono">{si.sku}</p>
+                      {si.quantity <= 0 && (
+                        <span className="inline-block text-[9px] text-red-600 font-medium">Rupture</span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-3 border-t">
+            <p className="text-xs text-muted-foreground">
+              Page {currentPage} sur {totalPages}
+            </p>
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+              >
+                ← Précédent
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                Suivant →
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

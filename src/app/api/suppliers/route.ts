@@ -24,6 +24,7 @@ export async function GET() {
         contact: s.contact,
         phone: s.phone,
         email: s.email,
+        websiteUrl: s.websiteUrl,
         address: s.address,
         notes: s.notes,
         itemsCount: s.stockItems.length,
@@ -49,12 +50,12 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth()
     const body = await req.json()
-    const { name, type, siret, contact, phone, email, address, notes } = body
+    const { name, type, siret, contact, phone, email, websiteUrl, address, notes } = body
     if (!name || !type) {
       return NextResponse.json({ error: 'Nom et type requis' }, { status: 400 })
     }
     const supplier = await db.supplier.create({
-      data: { name, type, siret: siret || null, contact, phone, email, address, notes, userId: user.id },
+      data: { name, type, siret: siret || null, contact, phone, email, websiteUrl: websiteUrl || null, address, notes, userId: user.id },
     })
     return NextResponse.json(supplier)
   } catch (error) {

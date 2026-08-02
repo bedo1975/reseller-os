@@ -2878,3 +2878,49 @@ Example verified by user:
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1100 KB, MD5: `d8da41b63b810a0a063ccaff43be277d`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: delete-received-preorder + boutique-out-of-stock-badge
+Agent: main
+Task: 2 fixes — (1) deleting a received pre-order should also delete the Purchase + StockItems, (2) out-of-stock products should appear on the boutique with "Indisponible" badge.
+
+## 1. Delete received pre-order → clean up Purchase + StockItems
+
+### Bug
+When deleting a "received" pre-order:
+- The Purchase was NOT deleted (the condition was `status === 'validated'` — but received pre-orders have `status === 'received'`)
+- The StockItems created from the pre-order (preOrderId = id) were NOT deleted → lingered in the stock
+- The Purchase remained in the ACHATS register
+
+### Fix (`/api/preorders/[id]` DELETE)
+- Extended the Purchase deletion condition: `if ((existing.status === 'validated' || existing.status === 'received') && existing.purchaseId)`
+- Added StockItems cleanup for received pre-orders:
+  ```ts
+  if (existing.status === 'received') {
+    await db.stockItem.deleteMany({ where: { preOrderId: id } })
+  }
+  ```
+
+## 2. Boutique — show out-of-stock products with "Indisponible" badge
+
+### Bug
+The boutique products list API filtered `quantity: { gt: 0 }` → out-of-stock products were completely hidden from the storefront.
+
+### Fix
+- **List API** (`/api/boutique/products/route.ts`): removed `quantity: { gt: 0 }` filter → out-of-stock products now appear in listings.
+- Fixed `quantity: item.quantity || 1` → `item.quantity ?? 1` (preserves 0).
+- **Product card** (`product-card.tsx`):
+  - Added `quantity?: number` to the ProductCardProps interface.
+  - Added `outOfStock = product.quantity != null && product.quantity <= 0` check.
+  - When out of stock:
+    - Card opacity reduced to 75%
+    - Red "Indisponible" badge in the top-right corner of the photo
+    - "Rupture de stock" text in red next to the price
+
+### Note
+The single product page (`/boutique/produit/[sku]`) already shows "Non disponible actuellement" + a red banner instead of the add-to-cart buttons (fixed in the previous task).
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1104 KB, MD5: `64f7c8457326a378c5bda520f5ba252e`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
