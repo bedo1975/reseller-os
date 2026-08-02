@@ -2995,3 +2995,27 @@ Replaced the inline Select with a button that opens a full-screen modal containi
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1117 KB, MD5: `3c34da8d6bc7f913a6218d0638af6047`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: preorder-search-icon-import-fix
+Agent: main
+Task: Fix "Search is not defined" error — the Search icon was used in the ProductPickerDialog but not imported from lucide-react.
+
+## Fix
+Added `Search` to the lucide-react imports in `preorder-module.tsx`:
+```ts
+import {
+  Plus, Trash2, Loader2, ArrowLeft, ClipboardList, CheckCircle2, Clock,
+  XCircle, Package, Edit3, FileText, ShoppingCart, PackagePlus, PackageCheck, Search,
+} from 'lucide-react'
+```
+
+The `Search` icon is used in:
+- The "Rechercher un article existant…" button
+- The "Changer d'article" button (linked article display)
+- The empty state in the product picker grid
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1117 KB, MD5: `949a8c24980c627c2a1a2464060523b1`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

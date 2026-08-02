@@ -1,0 +1,1306 @@
+     1→'use client'
+     2→
+     3→import { useState, useMemo, useEffect } from 'react'
+     4→import { useSession } from 'next-auth/react'
+     5→import { useFetch } from '@/hooks/use-fetch'
+     6→import { useSettings } from '@/hooks/use-settings'
+     7→import { Button } from '@/components/ui/button'
+     8→import { Input } from '@/components/ui/input'
+     9→import { Label } from '@/components/ui/label'
+    10→import { Textarea } from '@/components/ui/textarea'
+    11→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+    12→import {
+    13→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+    14→} from '@/components/ui/dialog'
+    15→import {
+    16→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    17→} from '@/components/ui/select'
+    18→import {
+    19→  Plus, Trash2, Loader2, ArrowLeft, ClipboardList, CheckCircle2, Clock,
+    20→  XCircle, Package, Edit3, FileText, ShoppingCart, PackagePlus, PackageCheck, Search,
+    21→} from 'lucide-react'
+    22→import { toast } from 'sonner'
+    23→
+    24→// ── Types ──────────────────────────────────────────────────────────────────
+    25→
+    26→interface Supplier {
+    27→  id: string
+    28→  name: string
+    29→  type: string
+    30→}
+    31→
+    32→interface StockItemLite {
+    33→  id: string
+    34→  sku: string
+    35→  title: string | null
+    36→  brand: string
+    37→  category: string
+    38→  subcategory: string | null
+    39→  size: string | null
+    40→  color: string | null
+    41→  condition: string
+    42→  photos: string  // JSON array
+    43→  quantity: number
+    44→}
+    45→
+    46→interface PreOrderItem {
+    47→  designation: string
+    48→  url: string
+    49→  description: string
+    50→  size: string
+    51→  color: string
+    52→  condition: string
+    53→  quantity: number
+    54→  unitPrice: number
+    55→  stockItemId: string | null
+    56→}
+    57→
+    58→interface PreOrder {
+    59→  id: string
+    60→  reference: string
+    61→  name: string
+    62→  supplierId: string | null
+    63→  supplier: Supplier | null
+    64→  supplierName: string | null
+    65→  orderDate: string
+    66→  items: string  // JSON
+    67→  subtotal: number
+    68→  shippingCost: number
+    69→  total: number
+    70→  paymentMethod: string | null
+    71→  notes: string | null
+    72→  status: string  // pending | validated | cancelled
+    73→  orderNumber: string | null
+    74→  invoiceNumber: string | null
+    75→  purchaseId: string | null
+    76→  validatedAt: string | null
+    77→  createdAt: string
+    78→}
+    79→
+    80→// ── Helpers ────────────────────────────────────────────────────────────────
+    81→
+    82→const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+    83→  pending: { label: 'En attente', color: 'bg-amber-100 text-amber-700', icon: Clock },
+    84→  validated: { label: 'Validée', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
+    85→  received: { label: 'Reçue', color: 'bg-blue-100 text-blue-700', icon: PackageCheck },
+    86→  cancelled: { label: 'Annulée', color: 'bg-red-100 text-red-700', icon: XCircle },
+    87→}
+    88→
+    89→function fmtDate(iso: string): string {
+    90→  try { return new Date(iso).toLocaleDateString('fr-FR') } catch { return '—' }
+    91→}
+    92→
+    93→function fmtMoney(n: number): string {
+    94→  return (n || 0).toFixed(2) + ' €'
+    95→}
+    96→
+    97→function parseItems(json: string): PreOrderItem[] {
+    98→  try { return JSON.parse(json) } catch { return [] }
+    99→}
+   100→
+   101→// ── Main component ─────────────────────────────────────────────────────────
+   102→
+   103→export function PreOrderModule() {
+   104→  const { data: session } = useSession()
+   105→  const isAdmin = session?.user?.role === 'admin'
+   106→  const [view, setView] = useState<'list' | 'create' | 'detail'>('list')
+   107→  const [selectedId, setSelectedId] = useState<string | null>(null)
+   108→  const [deleteTarget, setDeleteTarget] = useState<PreOrder | null>(null)
+   109→  const [deleting, setDeleting] = useState(false)
+   110→
+   111→  const { data: preorders, loading, refresh } = useFetch<PreOrder[]>('/api/preorders')
+   112→
+   113→  const openDetail = (id: string) => {
+   114→    setSelectedId(id)
+   115→    setView('detail')
+   116→  }
+   117→
+   118→  const confirmDelete = async () => {
+   119→    if (!deleteTarget) return
+   120→    setDeleting(true)
+   121→    try {
+   122→      const res = await fetch(`/api/preorders/${deleteTarget.id}`, { method: 'DELETE' })
+   123→      const data = await res.json()
+   124→      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+   125→      toast.success('Pré-commande supprimée')
+   126→      setDeleteTarget(null)
+   127→      refresh()
+   128→    } catch {
+   129→      toast.error('Erreur réseau')
+   130→    } finally {
+   131→      setDeleting(false)
+   132→    }
+   133→  }
+   134→
+   135→  if (view === 'create') {
+   136→    return <CreatePreOrderForm onBack={() => setView('list')} onCreated={() => { refresh(); setView('list') }} />
+   137→  }
+   138→
+   139→  if (view === 'detail' && selectedId) {
+   140→    return <PreOrderDetail id={selectedId} onBack={() => { refresh(); setView('list') }} />
+   141→  }
+   142→
+   143→  return (
+   144→    <div className="space-y-4">
+   145→      <div className="flex items-center justify-between">
+   146→        <div>
+   147→          <h1 className="text-2xl font-bold flex items-center gap-2">
+   148→            <ClipboardList className="h-6 w-6" /> Pré-commandes
+   149→          </h1>
+   150→          <p className="text-sm text-muted-foreground mt-1">
+   151→            Commandes fournisseurs en attente. Validez une pré-commande pour la convertir en commande et l'enregistrer en comptabilité (ACHATS).
+   152→          </p>
+   153→        </div>
+   154→        <Button onClick={() => setView('create')}>
+   155→          <Plus className="h-4 w-4 mr-2" /> Nouvelle pré-commande
+   156→        </Button>
+   157→      </div>
+   158→
+   159→      {/* Stats rapides */}
+   160→      <div className="grid grid-cols-3 gap-3">
+   161→        <Card>
+   162→          <CardContent className="p-4">
+   163→            <div className="flex items-center gap-2">
+   164→              <Clock className="h-5 w-5 text-amber-500" />
+   165→              <div>
+   166→                <p className="text-xs text-muted-foreground">En attente</p>
+   167→                <p className="text-xl font-bold">{(preorders || []).filter(p => p.status === 'pending').length}</p>
+   168→              </div>
+   169→            </div>
+   170→          </CardContent>
+   171→        </Card>
+   172→        <Card>
+   173→          <CardContent className="p-4">
+   174→            <div className="flex items-center gap-2">
+   175→              <CheckCircle2 className="h-5 w-5 text-green-500" />
+   176→              <div>
+   177→                <p className="text-xs text-muted-foreground">Validées</p>
+   178→                <p className="text-xl font-bold">{(preorders || []).filter(p => p.status === 'validated').length}</p>
+   179→              </div>
+   180→            </div>
+   181→          </CardContent>
+   182→        </Card>
+   183→        <Card>
+   184→          <CardContent className="p-4">
+   185→            <div className="flex items-center gap-2">
+   186→              <ShoppingCart className="h-5 w-5 text-blue-500" />
+   187→              <div>
+   188→                <p className="text-xs text-muted-foreground">Montant total (validées)</p>
+   189→                <p className="text-xl font-bold">{fmtMoney((preorders || []).filter(p => p.status === 'validated').reduce((s, p) => s + p.total, 0))}</p>
+   190→              </div>
+   191→            </div>
+   192→          </CardContent>
+   193→        </Card>
+   194→      </div>
+   195→
+   196→      {/* Liste */}
+   197→      <Card>
+   198→        <CardHeader>
+   199→          <CardTitle className="text-base">Liste des pré-commandes</CardTitle>
+   200→        </CardHeader>
+   201→        <CardContent>
+   202→          {loading ? (
+   203→            <div className="flex justify-center py-8">
+   204→              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+   205→            </div>
+   206→          ) : !preorders || preorders.length === 0 ? (
+   207→            <div className="text-center py-8 text-muted-foreground">
+   208→              <ClipboardList className="h-10 w-10 mx-auto mb-2 opacity-50" />
+   209→              <p>Aucune pré-commande pour le moment.</p>
+   210→              <p className="text-xs mt-1">Cliquez sur « Nouvelle pré-commande » pour commencer.</p>
+   211→            </div>
+   212→          ) : (
+   213→            <div className="overflow-x-auto">
+   214→              <table className="w-full text-sm">
+   215→                <thead>
+   216→                  <tr className="border-b text-left">
+   217→                    <th className="pb-2 pr-3 font-medium text-muted-foreground">Référence</th>
+   218→                    <th className="pb-2 pr-3 font-medium text-muted-foreground">Nom</th>
+   219→                    <th className="pb-2 pr-3 font-medium text-muted-foreground">Fournisseur</th>
+   220→                    <th className="pb-2 pr-3 font-medium text-muted-foreground">Date</th>
+   221→                    <th className="pb-2 pr-3 font-medium text-muted-foreground text-right">Total</th>
+   222→                    <th className="pb-2 pr-3 font-medium text-muted-foreground">Statut</th>
+   223→                    <th className="pb-2 font-medium text-muted-foreground"></th>
+   224→                  </tr>
+   225→                </thead>
+   226→                <tbody>
+   227→                  {preorders.map(po => {
+   228→                    const cfg = STATUS_CONFIG[po.status] || STATUS_CONFIG.pending
+   229→                    const Icon = cfg.icon
+   230→                    const itemCount = parseItems(po.items).length
+   231→                    return (
+   232→                      <tr key={po.id} className="border-b hover:bg-muted/50 cursor-pointer" onClick={() => openDetail(po.id)}>
+   233→                        <td className="py-2.5 pr-3 font-mono text-xs">{po.reference}</td>
+   234→                        <td className="py-2.5 pr-3 font-medium">{po.name}</td>
+   235→                        <td className="py-2.5 pr-3 text-muted-foreground">
+   236→                          {po.supplier?.name || po.supplierName || '—'}
+   237→                          <span className="text-xs text-muted-foreground ml-1">({itemCount} art.)</span>
+   238→                        </td>
+   239→                        <td className="py-2.5 pr-3 text-muted-foreground">{fmtDate(po.orderDate)}</td>
+   240→                        <td className="py-2.5 pr-3 text-right font-semibold">{fmtMoney(po.total)}</td>
+   241→                        <td className="py-2.5 pr-3">
+   242→                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+   243→                            <Icon className="h-3 w-3" /> {cfg.label}
+   244→                          </span>
+   245→                        </td>
+   246→                        <td className="py-2.5 flex items-center gap-1">
+   247→                          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); openDetail(po.id) }} title="Voir / modifier">
+   248→                            <Edit3 className="h-4 w-4" />
+   249→                          </Button>
+   250→                          {isAdmin && (
+   251→                            <Button
+   252→                              size="sm"
+   253→                              variant="ghost"
+   254→                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+   255→                              onClick={(e) => { e.stopPropagation(); setDeleteTarget(po) }}
+   256→                              title={po.status === 'validated' ? 'Supprimer (admin) — le Purchase lié sera aussi supprimé' : 'Supprimer (admin)'}
+   257→                            >
+   258→                              <Trash2 className="h-4 w-4" />
+   259→                            </Button>
+   260→                          )}
+   261→                        </td>
+   262→                      </tr>
+   263→                    )
+   264→                  })}
+   265→                </tbody>
+   266→              </table>
+   267→            </div>
+   268→          )}
+   269→        </CardContent>
+   270→      </Card>
+   271→
+   272→      {/* Dialogue de suppression (liste) */}
+   273→      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+   274→        <DialogContent>
+   275→          <DialogHeader>
+   276→            <DialogTitle>Supprimer la pré-commande</DialogTitle>
+   277→            <DialogDescription>
+   278→              Êtes-vous sûr de vouloir supprimer la pré-commande <strong>{deleteTarget?.reference}</strong> ({deleteTarget?.name}) ?
+   279→              Cette action est irréversible. Les articles créés dans le stock ne seront pas supprimés.
+   280→              {deleteTarget?.status === 'validated' && (
+   281→                <span className="block mt-2 text-amber-600 font-medium">
+   282→                  ⚠️ Cette pré-commande est validée. L'entrée comptable associée (dans Fiscalité → ACHATS) sera également supprimée.
+   283→                </span>
+   284→              )}
+   285→            </DialogDescription>
+   286→          </DialogHeader>
+   287→          <DialogFooter>
+   288→            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Annuler</Button>
+   289→            <Button onClick={confirmDelete} disabled={deleting} variant="destructive">
+   290→              {deleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+   291→              {deleting ? 'Suppression...' : 'Supprimer définitivement'}
+   292→            </Button>
+   293→          </DialogFooter>
+   294→        </DialogContent>
+   295→      </Dialog>
+   296→    </div>
+   297→  )
+   298→}
+   299→
+   300→// ── Create form ────────────────────────────────────────────────────────────
+   301→
+   302→function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreated: () => void }) {
+   303→  const { data: suppliers } = useFetch<Supplier[]>('/api/suppliers')
+   304→  const { data: stockItems } = useFetch<StockItemLite[]>('/api/stock')
+   305→  const { getByType, getSubcategories } = useSettings()
+   306→  const sizes = getByType('size')
+   307→  const colors = getByType('color')
+   308→  const conditions = getByType('condition')
+   309→  const categories = getByType('category')
+   310→  const [saving, setSaving] = useState(false)
+   311→  const [creatingArticleIdx, setCreatingArticleIdx] = useState<number | null>(null)
+   312→  const [pickerIdx, setPickerIdx] = useState<number | null>(null)  // which item line is picking a product
+   313→
+   314→  const [name, setName] = useState('')
+   315→  const [supplierId, setSupplierId] = useState<string>('')
+   316→  const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10))
+   317→  const [paymentMethod, setPaymentMethod] = useState<string>('')
+   318→  const [notes, setNotes] = useState('')
+   319→  const [shippingCost, setShippingCost] = useState(0)
+   320→  const [items, setItems] = useState<PreOrderItem[]>([
+   321→    { designation: '', url: '', description: '', size: '', color: '', condition: '', quantity: 1, unitPrice: 0, stockItemId: null },
+   322→  ])
+   323→
+   324→  const subtotal = useMemo(() => {
+   325→    return items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0), 0)
+   326→  }, [items])
+   327→  const total = subtotal + (Number(shippingCost) || 0)
+   328→
+   329→  const updateItem = (idx: number, field: keyof PreOrderItem, value: any) => {
+   330→    setItems(prev => prev.map((it, i) => i === idx ? { ...it, [field]: value } : it))
+   331→  }
+   332→
+   333→  const addItem = () => {
+   334→    setItems(prev => [...prev, { designation: '', url: '', description: '', size: '', color: '', condition: '', quantity: 1, unitPrice: 0, stockItemId: null }])
+   335→  }
+   336→
+   337→  const removeItem = (idx: number) => {
+   338→    setItems(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)
+   339→  }
+   340→
+   341→  // When selecting an existing stock item, auto-fill the fields
+   342→  const selectStockItem = (idx: number, stockItemId: string) => {
+   343→    if (!stockItemId) {
+   344→      updateItem(idx, 'stockItemId', null)
+   345→      return
+   346→    }
+   347→    const item = (stockItems || []).find(i => i.id === stockItemId)
+   348→    if (!item) return
+   349→    setItems(prev => prev.map((it, i) => {
+   350→      if (i !== idx) return it
+   351→      const designation = item.title || `${item.brand} ${item.category}`.trim()
+   352→      return {
+   353→        ...it,
+   354→        stockItemId: item.id,
+   355→        designation,
+   356→        size: item.size || '',
+   357→        color: item.color || '',
+   358→        condition: item.condition || '',
+   359→      }
+   360→    }))
+   361→  }
+   362→
+   363→  const submit = async () => {
+   364→    if (!name.trim()) { toast.error('Le nom est requis'); return }
+   365→    if (items.length === 0 || items.every(i => !i.designation.trim())) {
+   366→      toast.error('Au moins un article avec désignation est requis'); return
+   367→    }
+   368→    // Filter out empty items
+   369→    const cleanItems = items.filter(i => i.designation.trim())
+   370→    if (cleanItems.length === 0) { toast.error('Au moins un article est requis'); return }
+   371→
+   372→    setSaving(true)
+   373→    try {
+   374→      const res = await fetch('/api/preorders', {
+   375→        method: 'POST',
+   376→        headers: { 'Content-Type': 'application/json' },
+   377→        body: JSON.stringify({
+   378→          name: name.trim(),
+   379→          supplierId: supplierId || null,
+   380→          supplierName: supplierId ? (suppliers || []).find(s => s.id === supplierId)?.name : null,
+   381→          orderDate,
+   382→          paymentMethod: paymentMethod || null,
+   383→          items: cleanItems,
+   384→          shippingCost: Number(shippingCost) || 0,
+   385→          notes: notes.trim() || null,
+   386→        }),
+   387→      })
+   388→      const data = await res.json()
+   389→      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+   390→      toast.success('Pré-commande créée')
+   391→      onCreated()
+   392→    } catch {
+   393→      toast.error('Erreur réseau')
+   394→    } finally {
+   395→      setSaving(false)
+   396→    }
+   397→  }
+   398→
+   399→  // Create a StockItem from the current article line (qty = 0, status = A_PHOTOGRAPHIER)
+   400→  // and link it back to the pre-order item.
+   401→  //
+   402→  // IMPORTANT: purchaseCost is set to 0 (not item.unitPrice) to avoid double counting.
+   403→  // When the pre-order is validated, a Purchase entry is created with the pre-order total
+   404→  // (which includes this item's cost). If we also set purchaseCost > 0 on the StockItem,
+   405→  // the accounting API would count it TWICE in the ACHATS register:
+   406→  //   1. Once via StockItem.purchaseCost (in the stock-items-with-purchaseDate-in-period query)
+   407→  //   2. Once via Purchase.amount (the pre-order total)
+   408→  // By setting purchaseCost = 0, only the Purchase entry counts — which is correct.
+   409→  const createStockItem = async (idx: number) => {
+   410→    const item = items[idx]
+   411→    if (!item.designation.trim()) {
+   412→      toast.error('Veuillez saisir une désignation avant de créer l\'article')
+   413→      return
+   414→    }
+   415→    setCreatingArticleIdx(idx)
+   416→    try {
+   417→      // Generate a unique SKU
+   418→      const sku = `ART-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`
+   419→      const res = await fetch('/api/stock', {
+   420→        method: 'POST',
+   421→        headers: { 'Content-Type': 'application/json' },
+   422→        body: JSON.stringify({
+   423→          sku,
+   424→          title: item.designation.trim(),
+   425→          brand: item.designation.trim().split(' ')[0] || 'Article',  // first word as brand fallback
+   426→          category: categories[0]?.code || 'vetements',
+   427→          size: item.size || null,
+   428→          color: item.color || null,
+   429→          condition: item.condition || conditions[0]?.code || 'bon',
+   430→          purchaseCost: 0,  // 0 to avoid double counting (pre-order Purchase already accounts for the cost)
+   431→          purchaseDate: orderDate,
+   432→          supplierId: supplierId || null,
+   433→          quantity: 0,  // quantité = 0 comme demandé
+   434→          description: item.description || null,
+   435→          status: 'A_PHOTOGRAPHIER',
+   436→        }),
+   437→      })
+   438→      const data = await res.json()
+   439→      if (!res.ok) { toast.error(data.error || 'Erreur lors de la création'); return }
+   440→      // Link the created StockItem back to the pre-order item
+   441→      updateItem(idx, 'stockItemId', data.id)
+   442→      toast.success(`Article créé dans le stock (SKU: ${sku}, qté: 0, coût: 0€ — comptabilisé via la pré-commande)`)
+   443→    } catch {
+   444→      toast.error('Erreur réseau')
+   445→    } finally {
+   446→      setCreatingArticleIdx(null)
+   447→    }
+   448→  }
+   449→
+   450→  return (
+   451→    <div className="space-y-4">
+   452→      <div className="flex items-center gap-3">
+   453→        <Button variant="ghost" size="sm" onClick={onBack}>
+   454→          <ArrowLeft className="h-4 w-4 mr-1" /> Retour
+   455→        </Button>
+   456→        <h1 className="text-2xl font-bold">Nouvelle pré-commande</h1>
+   457→      </div>
+   458→
+   459→      {/* Infos générales */}
+   460→      <Card>
+   461→        <CardHeader>
+   462→          <CardTitle className="text-base">Informations générales</CardTitle>
+   463→        </CardHeader>
+   464→        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+   465→          <div className="space-y-1.5 md:col-span-2">
+   466→            <Label>Nom de la pré-commande *</Label>
+   467→            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Achat rentrée septembre" />
+   468→          </div>
+   469→          <div className="space-y-1.5">
+   470→            <Label>Date</Label>
+   471→            <Input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
+   472→          </div>
+   473→          <div className="space-y-1.5 md:col-span-3">
+   474→            <Label>Fournisseur</Label>
+   475→            <Select value={supplierId} onValueChange={setSupplierId}>
+   476→              <SelectTrigger><SelectValue placeholder="Sélectionner un fournisseur (optionnel)" /></SelectTrigger>
+   477→              <SelectContent>
+   478→                {(suppliers || []).map(s => (
+   479→                  <SelectItem key={s.id} value={s.id}>{s.name} ({s.type})</SelectItem>
+   480→                ))}
+   481→              </SelectContent>
+   482→            </Select>
+   483→          </div>
+   484→          <div className="space-y-1.5 md:col-span-3">
+   485→            <Label>Méthode de paiement</Label>
+   486→            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+   487→              <SelectTrigger><SelectValue placeholder="Sélectionner un mode de paiement (optionnel)" /></SelectTrigger>
+   488→              <SelectContent>
+   489→                <SelectItem value="especes">Espèces</SelectItem>
+   490→                <SelectItem value="carte_bancaire">Carte bancaire</SelectItem>
+   491→                <SelectItem value="virement">Virement</SelectItem>
+   492→                <SelectItem value="cheque">Chèque</SelectItem>
+   493→                <SelectItem value="paypal">PayPal</SelectItem>
+   494→              </SelectContent>
+   495→            </Select>
+   496→          </div>
+   497→        </CardContent>
+   498→      </Card>
+   499→
+   500→      {/* Articles */}
+   501→      <Card>
+   502→        <CardHeader>
+   503→          <div className="flex items-center justify-between">
+   504→            <div>
+   505→              <CardTitle className="text-base">Articles</CardTitle>
+   506→              <CardDescription className="text-xs">Ajoutez autant d'articles que nécessaire. Sélectionnez un article existant, saisissez-le manuellement, ou créez-le directement dans le stock.</CardDescription>
+   507→            </div>
+   508→            <Button size="sm" variant="outline" onClick={addItem}>
+   509→              <Plus className="h-4 w-4 mr-1" /> Ajouter un article
+   510→            </Button>
+   511→          </div>
+   512→        </CardHeader>
+   513→        <CardContent className="space-y-4">
+   514→          {items.map((item, idx) => (
+   515→            <div key={idx} className="border rounded-lg p-4 space-y-3 relative">
+   516→              <div className="flex items-center justify-between">
+   517→                <span className="text-xs font-medium text-muted-foreground">
+   518→                  Article {idx + 1}
+   519→                  {item.stockItemId && <span className="ml-2 text-green-600">✓ lié au stock</span>}
+   520→                </span>
+   521→                <div className="flex items-center gap-1">
+   522→                  <Button
+   523→                    size="sm"
+   524→                    variant="outline"
+   525→                    onClick={() => createStockItem(idx)}
+   526→                    disabled={creatingArticleIdx === idx || !!item.stockItemId}
+   527→                    title={item.stockItemId ? 'Article déjà créé dans le stock' : 'Créer cet article dans le stock (quantité = 0)'}
+   528→                  >
+   529→                    {creatingArticleIdx === idx ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <PackagePlus className="h-4 w-4 mr-1" />}
+   530→                    Créer l'article
+   531→                  </Button>
+   532→                  {items.length > 1 && (
+   533→                    <Button size="sm" variant="ghost" onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-600">
+   534→                      <Trash2 className="h-4 w-4" />
+   535→                    </Button>
+   536→                  )}
+   537→                </div>
+   538→              </div>
+   539→
+   540→              {/* Sélection article existant — ouvre une popup avec filtres catégorie/sous-catégorie */}
+   541→              <div className="space-y-1.5">
+   542→                <Label className="text-xs">Article existant (optionnel)</Label>
+   543→                {item.stockItemId ? (
+   544→                  <div className="flex items-center justify-between gap-2 p-2 rounded-md border bg-muted/30">
+   545→                    <span className="text-xs text-muted-foreground">
+   546→                      ✓ Lié : {(stockItems || []).find(si => si.id === item.stockItemId)?.title || (stockItems || []).find(si => si.id === item.stockItemId)?.brand || 'Article'}
+   547→                    </span>
+   548→                    <div className="flex gap-1">
+   549→                      <Button size="sm" variant="ghost" onClick={() => setPickerIdx(idx)} title="Changer d'article">
+   550→                        <Search className="h-3.5 w-3.5" />
+   551→                      </Button>
+   552→                      <Button size="sm" variant="ghost" className="text-red-500" onClick={() => selectStockItem(idx, '')} title="Détacher">
+   553→                        <Trash2 className="h-3.5 w-3.5" />
+   554→                      </Button>
+   555→                    </div>
+   556→                  </div>
+   557→                ) : (
+   558→                  <Button
+   559→                    type="button"
+   560→                    variant="outline"
+   561→                    size="sm"
+   562→                    onClick={() => setPickerIdx(idx)}
+   563→                    className="w-full justify-start text-muted-foreground"
+   564→                  >
+   565→                    <Search className="h-4 w-4 mr-2" /> Rechercher un article existant…
+   566→                  </Button>
+   567→                )}
+   568→              </div>
+   569→
+   570→              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+   571→                <div className="space-y-1.5 md:col-span-2">
+   572→                  <Label className="text-xs">Désignation *</Label>
+   573→                  <Input value={item.designation} onChange={e => updateItem(idx, 'designation', e.target.value)} placeholder="Ex: T-shirt Nike Sportswear blanc" />
+   574→                </div>
+   575→                <div className="space-y-1.5 md:col-span-2">
+   576→                  <Label className="text-xs">URL de l'article</Label>
+   577→                  <Input value={item.url} onChange={e => updateItem(idx, 'url', e.target.value)} placeholder="https://..." />
+   578→                </div>
+   579→                <div className="space-y-1.5">
+   580→                  <Label className="text-xs">Taille</Label>
+   581→                  <Select value={item.size || ''} onValueChange={(v) => updateItem(idx, 'size', v === '__none__' ? '' : v)}>
+   582→                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+   583→                    <SelectContent>
+   584→                      <SelectItem value="__none__">— Aucune —</SelectItem>
+   585→                      {sizes.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
+   586→                    </SelectContent>
+   587→                  </Select>
+   588→                </div>
+   589→                <div className="space-y-1.5">
+   590→                  <Label className="text-xs">Couleur</Label>
+   591→                  <Select value={item.color || ''} onValueChange={(v) => updateItem(idx, 'color', v === '__none__' ? '' : v)}>
+   592→                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+   593→                    <SelectContent>
+   594→                      <SelectItem value="__none__">— Aucune —</SelectItem>
+   595→                      {colors.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+   596→                    </SelectContent>
+   597→                  </Select>
+   598→                </div>
+   599→                <div className="space-y-1.5">
+   600→                  <Label className="text-xs">État</Label>
+   601→                  <Select value={item.condition || ''} onValueChange={(v) => updateItem(idx, 'condition', v === '__none__' ? '' : v)}>
+   602→                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+   603→                    <SelectContent>
+   604→                      <SelectItem value="__none__">— Aucun —</SelectItem>
+   605→                      {conditions.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+   606→                    </SelectContent>
+   607→                  </Select>
+   608→                </div>
+   609→                <div className="space-y-1.5">
+   610→                  <Label className="text-xs">Quantité</Label>
+   611→                  <Input type="number" min="1" value={item.quantity} onChange={e => updateItem(idx, 'quantity', Number(e.target.value))} />
+   612→                </div>
+   613→                <div className="space-y-1.5">
+   614→                  <Label className="text-xs">Tarif unitaire (€)</Label>
+   615→                  <Input type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => updateItem(idx, 'unitPrice', Number(e.target.value))} />
+   616→                </div>
+   617→                <div className="space-y-1.5 md:col-span-2">
+   618→                  <Label className="text-xs">Description</Label>
+   619→                  <Textarea value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)} rows={2} placeholder="Détails complémentaires..." />
+   620→                </div>
+   621→              </div>
+   622→              <div className="text-right text-sm text-muted-foreground">
+   623→                Total ligne: <span className="font-semibold text-foreground">{fmtMoney((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0))}</span>
+   624→              </div>
+   625→            </div>
+   626→          ))}
+   627→        </CardContent>
+   628→      </Card>
+   629→
+   630→      {/* Totaux + notes */}
+   631→      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   632→        <Card>
+   633→          <CardHeader><CardTitle className="text-base">Notes</CardTitle></CardHeader>
+   634→          <CardContent>
+   635→            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4} placeholder="Notes internes..." />
+   636→          </CardContent>
+   637→        </Card>
+   638→        <Card>
+   639→          <CardHeader><CardTitle className="text-base">Totaux</CardTitle></CardHeader>
+   640→          <CardContent className="space-y-2">
+   641→            <div className="flex justify-between text-sm">
+   642→              <span className="text-muted-foreground">Sous-total ({items.length} article{items.length > 1 ? 's' : ''})</span>
+   643→              <span className="font-medium">{fmtMoney(subtotal)}</span>
+   644→            </div>
+   645→            <div className="flex justify-between text-sm items-center">
+   646→              <span className="text-muted-foreground">Frais de port</span>
+   647→              <Input type="number" min="0" step="0.01" value={shippingCost} onChange={e => setShippingCost(Number(e.target.value))} className="w-28 text-right h-8" />
+   648→            </div>
+   649→            <div className="flex justify-between text-base font-bold border-t pt-2">
+   650→              <span>Total pré-commande</span>
+   651→              <span>{fmtMoney(total)}</span>
+   652→            </div>
+   653→            <div className="text-xs text-muted-foreground pt-1">
+   654→              Statut: <span className="font-medium text-amber-600">En attente</span>
+   655→            </div>
+   656→          </CardContent>
+   657→        </Card>
+   658→      </div>
+   659→
+   660→      {/* Actions */}
+   661→      <div className="flex justify-between">
+   662→        <Button variant="outline" onClick={onBack}>Annuler</Button>
+   663→        <Button onClick={submit} disabled={saving}>
+   664→          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+   665→          {saving ? 'Création...' : 'Créer la pré-commande'}
+   666→        </Button>
+   667→      </div>
+   668→
+   669→      {/* Product picker modal */}
+   670→      {pickerIdx !== null && (
+   671→        <ProductPickerDialog
+   672→          open={true}
+   673→          onOpenChange={(o) => { if (!o) setPickerIdx(null) }}
+   674→          stockItems={stockItems || []}
+   675→          categories={categories}
+   676→          getSubcategories={getSubcategories}
+   677→          onPick={(stockItemId) => {
+   678→            selectStockItem(pickerIdx, stockItemId)
+   679→            setPickerIdx(null)
+   680→          }}
+   681→        />
+   682→      )}
+   683→    </div>
+   684→  )
+   685→}
+   686→
+   687→// ── Detail / edit ──────────────────────────────────────────────────────────
+   688→
+   689→function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
+   690→  const { data: session } = useSession()
+   691→  const isAdmin = session?.user?.role === 'admin'
+   692→  const { data: preorder, loading, refresh } = useFetch<PreOrder>(`/api/preorders/${id}`)
+   693→  const [saving, setSaving] = useState(false)
+   694→  const [validating, setValidating] = useState(false)
+   695→  const [deleting, setDeleting] = useState(false)
+   696→  const [receiving, setReceiving] = useState(false)
+   697→  const [showValidateDialog, setShowValidateDialog] = useState(false)
+   698→  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+   699→  const [showReceiveDialog, setShowReceiveDialog] = useState(false)
+   700→  const [orderNumber, setOrderNumber] = useState('')
+   701→  const [invoiceNumber, setInvoiceNumber] = useState('')
+   702→
+   703→  const items = preorder ? parseItems(preorder.items) : []
+   704→  const cfg = preorder ? (STATUS_CONFIG[preorder.status] || STATUS_CONFIG.pending) : null
+   705→  const isValidated = preorder?.status === 'validated'
+   706→  const isCancelled = preorder?.status === 'cancelled'
+   707→  const isPending = preorder?.status === 'pending'
+   708→  const isReceived = preorder?.status === 'received'
+   709→
+   710→  const save = async (patch: any) => {
+   711→    setSaving(true)
+   712→    try {
+   713→      const res = await fetch(`/api/preorders/${id}`, {
+   714→        method: 'PATCH',
+   715→        headers: { 'Content-Type': 'application/json' },
+   716→        body: JSON.stringify(patch),
+   717→      })
+   718→      const data = await res.json()
+   719→      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+   720→      toast.success('Enregistré')
+   721→      refresh()
+   722→    } catch {
+   723→      toast.error('Erreur réseau')
+   724→    } finally {
+   725→      setSaving(false)
+   726→    }
+   727→  }
+   728→
+   729→  const deletePreorder = async () => {
+   730→    setDeleting(true)
+   731→    try {
+   732→      const res = await fetch(`/api/preorders/${id}`, { method: 'DELETE' })
+   733→      const data = await res.json()
+   734→      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+   735→      toast.success('Pré-commande supprimée')
+   736→      onBack()
+   737→    } catch {
+   738→      toast.error('Erreur réseau')
+   739→    } finally {
+   740→      setDeleting(false)
+   741→      setShowDeleteDialog(false)
+   742→    }
+   743→  }
+   744→
+   745→  const receiveOrder = async () => {
+   746→    setReceiving(true)
+   747→    try {
+   748→      const res = await fetch(`/api/preorders/${id}/receive`, { method: 'POST' })
+   749→      const data = await res.json()
+   750→      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+   751→      toast.success(data.message || 'Commande reçue — articles ajoutés au stock')
+   752→      setShowReceiveDialog(false)
+   753→      refresh()
+   754→    } catch {
+   755→      toast.error('Erreur réseau')
+   756→    } finally {
+   757→      setReceiving(false)
+   758→    }
+   759→  }
+   760→
+   761→  const validate = async () => {
+   762→    setValidating(true)
+   763→    try {
+   764→      const res = await fetch(`/api/preorders/${id}/validate`, {
+   765→        method: 'POST',
+   766→        headers: { 'Content-Type': 'application/json' },
+   767→        body: JSON.stringify({ orderNumber, invoiceNumber }),
+   768→      })
+   769→      const data = await res.json()
+   770→      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+   771→      toast.success(data.message || 'Pré-commande validée')
+   772→      setShowValidateDialog(false)
+   773→      refresh()
+   774→    } catch {
+   775→      toast.error('Erreur réseau')
+   776→    } finally {
+   777→      setValidating(false)
+   778→    }
+   779→  }
+   780→
+   781→  if (loading || !preorder || !cfg) {
+   782→    return (
+   783→      <div className="flex justify-center py-12">
+   784→        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+   785→      </div>
+   786→    )
+   787→  }
+   788→
+   789→  const Icon = cfg.icon
+   790→
+   791→  return (
+   792→    <div className="space-y-4">
+   793→      <div className="flex items-center justify-between">
+   794→        <div className="flex items-center gap-3">
+   795→          <Button variant="ghost" size="sm" onClick={onBack}>
+   796→            <ArrowLeft className="h-4 w-4 mr-1" /> Retour
+   797→          </Button>
+   798→          <div>
+   799→            <h1 className="text-2xl font-bold flex items-center gap-2">
+   800→              {preorder.name}
+   801→              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+   802→                <Icon className="h-3 w-3" /> {cfg.label}
+   803→              </span>
+   804→            </h1>
+   805→            <p className="text-sm text-muted-foreground font-mono">{preorder.reference}</p>
+   806→          </div>
+   807→        </div>
+   808→        <div className="flex items-center gap-2">
+   809→          {isPending && (
+   810→            <Button
+   811→              onClick={() => setShowValidateDialog(true)}
+   812→              className="bg-green-600 hover:bg-green-700"
+   813→            >
+   814→              <CheckCircle2 className="h-4 w-4 mr-2" /> Valider la pré-commande
+   815→            </Button>
+   816→          )}
+   817→          {isValidated && (
+   818→            <Button
+   819→              onClick={() => setShowReceiveDialog(true)}
+   820→              className="bg-blue-600 hover:bg-blue-700"
+   821→            >
+   822→              <Package className="h-4 w-4 mr-2" /> Commande reçue
+   823→            </Button>
+   824→          )}
+   825→          {isAdmin && !isCancelled && (
+   826→            <Button
+   827→              variant="outline"
+   828→              onClick={() => setShowDeleteDialog(true)}
+   829→              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+   830→            >
+   831→              <Trash2 className="h-4 w-4 mr-2" /> Supprimer
+   832→            </Button>
+   833→          )}
+   834→        </div>
+   835→      </div>
+   836→
+   837→      {/* Alerte si validée */}
+   838→      {isValidated && (
+   839→        <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900 p-4 text-sm">
+   840→          <div className="flex items-start gap-2">
+   841→            <Package className="h-5 w-5 text-green-600 mt-0.5" />
+   842→            <div className="space-y-1">
+   843→              <p className="font-semibold text-green-800 dark:text-green-200">
+   844→                Commande validée le {fmtDate(preorder.validatedAt || preorder.createdAt)}
+   845→              </p>
+   846→              <p className="text-green-700 dark:text-green-300">
+   847→                Cette pré-commande a été convertie en commande. Une entrée de <strong>{fmtMoney(preorder.total)}</strong> a été créée dans <strong>Fiscalité → ACHATS</strong>.
+   848→                {preorder.purchaseId && <span className="font-mono text-xs"> (Purchase ID: {preorder.purchaseId})</span>}
+   849→              </p>
+   850→              {preorder.orderNumber && <p className="text-green-700 dark:text-green-300">N° commande fournisseur: <strong>{preorder.orderNumber}</strong></p>}
+   851→              {preorder.invoiceNumber && <p className="text-green-700 dark:text-green-300">N° facture fournisseur: <strong>{preorder.invoiceNumber}</strong></p>}
+   852→            </div>
+   853→          </div>
+   854→        </div>
+   855→      )}
+   856→
+   857→      {/* Alerte si reçue */}
+   858→      {isReceived && (
+   859→        <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-4 text-sm">
+   860→          <div className="flex items-start gap-2">
+   861→            <PackageCheck className="h-5 w-5 text-blue-600 mt-0.5" />
+   862→            <div className="space-y-1">
+   863→              <p className="font-semibold text-blue-800 dark:text-blue-200">
+   864→                Commande reçue — articles ajoutés au stock
+   865→              </p>
+   866→              <p className="text-blue-700 dark:text-blue-300">
+   867→                Tous les articles de cette pré-commande ont été ajoutés au stock avec le statut <strong>« À contrôler »</strong>.
+   868→                Une entrée de <strong>{fmtMoney(preorder.total)}</strong> est comptabilisée dans <strong>Fiscalité → ACHATS</strong>.
+   869→              </p>
+   870→              {preorder.orderNumber && <p className="text-blue-700 dark:text-blue-300">N° commande fournisseur: <strong>{preorder.orderNumber}</strong></p>}
+   871→              {preorder.invoiceNumber && <p className="text-blue-700 dark:text-blue-300">N° facture fournisseur: <strong>{preorder.invoiceNumber}</strong></p>}
+   872→            </div>
+   873→          </div>
+   874→        </div>
+   875→      )}
+   876→
+   877→      {/* Infos générales (modifiables si non validée) */}
+   878→      <Card>
+   879→        <CardHeader><CardTitle className="text-base">Informations générales</CardTitle></CardHeader>
+   880→        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+   881→          <div className="space-y-1.5 md:col-span-2">
+   882→            <Label className="text-xs">Nom</Label>
+   883→            <Input
+   884→              value={preorder.name}
+   885→              disabled={isValidated || isCancelled}
+   886→              onChange={e => { /* allow inline edit via save button */ }}
+   887→              onBlur={e => { if (e.target.value !== preorder.name) save({ name: e.target.value }) }}
+   888→            />
+   889→          </div>
+   890→          <div className="space-y-1.5">
+   891→            <Label className="text-xs">Date</Label>
+   892→            <Input
+   893→              type="date"
+   894→              defaultValue={preorder.orderDate.slice(0, 10)}
+   895→              disabled={isValidated || isCancelled}
+   896→              onChange={e => { if (e.target.value !== preorder.orderDate.slice(0, 10)) save({ orderDate: e.target.value }) }}
+   897→            />
+   898→          </div>
+   899→          <div className="space-y-1.5 md:col-span-3">
+   900→            <Label className="text-xs">Fournisseur</Label>
+   901→            <Input
+   902→              value={preorder.supplier?.name || preorder.supplierName || ''}
+   903→              disabled
+   904→              className="bg-muted/50"
+   905→            />
+   906→          </div>
+   907→          <div className="space-y-1.5 md:col-span-3">
+   908→            <Label className="text-xs">Méthode de paiement</Label>
+   909→            <Input
+   910→              value={
+   911→                preorder.paymentMethod === 'especes' ? 'Espèces'
+   912→                : preorder.paymentMethod === 'carte_bancaire' ? 'Carte bancaire'
+   913→                : preorder.paymentMethod === 'virement' ? 'Virement'
+   914→                : preorder.paymentMethod === 'cheque' ? 'Chèque'
+   915→                : preorder.paymentMethod === 'paypal' ? 'PayPal'
+   916→                : '—'
+   917→              }
+   918→              disabled
+   919→              className="bg-muted/50"
+   920→            />
+   921→          </div>
+   922→          {isValidated && (
+   923→            <>
+   924→              <div className="space-y-1.5">
+   925→                <Label className="text-xs">N° commande fournisseur</Label>
+   926→                <Input
+   927→                  defaultValue={preorder.orderNumber || ''}
+   928→                  placeholder="À saisir"
+   929→                  onBlur={e => { if (e.target.value !== (preorder.orderNumber || '')) save({ orderNumber: e.target.value }) }}
+   930→                />
+   931→              </div>
+   932→              <div className="space-y-1.5">
+   933→                <Label className="text-xs">N° facture fournisseur</Label>
+   934→                <Input
+   935→                  defaultValue={preorder.invoiceNumber || ''}
+   936→                  placeholder="À saisir"
+   937→                  onBlur={e => { if (e.target.value !== (preorder.invoiceNumber || '')) save({ invoiceNumber: e.target.value }) }}
+   938→                />
+   939→              </div>
+   940→            </>
+   941→          )}
+   942→        </CardContent>
+   943→      </Card>
+   944→
+   945→      {/* Articles */}
+   946→      <Card>
+   947→        <CardHeader><CardTitle className="text-base">Articles ({items.length})</CardTitle></CardHeader>
+   948→        <CardContent>
+   949→          {items.length === 0 ? (
+   950→            <p className="text-muted-foreground text-sm">Aucun article.</p>
+   951→          ) : (
+   952→            <div className="overflow-x-auto">
+   953→              <table className="w-full text-sm">
+   954→                <thead>
+   955→                  <tr className="border-b text-left">
+   956→                    <th className="pb-2 pr-3 font-medium text-muted-foreground">Article</th>
+   957→                    <th className="pb-2 pr-3 font-medium text-muted-foreground">Attributs</th>
+   958→                    <th className="pb-2 pr-3 font-medium text-muted-foreground text-center">Qté</th>
+   959→                    <th className="pb-2 pr-3 font-medium text-muted-foreground text-right">Prix unit.</th>
+   960→                    <th className="pb-2 font-medium text-muted-foreground text-right">Total</th>
+   961→                  </tr>
+   962→                </thead>
+   963→                <tbody>
+   964→                  {items.map((it, i) => (
+   965→                    <tr key={i} className="border-b">
+   966→                      <td className="py-2.5 pr-3">
+   967→                        <div className="font-medium">{it.designation || '—'}</div>
+   968→                        {it.description && <div className="text-xs text-muted-foreground">{it.description}</div>}
+   969→                        {it.url && <a href={it.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">Voir l'article →</a>}
+   970→                      </td>
+   971→                      <td className="py-2.5 pr-3 text-xs text-muted-foreground">
+   972→                        {it.size && <div>Taille: {it.size}</div>}
+   973→                        {it.color && <div>Couleur: {it.color}</div>}
+   974→                        {it.condition && <div>État: {it.condition}</div>}
+   975→                      </td>
+   976→                      <td className="py-2.5 pr-3 text-center font-medium">{it.quantity}</td>
+   977→                      <td className="py-2.5 pr-3 text-right">{fmtMoney(Number(it.unitPrice) || 0)}</td>
+   978→                      <td className="py-2.5 text-right font-semibold">{fmtMoney((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0))}</td>
+   979→                    </tr>
+   980→                  ))}
+   981→                </tbody>
+   982→              </table>
+   983→            </div>
+   984→          )}
+   985→        </CardContent>
+   986→      </Card>
+   987→
+   988→      {/* Totaux */}
+   989→      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   990→        <Card>
+   991→          <CardHeader><CardTitle className="text-base">Notes</CardTitle></CardHeader>
+   992→          <CardContent>
+   993→            <Textarea
+   994→              defaultValue={preorder.notes || ''}
+   995→              disabled={isValidated || isCancelled}
+   996→              rows={4}
+   997→              placeholder="Notes internes..."
+   998→              onBlur={e => { if (e.target.value !== (preorder.notes || '')) save({ notes: e.target.value }) }}
+   999→            />
+  1000→          </CardContent>
+  1001→        </Card>
+  1002→        <Card>
+  1003→          <CardHeader><CardTitle className="text-base">Totaux</CardTitle></CardHeader>
+  1004→          <CardContent className="space-y-2">
+  1005→            <div className="flex justify-between text-sm">
+  1006→              <span className="text-muted-foreground">Sous-total</span>
+  1007→              <span className="font-medium">{fmtMoney(preorder.subtotal)}</span>
+  1008→            </div>
+  1009→            <div className="flex justify-between text-sm">
+  1010→              <span className="text-muted-foreground">Frais de port</span>
+  1011→              <span className="font-medium">{fmtMoney(preorder.shippingCost)}</span>
+  1012→            </div>
+  1013→            <div className="flex justify-between text-base font-bold border-t pt-2">
+  1014→              <span>Total</span>
+  1015→              <span>{fmtMoney(preorder.total)}</span>
+  1016→            </div>
+  1017→          </CardContent>
+  1018→        </Card>
+  1019→      </div>
+  1020→
+  1021→      {/* Dialogue de validation */}
+  1022→      <Dialog open={showValidateDialog} onOpenChange={setShowValidateDialog}>
+  1023→        <DialogContent>
+  1024→          <DialogHeader>
+  1025→            <DialogTitle>Valider la pré-commande</DialogTitle>
+  1026→            <DialogDescription>
+  1027→              Valider signifie que la commande a été acceptée et commandée chez le fournisseur.
+  1028→              Une entrée de <strong>{fmtMoney(preorder.total)}</strong> sera créée dans Fiscalité → ACHATS.
+  1029→              Vous pourrez modifier les numéros de commande/facture après validation.
+  1030→            </DialogDescription>
+  1031→          </DialogHeader>
+  1032→          <div className="space-y-3 py-2">
+  1033→            <div className="space-y-1.5">
+  1034→              <Label className="text-xs">N° commande fournisseur (optionnel)</Label>
+  1035→              <Input value={orderNumber} onChange={e => setOrderNumber(e.target.value)} placeholder="Ex: CMD-FOUR-12345" />
+  1036→            </div>
+  1037→            <div className="space-y-1.5">
+  1038→              <Label className="text-xs">N° facture fournisseur (optionnel)</Label>
+  1039→              <Input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} placeholder="Ex: FAC-2026-001" />
+  1040→            </div>
+  1041→          </div>
+  1042→          <DialogFooter>
+  1043→            <Button variant="outline" onClick={() => setShowValidateDialog(false)}>Annuler</Button>
+  1044→            <Button onClick={validate} disabled={validating} className="bg-green-600 hover:bg-green-700">
+  1045→              {validating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+  1046→              {validating ? 'Validation...' : 'Valider et convertir en commande'}
+  1047→            </Button>
+  1048→          </DialogFooter>
+  1049→        </DialogContent>
+  1050→      </Dialog>
+  1051→
+  1052→      {/* Dialogue de suppression */}
+  1053→      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+  1054→        <DialogContent>
+  1055→          <DialogHeader>
+  1056→            <DialogTitle>Supprimer la pré-commande</DialogTitle>
+  1057→            <DialogDescription>
+  1058→              Êtes-vous sûr de vouloir supprimer la pré-commande <strong>{preorder.reference}</strong> ?
+  1059→              Cette action est irréversible. Les articles créés dans le stock ne seront pas supprimés.
+  1060→              {isValidated && (
+  1061→                <span className="block mt-2 text-amber-600 font-medium">
+  1062→                  ⚠️ Cette pré-commande est validée. L'entrée comptable associée (dans Fiscalité → ACHATS) sera également supprimée.
+  1063→                </span>
+  1064→              )}
+  1065→            </DialogDescription>
+  1066→          </DialogHeader>
+  1067→          <DialogFooter>
+  1068→            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Annuler</Button>
+  1069→            <Button onClick={deletePreorder} disabled={deleting} variant="destructive">
+  1070→              {deleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+  1071→              {deleting ? 'Suppression...' : 'Supprimer définitivement'}
+  1072→            </Button>
+  1073→          </DialogFooter>
+  1074→        </DialogContent>
+  1075→      </Dialog>
+  1076→
+  1077→      {/* Dialogue de réception */}
+  1078→      <Dialog open={showReceiveDialog} onOpenChange={setShowReceiveDialog}>
+  1079→        <DialogContent>
+  1080→          <DialogHeader>
+  1081→            <DialogTitle>Marquer la commande comme reçue</DialogTitle>
+  1082→            <DialogDescription>
+  1083→              Tous les articles de cette pré-commande seront ajoutés au stock avec le statut <strong>« À contrôler »</strong>.
+  1084→              <br /><br />
+  1085→              {items.filter(i => i.stockItemId).length > 0 && (
+  1086→                <span className="text-blue-600">
+  1087→                  ℹ️ {items.filter(i => i.stockItemId).length} article(s) déjà créé(s) seront mis à jour (quantité + statut).
+  1088→                </span>
+  1089→              )}
+  1090→              {items.filter(i => !i.stockItemId).length > 0 && (
+  1091→                <span className="text-blue-600">
+  1092→                  ℹ️ {items.filter(i => !i.stockItemId).length} nouvel(s) article(s) seront créés dans le stock.
+  1093→                </span>
+  1094→              )}
+  1095→            </DialogDescription>
+  1096→          </DialogHeader>
+  1097→          <DialogFooter>
+  1098→            <Button variant="outline" onClick={() => setShowReceiveDialog(false)}>Annuler</Button>
+  1099→            <Button onClick={receiveOrder} disabled={receiving} className="bg-blue-600 hover:bg-blue-700">
+  1100→              {receiving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Package className="h-4 w-4 mr-2" />}
+  1101→              {receiving ? 'Traitement...' : 'Confirmer la réception'}
+  1102→            </Button>
+  1103→          </DialogFooter>
+  1104→        </DialogContent>
+  1105→      </Dialog>
+  1106→    </div>
+  1107→  )
+  1108→}
+  1109→
+  1110→// ── Product picker dialog ────────────────────────────────────────────────
+  1111→// Modal with category → subcategory filters, product grid (photo + name), and pagination.
+  1112→
+  1113→interface ProductPickerProps {
+  1114→  open: boolean
+  1115→  onOpenChange: (o: boolean) => void
+  1116→  stockItems: StockItemLite[]
+  1117→  categories: { id: string; code: string; value: string }[]
+  1118→  getSubcategories: (parentCode: string | null | undefined) => { id: string; code: string; value: string; parentCode: string | null }[]
+  1119→  onPick: (stockItemId: string) => void
+  1120→}
+  1121→
+  1122→const PAGE_SIZE = 12
+  1123→
+  1124→function ProductPickerDialog({ open, onOpenChange, stockItems, categories, getSubcategories, onPick }: ProductPickerProps) {
+  1125→  const [categoryFilter, setCategoryFilter] = useState<string>('')
+  1126→  const [subcategoryFilter, setSubcategoryFilter] = useState<string>('')
+  1127→  const [search, setSearch] = useState('')
+  1128→  const [page, setPage] = useState(1)
+  1129→
+  1130→  // Reset filters when dialog opens
+  1131→  useEffect(() => {
+  1132→    if (open) {
+  1133→      setCategoryFilter('')
+  1134→      setSubcategoryFilter('')
+  1135→      setSearch('')
+  1136→      setPage(1)
+  1137→    }
+  1138→  }, [open])
+  1139→
+  1140→  const subcategories = categoryFilter ? getSubcategories(categoryFilter) : []
+  1141→
+  1142→  // Filter stock items
+  1143→  const filtered = useMemo(() => {
+  1144→    let list = stockItems
+  1145→    if (categoryFilter) list = list.filter(si => si.category === categoryFilter)
+  1146→    if (subcategoryFilter) list = list.filter(si => si.subcategory === subcategoryFilter)
+  1147→    if (search) {
+  1148→      const q = search.toLowerCase()
+  1149→      list = list.filter(si =>
+  1150→        (si.title || '').toLowerCase().includes(q) ||
+  1151→        si.brand.toLowerCase().includes(q) ||
+  1152→        si.sku.toLowerCase().includes(q)
+  1153→      )
+  1154→    }
+  1155→    return list
+  1156→  }, [stockItems, categoryFilter, subcategoryFilter, search])
+  1157→
+  1158→  // Pagination
+  1159→  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  1160→  const currentPage = Math.min(page, totalPages)
+  1161→  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  1162→
+  1163→  // Helper to parse first photo
+  1164→  const getPhoto = (photosJson: string): string | null => {
+  1165→    try {
+  1166→      const arr = JSON.parse(photosJson)
+  1167→      if (Array.isArray(arr) && arr.length > 0) {
+  1168→        const p = arr[0]
+  1169→        return p.startsWith('/uploads/') ? `/api${p}` : p
+  1170→      }
+  1171→    } catch {}
+  1172→    return null
+  1173→  }
+  1174→
+  1175→  return (
+  1176→    <Dialog open={open} onOpenChange={onOpenChange}>
+  1177→      <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+  1178→        <DialogHeader>
+  1179→          <DialogTitle>Rechercher un article existant</DialogTitle>
+  1180→          <DialogDescription>
+  1181→            Filtrez par catégorie et sous-catégorie, puis cliquez sur un article pour l'ajouter à la pré-commande.
+  1182→          </DialogDescription>
+  1183→        </DialogHeader>
+  1184→
+  1185→        {/* Filters */}
+  1186→        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pb-3 border-b">
+  1187→          <div className="space-y-1.5">
+  1188→            <Label className="text-xs">Catégorie</Label>
+  1189→            <Select
+  1190→              value={categoryFilter || '__all__'}
+  1191→              onValueChange={(v) => { setCategoryFilter(v === '__all__' ? '' : v); setSubcategoryFilter(''); setPage(1) }}
+  1192→            >
+  1193→              <SelectTrigger><SelectValue placeholder="Toutes" /></SelectTrigger>
+  1194→              <SelectContent>
+  1195→                <SelectItem value="__all__">Toutes les catégories</SelectItem>
+  1196→                {categories.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+  1197→              </SelectContent>
+  1198→            </Select>
+  1199→          </div>
+  1200→          <div className="space-y-1.5">
+  1201→            <Label className="text-xs">Sous-catégorie</Label>
+  1202→            <Select
+  1203→              value={subcategoryFilter || '__all__'}
+  1204→              onValueChange={(v) => { setSubcategoryFilter(v === '__all__' ? '' : v); setPage(1) }}
+  1205→              disabled={!categoryFilter || subcategories.length === 0}
+  1206→            >
+  1207→              <SelectTrigger><SelectValue placeholder="Toutes" /></SelectTrigger>
+  1208→              <SelectContent>
+  1209→                <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
+  1210→                {subcategories.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
+  1211→              </SelectContent>
+  1212→            </Select>
+  1213→          </div>
+  1214→          <div className="space-y-1.5">
+  1215→            <Label className="text-xs">Recherche</Label>
+  1216→            <Input
+  1217→              value={search}
+  1218→              onChange={e => { setSearch(e.target.value); setPage(1) }}
+  1219→              placeholder="Nom, marque, SKU…"
+  1220→            />
+  1221→          </div>
+  1222→        </div>
+  1223→
+  1224→        {/* Results count */}
+  1225→        <div className="text-xs text-muted-foreground py-2">
+  1226→          {filtered.length} article{filtered.length > 1 ? 's' : ''} trouvé{filtered.length > 1 ? 's' : ''}
+  1227→        </div>
+  1228→
+  1229→        {/* Product grid */}
+  1230→        <div className="flex-1 overflow-y-auto">
+  1231→          {filtered.length === 0 ? (
+  1232→            <div className="text-center py-12 text-muted-foreground">
+  1233→              <Search className="h-10 w-10 mx-auto mb-2 opacity-50" />
+  1234→              <p>Aucun article trouvé. Ajustez les filtres ou créez un nouvel article.</p>
+  1235→            </div>
+  1236→          ) : (
+  1237→            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+  1238→              {paginated.map(si => {
+  1239→                const photo = getPhoto(si.photos)
+  1240→                const designation = si.title || `${si.brand} ${si.category}`.trim()
+  1241→                return (
+  1242→                  <button
+  1243→                    key={si.id}
+  1244→                    type="button"
+  1245→                    onClick={() => onPick(si.id)}
+  1246→                    className="text-left border rounded-lg overflow-hidden hover:border-[#007bff] hover:shadow-md transition-all group"
+  1247→                  >
+  1248→                    <div className="aspect-square bg-gray-50 relative overflow-hidden">
+  1249→                      {photo ? (
+  1250→                        // eslint-disable-next-line @next/next/no-img-element
+  1251→                        <img src={photo} alt={designation} className="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
+  1252→                      ) : (
+  1253→                        <div className="flex items-center justify-center w-full h-full text-gray-300">
+  1254→                          <Package className="h-8 w-8" />
+  1255→                        </div>
+  1256→                      )}
+  1257→                    </div>
+  1258→                    <div className="p-2 space-y-0.5">
+  1259→                      <p className="text-xs font-medium line-clamp-2 leading-tight">{designation}</p>
+  1260→                      <p className="text-[10px] text-muted-foreground">
+  1261→                        {si.brand}
+  1262→                        {si.size ? ` · ${si.size}` : ''}
+  1263→                      </p>
+  1264→                      <p className="text-[9px] text-muted-foreground font-mono">{si.sku}</p>
+  1265→                      {si.quantity <= 0 && (
+  1266→                        <span className="inline-block text-[9px] text-red-600 font-medium">Rupture</span>
+  1267→                      )}
+  1268→                    </div>
+  1269→                  </button>
+  1270→                )
+  1271→              })}
+  1272→            </div>
+  1273→          )}
+  1274→        </div>
+  1275→
+  1276→        {/* Pagination */}
+  1277→        {totalPages > 1 && (
+  1278→          <div className="flex items-center justify-between pt-3 border-t">
+  1279→            <p className="text-xs text-muted-foreground">
+  1280→              Page {currentPage} sur {totalPages}
+  1281→            </p>
+  1282→            <div className="flex gap-1">
+  1283→              <Button
+  1284→                size="sm"
+  1285→                variant="outline"
+  1286→                onClick={() => setPage(p => Math.max(1, p - 1))}
+  1287→                disabled={currentPage <= 1}
+  1288→              >
+  1289→                ← Précédent
+  1290→              </Button>
+  1291→              <Button
+  1292→                size="sm"
+  1293→                variant="outline"
+  1294→                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+  1295→                disabled={currentPage >= totalPages}
+  1296→              >
+  1297→                Suivant →
+  1298→              </Button>
+  1299→            </div>
+  1300→          </div>
+  1301→        )}
+  1302→      </DialogContent>
+  1303→    </Dialog>
+  1304→  )
+  1305→}
+  1306→

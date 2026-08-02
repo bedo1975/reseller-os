@@ -69,6 +69,8 @@ export async function PATCH(
     if (typeof body.notes === 'string') data.notes = body.notes || null
     if (typeof body.orderNumber === 'string') data.orderNumber = body.orderNumber || null
     if (typeof body.invoiceNumber === 'string') data.invoiceNumber = body.invoiceNumber || null
+    if (typeof body.supplierInvoicePath === 'string') data.supplierInvoicePath = body.supplierInvoicePath || null
+    if (typeof body.supplierInvoiceName === 'string') data.supplierInvoiceName = body.supplierInvoiceName || null
     if (typeof body.status === 'string') {
       if (!['pending', 'validated', 'received', 'cancelled'].includes(body.status)) {
         return NextResponse.json({ error: 'Statut invalide' }, { status: 400 })

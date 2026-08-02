@@ -400,6 +400,8 @@ model PreOrder {
   // Champs remplis lors de la validation (conversion en commande)
   orderNumber     String?  // n° commande fournisseur (saisi après validation)
   invoiceNumber   String?  // n° facture fournisseur (saisi après validation)
+  supplierInvoicePath String?  // chemin du PDF facture fournisseur (ex: "/api/uploads/preorder-invoices/xxx.pdf")
+  supplierInvoiceName String?  // nom du fichier original (ex: "facture-fournisseur.pdf")
   purchaseId      String?  // lien vers le Purchase créé dans la compta ACHATS
   validatedAt     DateTime?
   userId          String?

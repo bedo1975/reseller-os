@@ -18,6 +18,7 @@ import {
 import {
   Plus, Trash2, Loader2, ArrowLeft, ClipboardList, CheckCircle2, Clock,
   XCircle, Package, Edit3, FileText, ShoppingCart, PackagePlus, PackageCheck, Search,
+  Upload, Download, Printer, ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -69,9 +70,11 @@ interface PreOrder {
   total: number
   paymentMethod: string | null
   notes: string | null
-  status: string  // pending | validated | cancelled
+  status: string  // pending | validated | received | cancelled
   orderNumber: string | null
   invoiceNumber: string | null
+  supplierInvoicePath: string | null
+  supplierInvoiceName: string | null
   purchaseId: string | null
   validatedAt: string | null
   createdAt: string
@@ -220,6 +223,7 @@ export function PreOrderModule() {
                     <th className="pb-2 pr-3 font-medium text-muted-foreground">Date</th>
                     <th className="pb-2 pr-3 font-medium text-muted-foreground text-right">Total</th>
                     <th className="pb-2 pr-3 font-medium text-muted-foreground">Statut</th>
+                    <th className="pb-2 pr-3 font-medium text-muted-foreground hidden lg:table-cell">Facture</th>
                     <th className="pb-2 font-medium text-muted-foreground"></th>
                   </tr>
                 </thead>
@@ -242,6 +246,35 @@ export function PreOrderModule() {
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
                             <Icon className="h-3 w-3" /> {cfg.label}
                           </span>
+                        </td>
+                        <td className="py-2.5 pr-3 hidden lg:table-cell">
+                          {po.supplierInvoicePath ? (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                onClick={(e) => { e.stopPropagation(); window.open(po.supplierInvoicePath!, '_blank') }}
+                                title={`Voir la facture${po.invoiceNumber ? ` ${po.invoiceNumber}` : ''}`}
+                              >
+                                <FileText className="h-3.5 w-3.5 mr-1" />
+                                <span className="text-xs font-mono">{po.invoiceNumber || 'PDF'}</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0"
+                                onClick={(e) => { e.stopPropagation(); window.open(po.supplierInvoicePath!, '_blank') }}
+                                title="Imprimer"
+                              >
+                                <Printer className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {po.invoiceNumber || '—'}
+                            </span>
+                          )}
                         </td>
                         <td className="py-2.5 flex items-center gap-1">
                           <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); openDetail(po.id) }} title="Voir / modifier">
@@ -694,6 +727,7 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const [validating, setValidating] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [receiving, setReceiving] = useState(false)
+  const [uploadingInvoice, setUploadingInvoice] = useState(false)
   const [showValidateDialog, setShowValidateDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showReceiveDialog, setShowReceiveDialog] = useState(false)
@@ -756,6 +790,35 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
     } finally {
       setReceiving(false)
     }
+  }
+
+  const uploadInvoice = async (file: File) => {
+    setUploadingInvoice(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/preorders/${id}/invoice-upload`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erreur lors de l\'upload'); return }
+      // Save the path + filename to the pre-order
+      await save({
+        supplierInvoicePath: data.path,
+        supplierInvoiceName: data.filename,
+      })
+      toast.success('Facture téléversée avec succès')
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setUploadingInvoice(false)
+    }
+  }
+
+  const deleteInvoice = async () => {
+    await save({ supplierInvoicePath: null, supplierInvoiceName: null })
+    toast.success('Facture détachée')
   }
 
   const validate = async () => {
@@ -938,6 +1001,67 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
                 />
               </div>
             </>
+          )}
+          {isValidated && (
+            <div className="space-y-1.5 md:col-span-3">
+              <Label className="text-xs">Facture fournisseur (PDF)</Label>
+              {preorder.supplierInvoicePath ? (
+                <div className="flex items-center justify-between gap-2 p-3 rounded-md border bg-muted/30">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-5 w-5 text-red-600 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{preorder.supplierInvoiceName || 'Facture'}</p>
+                      <p className="text-[10px] text-muted-foreground">Fichier joint</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(preorder.supplierInvoicePath!, '_blank')}
+                      title="Voir / Télécharger"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" /> Voir
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(preorder.supplierInvoicePath!, '_blank')}
+                      title="Imprimer"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-500 hover:text-red-600"
+                      onClick={deleteInvoice}
+                      title="Détacher la facture"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 p-4 rounded-md border-2 border-dashed border-gray-300 hover:border-[#007bff] hover:bg-blue-50 cursor-pointer transition-colors">
+                  <input
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0]
+                      if (file) uploadInvoice(file)
+                      e.target.value = ''  // reset for re-upload
+                    }}
+                  />
+                  {uploadingInvoice ? (
+                    <><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> <span className="text-sm text-muted-foreground">Téléversement…</span></>
+                  ) : (
+                    <><Upload className="h-4 w-4 text-muted-foreground" /> <span className="text-sm text-muted-foreground">Téléverser une facture (PDF, JPG, PNG…)</span></>
+                  )}
+                </label>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
