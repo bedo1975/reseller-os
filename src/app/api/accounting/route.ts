@@ -266,8 +266,45 @@ export async function GET(req: NextRequest) {
         }
       })
 
-      // Fusionne les deux listes
-      const allEntries = [...entries, ...purchaseEntries]
+      // ─── Dépenses (Expense model — créées via Synthèse → Dépenses → Ajouter) ───
+      const expenses = await db.expense.findMany({
+        where: { date: dateFilter, userId: adminUser.id },
+        orderBy: { date: 'asc' },
+      })
+
+      const expenseCategoryLabels: Record<string, string> = {
+        frais_port: 'Frais de port',
+        frais_plateforme: 'Frais de plateforme',
+        abonnement: 'Abonnement',
+        fourniture: 'Fourniture',
+        carburant: 'Carburant',
+        autre: 'Autre dépense',
+      }
+
+      const expenseEntries = expenses.map((e, idx) => {
+        const expenseMontantTTC = e.amount
+        const expenseMontantHT = vatEnabled ? expenseMontantTTC / (1 + vatRate / 100) : expenseMontantTTC
+        return {
+          numero: entries.length + purchaseEntries.length + idx + 1,
+          date: e.date,
+          invoiceNumber: '—',
+          orderNumber: '—',
+          designation: e.label,
+          fournisseur: '—',
+          siret: null,
+          typeFournisseur: expenseCategoryLabels[e.category] || 'Dépense',
+          lotReference: '—',
+          modePaiement: '—',
+          montant: parseFloat(expenseMontantTTC.toFixed(2)),
+          montantHT: parseFloat(expenseMontantHT.toFixed(2)),
+          sku: '—',
+          prixVente: null,
+          isExpense: true,  // new flag to distinguish expenses
+        }
+      })
+
+      // Fusionne les trois listes
+      const allEntries = [...entries, ...purchaseEntries, ...expenseEntries]
       const allTotal = allEntries.reduce((s, e) => s + e.montant, 0)
       const allTotalHT = allEntries.reduce((s, e) => s + e.montantHT, 0)
 

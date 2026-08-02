@@ -3170,3 +3170,57 @@ Updated the DELETE `/api/preorders/[id]` route to also delete the invoice file f
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1141 KB, MD5: `84c903681c99d46097177901d8e49bfd`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: purchase-invoice-upload
+Agent: main
+Task: Add invoice PDF attachment (upload/view/print/delete) to purchases (achats hors stock) in Fiscalité → Registre des achats.
+
+## 1. Schema
+Added to `Purchase` model:
+- `invoicePath String?` — API URL (e.g. "/api/uploads/purchase-invoices/xxx.pdf")
+- `invoiceName String?` — original filename
+- `bunx prisma db push` — DB in sync.
+
+## 2. Upload + Delete API — `/api/purchases/[id]/invoice-upload` (new route)
+- **POST**: receives FormData with "file" field. Accepts PDF/JPG/PNG/WebP/GIF (max 10MB). Saves to `public/uploads/purchase-invoices/invoice-{purchaseId}-{hash}.{ext}`. Also deletes any existing invoice file before saving the new one. Returns `{ path, filename }`.
+- **DELETE**: deletes the file from disk + clears `invoicePath`/`invoiceName` in the DB (in one call).
+- Admin can access any purchase; staff only their own.
+
+## 3. PATCH API — `/api/purchases/[id]`
+- Added `invoicePath` and `invoiceName` to the updatable fields (accepts string OR explicit null).
+- Also fixed: admin can now edit any purchase (was restricted to `existing.userId !== user.id`).
+- Fixed `amount` parsing (empty string → 0, was crashing on `parseFloat('')`).
+- DELETE handler now also deletes the invoice file from disk.
+
+## 4. Accounting API — `/api/accounting?type=achats`
+- Purchase entries now include `purchaseId`, `invoicePath`, `invoiceName` — needed for the invoice UI in the register.
+
+## 5. Registre des achats — new "Facture" column
+- Added `purchaseId`, `invoicePath`, `invoiceName` to the `AchatEntry` interface.
+- Added a new "Facture" column at the end of the register table.
+- New `PurchaseInvoiceCell` component (inline, per row):
+  - **No purchaseId** (StockItem entry): shows "—"
+  - **No invoice attached**: shows a "Joindre" label with Upload icon → file picker → upload
+  - **Invoice attached**: 3 buttons:
+    - FileText icon (blue) → opens the PDF in a new tab (view)
+    - Printer icon → opens the PDF in a new tab (print)
+    - Trash icon (red) → deletes the invoice (file + DB reference)
+- After upload/delete, calls `refreshAchats()` to reload the register data.
+- Updated the totals row colspan (9 with VAT, 8 without — was 8/7).
+
+## 6. Imported icons
+Added `Upload`, `ExternalLink`, `Loader2` to the lucide-react imports in `taxes-module.tsx`.
+
+## Build & zip
+- `bunx prisma db push`: ✓ schema in sync.
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages — new /invoice-upload route for purchases).
+- `bash scripts/make-zip.sh`: zip = 1155 KB, MD5: `00e984f1cdabac0f6e93a7a40951085d`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+## Testing notes
+1. Fiscalité → Registre des achats → the "Facture" column appears at the end of the table.
+2. For achats hors stock (HS entries): click "Joindre" → select a PDF → it uploads → 3 buttons appear (view, print, delete).
+3. Click the FileText icon → the PDF opens in the browser (inline, not download).
+4. Click the Trash icon → the invoice is detached (file deleted from disk + DB cleared).
+5. For StockItem entries: the column shows "—" (no invoice attachment for stock items — they use the pre-order invoice system).

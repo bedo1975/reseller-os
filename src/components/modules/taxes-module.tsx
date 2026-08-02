@@ -163,14 +163,14 @@ function SyntheseTab({ year }: { year: number }) {
   const urssafCotisation = totalCA * taxRate / 100
   // Bénéfice net = CA - Total des charges (tous les décaissements)
   // En micro-entreprise, on déduit TOUTES les charges au moment du paiement (pas au moment de la vente).
-  // Les achats (stock + hors stock) sont des charges décaissées, même si les articles ne sont pas encore vendus.
-  // Total des charges = achats + frais plateforme + frais port transporteur + frais bancaires + autres dépenses + URSSAF
+  // achatsData.total includes: StockItems (purchaseCost × qty) + Purchases (hors stock) + Expenses (dépenses)
+  // So we must NOT deduct totalOtherExpenses again (it's already in achatsData.total via the Expenses).
+  // Fallback: if achatsData hasn't loaded, use totalPurchases (StockItems + Purchases) + totalOtherExpenses (Expenses)
   const totalProfit = totalCA
-    - (achatsData?.total ?? totalPurchases)  // tous les achats (stock + hors stock, × quantité)
+    - (achatsData?.total ?? (totalPurchases + totalOtherExpenses))  // all charges
     - totalPlatformFees
     - totalCarrierShipping
     - totalPaymentFees
-    - totalOtherExpenses
     - urssafCotisation
 
   const exportCSV = () => {
@@ -459,12 +459,12 @@ function SyntheseTab({ year }: { year: number }) {
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <SummaryCard label="Chiffre d'affaires" value={totalCA} hint="Inclut prix article + frais port client" />
-          <SummaryCard label="Achats" value={totalPurchases} />
+          <SummaryCard label="Achats + Dépenses" value={achatsData?.total ?? (totalPurchases + totalOtherExpenses)} hint="Articles stock + hors stock + dépenses (visible dans le Registre des achats)" />
           <SummaryCard label="Frais plateforme" value={totalPlatformFees} />
           <SummaryCard label="dont Frais port client" value={totalShippingBilled} hint="Inclus dans le CA (revenu)" />
           <SummaryCard label="Frais port réels (transporteur)" value={totalCarrierShipping} hint="Charge déductible du CA" />
           <SummaryCard label="Frais bancaires (Stripe/PayPal)" value={totalPaymentFees} hint="Charge déductible du CA" />
-          <SummaryCard label="Autres dépenses" value={totalOtherExpenses} />
+          <SummaryCard label="Autres dépenses" value={totalOtherExpenses} hint="Dépenses saisies dans l'onglet Dépenses" />
           <SummaryCard label={`Cotisations URSSAF (${taxRate}%)`} value={parseFloat(urssafCotisation.toFixed(2))} />
           <SummaryCard label="Bénéfice net" value={totalProfit} highlight />
           <SummaryCard label="Marge nette" value={totalCA > 0 ? parseFloat(((totalProfit / totalCA) * 100).toFixed(1)) : 0} suffix="%" />
@@ -1037,6 +1037,7 @@ interface AchatEntry {
   vendu?: boolean
   isHorsStock?: boolean
   isPreOrderReceived?: boolean
+  isExpense?: boolean
   quantite?: number
 }
 
@@ -1131,7 +1132,7 @@ function AchatsTab({ year }: { year: number }) {
                 <td>${e.designation}</td>
                 <td>${e.fournisseur}${e.siret ? `<br><span style="font-size:9px; color:#888;">SIRET : ${e.siret}</span>` : ''}</td>
                 <td>${e.modePaiement}</td>
-                <td>${e.isPreOrderReceived ? 'En stock' : e.isHorsStock ? 'HS' : e.vendu ? 'Vendu' : 'En stock'}</td>
+                <td>${e.isExpense ? 'Dépense' : e.isPreOrderReceived ? 'En stock' : e.isHorsStock ? 'HS' : e.vendu ? 'Vendu' : 'En stock'}</td>
                 ${data.vatEnabled ? `<td class="right">${e.montantHT.toFixed(2)}</td>` : ''}
                 <td class="right"><strong>${e.montant.toFixed(2)}</strong></td>
               </tr>
@@ -1338,7 +1339,9 @@ function AchatsTab({ year }: { year: number }) {
                       </td>
                       <td className="px-2 py-2 hidden lg:table-cell text-muted-foreground text-[10px]">{e.modePaiement}</td>
                       <td className="px-2 py-2">
-                        {e.isPreOrderReceived ? (
+                        {e.isExpense ? (
+                          <span className="text-[9px] bg-sky-100 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded font-medium">Dépense</span>
+                        ) : e.isPreOrderReceived ? (
                           <span className="text-[9px] bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded font-medium">En stock</span>
                         ) : e.isHorsStock ? (
                           <span className="text-[9px] bg-violet-100 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded font-medium">HS</span>
