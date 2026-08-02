@@ -245,9 +245,12 @@ export async function GET(req: NextRequest) {
         const isPreOrderReceived = receivedPurchaseIds.has(p.id)
         return {
           numero: entries.length + idx + 1,
+          purchaseId: p.id,  // needed for invoice upload/delete in the UI
           date: p.date,
           invoiceNumber: p.invoiceNumber || '—',
           orderNumber: p.orderNumber || '—',  // n° commande fournisseur (pour les pré-commandes)
+          invoicePath: p.invoicePath || null,  // facture PDF attachée
+          invoiceName: p.invoiceName || null,
           designation: p.designation,
           fournisseur: p.supplier?.name || p.supplierName || '—',
           siret: p.supplier?.siret || null,

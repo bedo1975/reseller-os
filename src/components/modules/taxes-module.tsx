@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   FileDown, FileSpreadsheet, FileText, Plus, Trash2, Receipt, BookOpen,
   ClipboardList, BarChart3, BookCheck, BookMarked, Printer, Percent, Edit, AlertTriangle, Calendar,
+  Upload, ExternalLink, Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatEUR, formatDate, EXPENSE_CATEGORIES } from '@/lib/constants'
@@ -1017,9 +1018,12 @@ function RecettesTab({ year }: { year: number }) {
 
 interface AchatEntry {
   numero: number
+  purchaseId?: string
   date: string
   invoiceNumber: string
   orderNumber?: string
+  invoicePath?: string | null
+  invoiceName?: string | null
   designation: string
   fournisseur: string
   siret: string | null
@@ -1057,7 +1061,7 @@ interface AchatsData {
 function AchatsTab({ year }: { year: number }) {
   const confirm = useConfirm()
   const [month, setMonth] = useState<string>('all')
-  const { data, loading } = useFetch<AchatsData>(`/api/accounting?type=achats&year=${year}${month !== 'all' ? `&month=${month}` : ''}`)
+  const { data, loading, refresh: refreshAchats } = useFetch<AchatsData>(`/api/accounting?type=achats&year=${year}${month !== 'all' ? `&month=${month}` : ''}`)
 
   if (loading || !data) {
     return (
@@ -1304,6 +1308,7 @@ function AchatsTab({ year }: { year: number }) {
                     <th className="px-2 py-2 font-medium">Statut</th>
                     {data.vatEnabled && <th className="px-2 py-2 font-medium text-right">HT</th>}
                     <th className="px-2 py-2 font-medium text-right">TTC</th>
+                    <th className="px-2 py-2 font-medium">Facture</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1345,14 +1350,18 @@ function AchatsTab({ year }: { year: number }) {
                       </td>
                       {data.vatEnabled && <td className="px-2 py-2 text-right">{formatEUR(e.montantHT)}</td>}
                       <td className="px-2 py-2 text-right font-semibold">{formatEUR(e.montant)}</td>
+                      <td className="px-2 py-2">
+                        <PurchaseInvoiceCell entry={e} onRefresh={refreshAchats} />
+                      </td>
                     </tr>
                   ))}
                   <tr className="bg-sky-50 dark:bg-sky-950/30 border-t-2 border-sky-200 dark:border-sky-900">
-                    <td colSpan={data.vatEnabled ? 8 : 7} className="px-2 py-2.5 text-right font-semibold text-xs uppercase">
+                    <td colSpan={data.vatEnabled ? 9 : 8} className="px-2 py-2.5 text-right font-semibold text-xs uppercase">
                       Total {data.month ? 'mensuel' : 'annuel'}
                     </td>
                     {data.vatEnabled && <td className="px-2 py-2.5 text-right font-bold">{formatEUR(data.totalHT)}</td>}
                     <td className="px-2 py-2.5 text-right font-bold text-sky-600">{formatEUR(data.total)}</td>
+                    <td></td>
                   </tr>
                 </tbody>
               </table>
@@ -1547,5 +1556,104 @@ function UrssafTab({ year }: { year: number }) {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// ── Purchase invoice cell (for achats hors stock in the registre) ──────────
+// Inline component that handles upload/view/print/delete of a supplier invoice
+// for each purchase entry in the "Détail des achats" table.
+
+function PurchaseInvoiceCell({ entry, onRefresh }: { entry: AchatEntry; onRefresh: () => void }) {
+  const [uploading, setUploading] = useState(false)
+
+  // Only purchases (hors stock) have a purchaseId — StockItems don't
+  if (!entry.purchaseId) {
+    return <span className="text-[10px] text-muted-foreground">—</span>
+  }
+
+  const upload = async (file: File) => {
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/purchases/${entry.purchaseId}/invoice-upload`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+      toast.success('Facture téléversée')
+      onRefresh()
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const remove = async () => {
+    try {
+      const res = await fetch(`/api/purchases/${entry.purchaseId}/invoice-upload`, { method: 'DELETE' })
+      if (!res.ok) { toast.error('Erreur'); return }
+      toast.success('Facture supprimée')
+      onRefresh()
+    } catch {
+      toast.error('Erreur réseau')
+    }
+  }
+
+  if (entry.invoicePath) {
+    return (
+      <div className="flex items-center gap-1">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+          onClick={() => window.open(entry.invoicePath!, '_blank')}
+          title="Voir la facture"
+        >
+          <FileText className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 p-0"
+          onClick={() => window.open(entry.invoicePath!, '_blank')}
+          title="Imprimer"
+        >
+          <Printer className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+          onClick={remove}
+          title="Supprimer la facture"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <label className="inline-flex items-center gap-1 cursor-pointer text-[10px] text-muted-foreground hover:text-[#007bff]">
+      <input
+        type="file"
+        accept="application/pdf,image/jpeg,image/png,image/webp,image/gif"
+        className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0]
+          if (file) upload(file)
+          e.target.value = ''
+        }}
+      />
+      {uploading ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Upload className="h-3.5 w-3.5" />
+      )}
+      <span>{uploading ? '…' : 'Joindre'}</span>
+    </label>
   )
 }

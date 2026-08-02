@@ -369,6 +369,8 @@ model Purchase {
   amount          Float    // montant TTC
   orderNumber     String?  // n° commande fournisseur (pour les pré-commandes)
   invoiceNumber   String?  // n° facture fournisseur
+  invoicePath     String?  // chemin du PDF facture (ex: "/api/uploads/purchase-invoices/xxx.pdf")
+  invoiceName     String?  // nom du fichier original
   paymentMethod   String?  // especes | carte_bancaire | virement | cheque | paypal
   notes           String?
   userId          String?

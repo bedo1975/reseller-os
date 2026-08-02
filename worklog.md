@@ -3129,3 +3129,44 @@ Clicking the button opens a new tab with the printable HTML, which auto-triggers
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages — new /print route).
 - `bash scripts/make-zip.sh`: zip = 1141 KB, MD5: `826d165fb8b21f5ebc301dfd8c6d6cad`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: invoice-detach-fix
+Agent: main
+Task: Fix — detaching a supplier invoice didn't work (the file stayed in place, DB reference wasn't cleared).
+
+## Root cause
+The PATCH route checked `typeof body.supplierInvoicePath === 'string'` before updating the field. But `deleteInvoice()` sent `{ supplierInvoicePath: null }` — and `typeof null === 'object'`, not `'string'`. So the field was never updated, and the invoice stayed attached.
+
+## Fix — 3 changes
+
+### 1. PATCH route (`/api/preorders/[id]/route.ts`)
+Changed the condition to also accept explicit `null`:
+```ts
+if (typeof body.supplierInvoicePath === 'string' || body.supplierInvoicePath === null) {
+  data.supplierInvoicePath = body.supplierInvoicePath || null
+}
+if (typeof body.supplierInvoiceName === 'string' || body.supplierInvoiceName === null) {
+  data.supplierInvoiceName = body.supplierInvoiceName || null
+}
+```
+
+### 2. New DELETE route (`/api/preorders/[id]/invoice-upload`)
+Added a DELETE handler that deletes the actual file from disk:
+- Extracts the disk path from the API URL (`/api/uploads/preorder-invoices/xxx.pdf` → `public/uploads/preorder-invoices/xxx.pdf`)
+- Uses `fs.unlinkSync()` to delete the file
+- Safe: checks `fs.existsSync()` first, catches errors
+
+### 3. Frontend `deleteInvoice()` (preorder-module.tsx)
+Updated to:
+1. Call DELETE `/api/preorders/${id}/invoice-upload` → deletes the file from disk
+2. Call PATCH with `{ supplierInvoicePath: null, supplierInvoiceName: null }` → clears the DB reference
+3. Toast: "Facture supprimée"
+
+### Bonus: pre-order deletion also cleans up the invoice file
+Updated the DELETE `/api/preorders/[id]` route to also delete the invoice file from disk before deleting the pre-order record.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1141 KB, MD5: `84c903681c99d46097177901d8e49bfd`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
