@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select'
 import {
   Plus, Trash2, Loader2, ArrowLeft, ClipboardList, CheckCircle2, Clock,
-  XCircle, Package, Edit3, FileText, ShoppingCart, PackagePlus, PackageCheck,
+  XCircle, Package, Edit3, FileText, ShoppingCart, PackagePlus, PackageCheck, Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 

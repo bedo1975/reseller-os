@@ -2924,3 +2924,74 @@ The single product page (`/boutique/produit/[sku]`) already shows "Non disponibl
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1104 KB, MD5: `64f7c8457326a378c5bda520f5ba252e`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: supplier-website-url + preorder-product-picker-modal
+Agent: main
+Task: 2 features — (1) add "URL du site web" field to supplier form in Sourcing, (2) replace inline Select article picker in pre-order form with a modal product picker (category → subcategory → grid + pagination).
+
+## 1. Supplier websiteUrl field
+
+### Schema (`prisma/schema.prisma`)
+- Added `websiteUrl String?` to the `Supplier` model (between `email` and `address`).
+- `bunx prisma db push` — DB in sync.
+
+### Supplier API
+- **GET** (`/api/suppliers/route.ts`): added `websiteUrl: s.websiteUrl` to the response mapper.
+- **POST** (create): added `websiteUrl` to destructured body + `data` object (`websiteUrl: websiteUrl || null`).
+- **PATCH** (`/api/suppliers/[id]/route.ts`): added `'websiteUrl'` to the `allowed` array.
+
+### Sourcing module (`sourcing-module.tsx`)
+- Added `websiteUrl: string | null` to `SupplierStat` interface.
+- Added `websiteUrl: ''` to form state (initial + reset).
+- Added `websiteUrl: supplier.websiteUrl || ''` in the edit branch.
+- Added a new form field "URL du site web" (`<Input type="url">`) between Email and Address.
+- Added the website URL display (with Globe icon + clickable link) in the `SupplierDetail` dialog.
+- Imported `Globe` from lucide-react.
+
+## 2. Pre-order product picker modal
+
+### Problem
+The old "Article existant" picker was an inline `<Select>` that loaded ALL stock items in a dropdown. With a large catalog, this was unusable — no search, no filters, no photos.
+
+### Solution — `ProductPickerDialog` component (new, ~180 lines)
+Replaced the inline Select with a button that opens a full-screen modal containing:
+
+1. **Filters row** (3 columns):
+   - **Catégorie** dropdown (from `useSettings().getByType('category')`)
+   - **Sous-catégorie** dropdown (from `getSubcategories(categoryCode)`, disabled until a category is selected)
+   - **Recherche** text input (filters by title, brand, or SKU)
+
+2. **Results count**: "X articles trouvés"
+
+3. **Product grid** (2-4 columns responsive):
+   - Each card shows: photo (or Package icon placeholder), title/designation, brand + size, SKU, "Rupture" badge if quantity ≤ 0
+   - Click on a card → calls `onPick(stockItemId)` → links the article to the pre-order line → closes the modal
+
+4. **Pagination**: 12 items per page, "Précédent" / "Suivant" buttons + "Page X sur Y"
+
+### Changes in `preorder-module.tsx`
+- **StockItemLite interface**: added `subcategory`, `photos`, `quantity` fields (needed for the grid display + subcategory filter).
+- **CreatePreOrderForm**: 
+  - Added `getSubcategories` from `useSettings()`.
+  - Added `pickerIdx` state (tracks which item line opened the picker).
+  - Replaced the inline `<Select>` with a button "Rechercher un article existant…" + a linked-article display (with change/detach buttons).
+  - Added `<ProductPickerDialog>` at the end of the form.
+- **ProductPickerDialog component**: new component with:
+  - `useEffect` to reset filters when the dialog opens.
+  - `useMemo` for filtered + paginated items.
+  - `getPhoto()` helper to parse the first photo from the JSON array (with `/uploads/` → `/api/uploads/` rewrite).
+  - Full keyboard-accessible grid of clickable product cards.
+
+### UX flow
+1. User clicks "Rechercher un article existant…" button on a pre-order line.
+2. Modal opens with all stock items in a paginated grid.
+3. User filters by category → subcategory → search.
+4. User clicks a product card → the article is linked to the pre-order line (designation, size, color, condition auto-filled) → modal closes.
+5. The linked article is shown as "✓ Lié : [title]" with change/detach buttons.
+
+## Build & zip
+- `bunx prisma db push`: ✓ schema in sync (Supplier.websiteUrl added).
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1117 KB, MD5: `3c34da8d6bc7f913a6218d0638af6047`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
