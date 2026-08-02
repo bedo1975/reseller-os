@@ -247,6 +247,10 @@ model StockItem {
   // comptabilisé via le Purchase créé lors de la validation de la pré-commande.
   preOrderId    String?
 
+  // Facture fournisseur attachée (pour les articles ajoutés manuellement au stock)
+  invoicePath   String?  // chemin du PDF facture
+  invoiceName   String?  // nom du fichier original
+
   // 1 StockItem peut avoir plusieurs Sales (utile pour quantité > 1)
   sales         Sale[]
 }
@@ -303,6 +307,12 @@ model Expense {
   category    String   // frais_port | frais_plateforme | abonnement | fourniture | carburant | autre
   label       String
   amount      Float
+
+  // Détails fournisseur (saisis dans le formulaire de dépense)
+  supplierName    String?  // nom du fournisseur
+  invoiceNumber   String?  // n° facture fournisseur
+  orderNumber     String?  // n° commande fournisseur
+  paymentMethod   String?  // especes | carte_bancaire | virement | cheque | paypal
 
   // Facture attachée
   invoicePath String?  // chemin du PDF facture (ex: "/api/uploads/expense-invoices/xxx.pdf")

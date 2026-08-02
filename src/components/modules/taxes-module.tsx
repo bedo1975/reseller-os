@@ -126,6 +126,10 @@ function SyntheseTab({ year }: { year: number }) {
     category: 'frais_port',
     label: '',
     amount: '',
+    supplierName: '',
+    invoiceNumber: '',
+    orderNumber: '',
+    paymentMethod: '',
     isRecurring: false,
     recurringFreq: '',
   })
@@ -342,7 +346,7 @@ function SyntheseTab({ year }: { year: number }) {
         if (!res.ok) throw new Error('Erreur')
         toast.success(form.isRecurring ? 'Dépense récurrente créée (prochaines occurrences générées)' : 'Dépense ajoutée')
       }
-      setForm({ date: new Date().toISOString().split('T')[0], category: 'frais_port', label: '', amount: '', isRecurring: false, recurringFreq: '' })
+      setForm({ date: new Date().toISOString().split('T')[0], category: 'frais_port', label: '', amount: '', supplierName: '', invoiceNumber: '', orderNumber: '', paymentMethod: '', isRecurring: false, recurringFreq: '' })
       setShowForm(false)
       refresh()
     } catch {
@@ -359,6 +363,10 @@ function SyntheseTab({ year }: { year: number }) {
       category: e.category,
       label: e.label,
       amount: String(e.amount),
+      supplierName: (e as any).supplierName || '',
+      invoiceNumber: (e as any).invoiceNumber || '',
+      orderNumber: (e as any).orderNumber || '',
+      paymentMethod: (e as any).paymentMethod || '',
       isRecurring: e.isRecurring,
       recurringFreq: e.recurringFreq || '',
     })
@@ -558,9 +566,39 @@ function SyntheseTab({ year }: { year: number }) {
                 <Label className="text-xs">Libellé</Label>
                 <Input value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="Abonnement Vinted Pro" />
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Montant (€)</Label>
+                  <Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="9.99" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Fournisseur</Label>
+                  <Input value={form.supplierName} onChange={e => setForm({ ...form, supplierName: e.target.value })} placeholder="Nom du fournisseur" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">N° facture</Label>
+                  <Input value={form.invoiceNumber} onChange={e => setForm({ ...form, invoiceNumber: e.target.value })} placeholder="FAC-2026-001" className="font-mono text-sm" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">N° commande fournisseur</Label>
+                  <Input value={form.orderNumber} onChange={e => setForm({ ...form, orderNumber: e.target.value })} placeholder="CMD-12345" className="font-mono text-sm" />
+                </div>
+              </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Montant (€)</Label>
-                <Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="9.99" />
+                <Label className="text-xs">Mode de paiement</Label>
+                <Select value={form.paymentMethod || '__none__'} onValueChange={v => setForm({ ...form, paymentMethod: v === '__none__' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">—</SelectItem>
+                    <SelectItem value="especes">Espèces</SelectItem>
+                    <SelectItem value="carte_bancaire">Carte bancaire</SelectItem>
+                    <SelectItem value="virement">Virement</SelectItem>
+                    <SelectItem value="cheque">Chèque</SelectItem>
+                    <SelectItem value="paypal">PayPal</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Option récurrent */}
@@ -1023,6 +1061,7 @@ interface AchatEntry {
   numero: number
   purchaseId?: string
   expenseId?: string
+  stockItemId?: string
   date: string
   invoiceNumber: string
   orderNumber?: string
@@ -1368,7 +1407,7 @@ function AchatsTab({ year }: { year: number }) {
                         >
                           {e.invoicePath ? (
                             <><FileText className="h-3.5 w-3.5 mr-1 text-blue-600" /><span className="text-[10px]">Voir</span></>
-                          ) : (e.purchaseId || e.expenseId) ? (
+                          ) : (e.purchaseId || e.expenseId || e.stockItemId) ? (
                             <><Upload className="h-3.5 w-3.5 mr-1 text-muted-foreground" /><span className="text-[10px]">Joindre</span></>
                           ) : (
                             <span className="text-[10px] text-muted-foreground">—</span>
@@ -1595,8 +1634,14 @@ function EntryDetailModal({ entry, onOpenChange }: { entry: AchatEntry; onOpenCh
   // Determine the type + ID for invoice operations
   const isPurchase = !!entry.purchaseId
   const isExpense = !!entry.expenseId
-  const recordId = entry.purchaseId || entry.expenseId
-  const apiBase = isExpense ? `/api/expenses/${recordId}` : `/api/purchases/${recordId}`
+  const isStockItem = !!entry.stockItemId
+  const recordId = entry.purchaseId || entry.expenseId || entry.stockItemId
+  const apiBase = isExpense
+    ? `/api/expenses/${recordId}`
+    : isStockItem
+    ? `/api/stock/${recordId}`
+    : `/api/purchases/${recordId}`
+  const canHaveInvoice = isPurchase || isExpense || isStockItem
 
   const upload = async (file: File) => {
     setUploading(true)
@@ -1713,7 +1758,7 @@ function EntryDetailModal({ entry, onOpenChange }: { entry: AchatEntry; onOpenCh
                 </Button>
               </div>
             </div>
-          ) : (isPurchase || isExpense) ? (
+          ) : canHaveInvoice ? (
             <label className="flex items-center justify-center gap-2 p-4 rounded-md border-2 border-dashed border-gray-300 hover:border-[#007bff] hover:bg-blue-50 cursor-pointer transition-colors">
               <input
                 type="file"
@@ -1732,7 +1777,7 @@ function EntryDetailModal({ entry, onOpenChange }: { entry: AchatEntry; onOpenCh
               )}
             </label>
           ) : (
-            <p className="text-xs text-muted-foreground py-2">Les articles en stock n'ont pas de facture rattachable ici. Utilisez les pré-commandes pour gérer les factures fournisseur.</p>
+            <p className="text-xs text-muted-foreground py-2">Aucune facture rattachable.</p>
           )}
         </div>
 

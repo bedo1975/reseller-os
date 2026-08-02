@@ -23,7 +23,8 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth()
     const body = await req.json()
-    const { date, category, label, amount, isRecurring, recurringFreq } = body
+    const { date, category, label, amount, isRecurring, recurringFreq,
+            supplierName, invoiceNumber, orderNumber, paymentMethod } = body
     if (!label || !amount) {
       return NextResponse.json({ error: 'Libellé et montant requis' }, { status: 400 })
     }
@@ -36,6 +37,10 @@ export async function POST(req: NextRequest) {
         amount: parseFloat(amount),
         isRecurring: !!isRecurring,
         recurringFreq: isRecurring ? (recurringFreq || 'monthly') : null,
+        supplierName: supplierName || null,
+        invoiceNumber: invoiceNumber || null,
+        orderNumber: orderNumber || null,
+        paymentMethod: paymentMethod || null,
         userId: user.id,
       },
     })

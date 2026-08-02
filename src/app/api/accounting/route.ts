@@ -161,9 +161,12 @@ export async function GET(req: NextRequest) {
         const designationBase = `${item.brand} ${item.category} ${item.size || ''} ${item.color || ''}`.trim().replace(/\s+/g, ' ')
         return {
           numero: idx + 1,
+          stockItemId: item.id,  // needed for invoice upload/delete in the UI
           date: item.purchaseDate,
           invoiceNumber: item.purchaseInvoiceNumber || firstSale?.invoiceNumber || '—',
-          orderNumber: '—',  // les articles en stock n'ont pas de n° commande fournisseur
+          orderNumber: '—',
+          invoicePath: item.invoicePath || null,
+          invoiceName: item.invoiceName || null,
           designation: qty > 1 ? `${designationBase} (×${qty})` : designationBase,
           fournisseur: item.supplier?.name || '—',
           siret: item.supplier?.siret || null,
@@ -286,23 +289,23 @@ export async function GET(req: NextRequest) {
         const expenseMontantHT = vatEnabled ? expenseMontantTTC / (1 + vatRate / 100) : expenseMontantTTC
         return {
           numero: entries.length + purchaseEntries.length + idx + 1,
-          expenseId: e.id,  // needed for invoice upload/delete in the UI
+          expenseId: e.id,
           date: e.date,
-          invoiceNumber: '—',
-          orderNumber: '—',
+          invoiceNumber: e.invoiceNumber || '—',
+          orderNumber: e.orderNumber || '—',
           invoicePath: e.invoicePath || null,
           invoiceName: e.invoiceName || null,
           designation: e.label,
-          fournisseur: '—',
+          fournisseur: e.supplierName || '—',
           siret: null,
           typeFournisseur: expenseCategoryLabels[e.category] || 'Dépense',
           lotReference: '—',
-          modePaiement: '—',
+          modePaiement: e.paymentMethod ? (paymentMethodLabels[e.paymentMethod] || e.paymentMethod) : '—',
           montant: parseFloat(expenseMontantTTC.toFixed(2)),
           montantHT: parseFloat(expenseMontantHT.toFixed(2)),
           sku: '—',
           prixVente: null,
-          isExpense: true,  // flag to distinguish expenses
+          isExpense: true,
         }
       })
 

@@ -3273,3 +3273,54 @@ Each Expense entry has:
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1160 KB, MD5: `2a40a4ded6b0174cbaaaa9bdd5f9a97e`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: expense-invoice + entry-detail-modal
+Agent: main
+Task: (1) Allow attaching a PDF invoice to Expenses (dépenses saisies via Synthèse → Dépenses → Ajouter), (2) replace the inline invoice cell with a modal that shows entry details + invoice management (view/print/upload/delete).
+
+## 1. Schema — Expense invoice fields
+Added to `Expense` model:
+- `invoicePath String?` — API URL (e.g. "/api/uploads/expense-invoices/xxx.pdf")
+- `invoiceName String?` — original filename
+- `bunx prisma db push` — DB in sync.
+
+## 2. Expense invoice API — `/api/expenses/[id]/invoice-upload` (new route)
+- **POST**: FormData with "file" field. Accepts PDF/JPG/PNG/WebP/GIF (max 10MB). Saves to `public/uploads/expense-invoices/`. Deletes old invoice if any. Updates `invoicePath`/`invoiceName` in DB directly (no separate PATCH needed). Returns `{ path, filename }`.
+- **DELETE**: deletes file from disk + clears `invoicePath`/`invoiceName` in DB.
+- Admin can access any expense; staff only their own.
+
+## 3. Accounting API — expense entries now include invoice fields + expenseId
+- Added `expenseId`, `invoicePath`, `invoiceName` to the Expense entries in the accounting response.
+- The `AchatEntry` interface in taxes-module.tsx now includes `expenseId?: string`.
+
+## 4. Entry detail modal — replaces the old inline PurchaseInvoiceCell
+New component `EntryDetailModal` opens when clicking the "Facture" button in the register table. It shows:
+- **Details section**: designation, type, fournisseur, n° facture, n° commande, mode de paiement, montant TTC
+- **Invoice section** (context-aware):
+  - If the entry has an invoice attached → card with filename + 3 buttons: **Voir** (opens PDF), **Imprimer** (opens PDF for print), **Supprimer** (detach)
+  - If no invoice + entry is a Purchase or Expense → drop zone "Téléverser une facture (PDF, JPG, PNG…)"
+  - If no invoice + entry is a StockItem → message "Les articles en stock n'ont pas de facture rattachable ici"
+
+The modal automatically determines the API base URL based on the entry type:
+- `entry.expenseId` → `/api/expenses/${expenseId}/invoice-upload`
+- `entry.purchaseId` → `/api/purchases/${purchaseId}/invoice-upload`
+
+## 5. Register table — "Facture" column updated
+Replaced the old `PurchaseInvoiceCell` (which only worked for Purchases) with a simple button:
+- If invoice attached → blue "Voir" button (FileText icon)
+- If no invoice + has purchaseId or expenseId → "Joindre" button (Upload icon)
+- If StockItem (no purchaseId/expenseId) → "—"
+
+Clicking any of these opens the `EntryDetailModal`.
+
+## Result
+- **Expenses** (from Synthèse → Dépenses → Ajouter) can now have a PDF invoice attached.
+- **All entry types** (StockItems, Purchases, Expenses) in the Registre des achats have a "Facture" button that opens a modal with details + invoice management.
+- The modal is the single entry point for viewing/uploading/printing/deleting invoices for any entry type.
+
+## Build & zip
+- `bunx prisma db push`: ✓ schema in sync.
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages — new /expenses/[id]/invoice-upload route).
+- `bash scripts/make-zip.sh`: zip = 1175 KB, MD5: `d9a004d1026d388e51a699cde4d99221`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
