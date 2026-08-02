@@ -3324,3 +3324,61 @@ Clicking any of these opens the `EntryDetailModal`.
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages — new /expenses/[id]/invoice-upload route).
 - `bash scripts/make-zip.sh`: zip = 1175 KB, MD5: `d9a004d1026d388e51a699cde4d99221`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: stockitem-invoice + expense-form-fields
+Agent: main
+Task: (1) StockItem entries in the Registre des achats can now have a PDF invoice attached (upload/view/print/delete via the modal), (2) Expense form now has 4 new fields (N° facture, N° cmd fournisseur, Fournisseur, Méthode de paiement) that appear in the Registre des achats.
+
+## 1. Schema changes
+- **StockItem**: added `invoicePath String?` + `invoiceName String?`
+- **Expense**: added `supplierName String?`, `invoiceNumber String?`, `orderNumber String?`, `paymentMethod String?`
+- `bunx prisma db push` — DB in sync.
+
+## 2. StockItem invoice API — `/api/stock/[id]/invoice-upload` (new route)
+- **POST**: FormData upload, saves to `public/uploads/stock-invoices/`, updates DB directly.
+- **DELETE**: deletes file + clears DB fields.
+- Admin can access any stock item; staff only their own.
+
+## 3. Stock PATCH API
+- Added `invoicePath` and `invoiceName` to the allowed fields list.
+
+## 4. Expense API — POST + PATCH
+- POST now accepts + stores `supplierName`, `invoiceNumber`, `orderNumber`, `paymentMethod`.
+- PATCH now accepts these fields (admin can edit any expense).
+- DELETE now also deletes the invoice file from disk.
+- Fixed `amount` parsing (empty string → 0).
+
+## 5. Accounting API
+- **StockItem entries** now include `stockItemId`, `invoicePath`, `invoiceName`.
+- **Expense entries** now include the 4 new fields (supplierName as `fournisseur`, invoiceNumber, orderNumber, paymentMethod as `modePaiement`).
+
+## 6. Expense form (taxes-module.tsx)
+Added 4 new fields to the "Ajouter une dépense" form:
+- **Fournisseur** (Input, placeholder "Nom du fournisseur")
+- **N° facture** (Input, font-mono, placeholder "FAC-2026-001")
+- **N° commande fournisseur** (Input, font-mono, placeholder "CMD-12345")
+- **Mode de paiement** (Select: Espèces, Carte bancaire, Virement, Chèque, PayPal)
+- These fields are included in both the create and edit flows.
+
+## 7. EntryDetailModal — handles all 3 entry types
+Updated to handle StockItems in addition to Purchases and Expenses:
+- `isStockItem = !!entry.stockItemId`
+- `apiBase` = `/api/stock/${recordId}` for StockItems
+- `canHaveInvoice` = true for all 3 types (Purchase, Expense, StockItem)
+- The "Joindre" button in the register table now appears for all 3 types
+- The modal's invoice section shows the upload zone for all 3 types
+
+## 8. AchatEntry interface
+- Added `stockItemId?: string` to the interface.
+
+## Result
+- **StockItem entries** (articles ajoutés via Stock → Nouvel article): can now have a PDF invoice attached via the modal.
+- **Expense entries** (dépenses saisies via Synthèse → Dépenses → Ajouter): now show fournisseur, n° facture, n° cmd, paiement in the Registre des achats, AND can have a PDF invoice attached.
+- All 3 entry types (StockItem, Purchase, Expense) have the same invoice management (upload/view/print/delete) via the modal.
+
+## Build & zip
+- `bunx prisma db push`: ✓ schema in sync.
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages — new /stock/[id]/invoice-upload route).
+- `bash scripts/make-zip.sh`: zip = 1186 KB, MD5: `0554e04a4bed5ba62386a3dd068a2418`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

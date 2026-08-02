@@ -69,6 +69,13 @@ export async function POST(
     fs.writeFileSync(filePath, buffer)
 
     const publicPath = `/api/uploads/purchase-invoices/${filename}`
+
+    // Save to DB (same pattern as expense invoice upload)
+    await db.purchase.update({
+      where: { id },
+      data: { invoicePath: publicPath, invoiceName: file.name },
+    })
+
     return NextResponse.json({ path: publicPath, filename: file.name })
   } catch (error) {
     console.error('POST /api/purchases/[id]/invoice-upload error:', error)
