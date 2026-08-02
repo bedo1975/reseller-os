@@ -50,10 +50,15 @@ export async function GET(
       '.gif': 'image/gif',
       '.avif': 'image/avif',
       '.svg': 'image/svg+xml',
+      '.pdf': 'application/pdf',
     }
     const contentType = mimeTypes[ext] || 'application/octet-stream'
 
     const buffer = fs.readFileSync(filePath)
+
+    // For PDFs and images, use Content-Disposition: inline so the browser displays them
+    // instead of downloading. For other types, let the browser decide.
+    const isInline = ext === '.pdf' || ext.startsWith('.jp') || ext === '.png' || ext === '.webp' || ext === '.gif' || ext === '.svg' || ext === '.avif'
 
     return new NextResponse(buffer, {
       status: 200,
@@ -61,6 +66,7 @@ export async function GET(
         'Content-Type': contentType,
         'Content-Length': buffer.length.toString(),
         'Cache-Control': 'public, max-age=86400, immutable', // 1 day cache
+        ...(isInline ? { 'Content-Disposition': 'inline' } : {}),
       },
     })
   } catch (error) {

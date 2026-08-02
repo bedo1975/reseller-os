@@ -3019,3 +3019,58 @@ The `Search` icon is used in:
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1117 KB, MD5: `949a8c24980c627c2a1a2464060523b1`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: supplier-invoice-upload
+Agent: main
+Task: Allow attaching a supplier invoice PDF to a validated pre-order + show it in the pre-order list with number + print link.
+
+## 1. Schema
+Added to `PreOrder` model:
+- `supplierInvoicePath String?` — API URL (e.g. "/api/uploads/preorder-invoices/invoice-xxx.pdf")
+- `supplierInvoiceName String?` — original filename (e.g. "facture-fournisseur.pdf")
+- `bunx prisma db push` — DB in sync.
+
+## 2. Upload API — `/api/preorders/[id]/invoice-upload` (new route)
+- Receives a FormData with a "file" field.
+- Accepts: PDF, JPG, PNG, WebP, GIF (max 10MB).
+- Saves to: `public/uploads/preorder-invoices/invoice-{preorderId}-{hash}.{ext}`
+- Returns: `{ path: "/api/uploads/preorder-invoices/...", filename: "original-name.pdf" }`
+- Auth: any authenticated user (admin or staff with access to the pre-order).
+
+## 3. PATCH API
+Added `supplierInvoicePath` and `supplierInvoiceName` to the updatable fields in `/api/preorders/[id]` PATCH.
+
+## 4. Pre-order interface
+Added `supplierInvoicePath` and `supplierInvoiceName` to the `PreOrder` TypeScript interface.
+
+## 5. Pre-order detail — invoice upload/download/print UI
+Added in `PreOrderDetail` component (only visible when `isValidated`):
+- **No invoice attached**: a dashed-border drop zone "Téléverser une facture (PDF, JPG, PNG…)" with a hidden file input. Click → file picker → upload via FormData → PATCH the pre-order with the returned path/name.
+- **Invoice attached**: a card showing:
+  - FileText icon (red) + filename
+  - "Voir" button (ExternalLink icon) → opens the PDF in a new tab
+  - Printer icon button → opens the PDF in a new tab (browser print dialog)
+  - Trash icon button → detaches the invoice (sets path/name to null)
+- `uploadInvoice(file)` function: FormData POST to `/api/preorders/${id}/invoice-upload` → saves path/name via PATCH → toast success.
+- `deleteInvoice()` function: PATCH with null path/name → toast "Facture détachée".
+- Imported `Upload`, `Download`, `Printer`, `ExternalLink` from lucide-react.
+
+## 6. Pre-order list — "Facture" column
+Added a new column (hidden on small screens via `hidden lg:table-cell`) between "Statut" and the Actions column:
+- **Invoice attached**: blue button with FileText icon + invoice number (or "PDF" if no number) → opens the PDF. + Printer icon button → opens the PDF for printing.
+- **No invoice**: shows the invoice number (if set) or "—".
+- Both buttons use `e.stopPropagation()` to prevent opening the detail page.
+
+## Build & zip
+- `bunx prisma db push`: ✓ schema in sync.
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages — new /invoice-upload route).
+- `bash scripts/make-zip.sh`: zip = 1132 KB, MD5: `4df654067226d738fe6af8f09748f9c7`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+## Testing notes
+1. Create a pre-order → validate it → on the detail page, a "Facture fournisseur (PDF)" section appears.
+2. Click the drop zone → select a PDF → it uploads → the card appears with "Voir" / Printer / Trash buttons.
+3. Go back to the list → the "Facture" column shows a blue button with the invoice number (or "PDF") + printer icon.
+4. Click the button → the PDF opens in a new tab.
+5. Click the printer icon → the PDF opens (browser print dialog available).

@@ -885,6 +885,15 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
               <Package className="h-4 w-4 mr-2" /> Commande reçue
             </Button>
           )}
+          {(isValidated || isReceived) && (
+            <Button
+              variant="outline"
+              onClick={() => window.open(`/api/preorders/${id}/print`, '_blank')}
+              title="Imprimer le bon de commande"
+            >
+              <Printer className="h-4 w-4 mr-2" /> Imprimer
+            </Button>
+          )}
           {isAdmin && !isCancelled && (
             <Button
               variant="outline"
