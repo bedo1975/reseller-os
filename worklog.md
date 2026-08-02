@@ -3074,3 +3074,58 @@ Added a new column (hidden on small screens via `hidden lg:table-cell`) between 
 3. Go back to the list → the "Facture" column shows a blue button with the invoice number (or "PDF") + printer icon.
 4. Click the button → the PDF opens in a new tab.
 5. Click the printer icon → the PDF opens (browser print dialog available).
+
+---
+Task ID: invoice-view-inline + preorder-print
+Agent: main
+Task: 2 fixes — (1) invoice PDF should open in the browser (not download), (2) add a print button for validated pre-orders.
+
+## 1. Invoice PDF opens in browser (not download)
+
+### Root cause
+The `/api/uploads/[...path]` route did NOT include `.pdf` in its MIME type map, so PDFs were served with `application/octet-stream` — which forces the browser to download the file instead of displaying it.
+
+### Fix (`/api/uploads/[...path]/route.ts`)
+- Added `.pdf: 'application/pdf'` to the MIME type map.
+- Added `Content-Disposition: inline` header for PDFs and images — this tells the browser to display the file inline instead of downloading it.
+```ts
+const isInline = ext === '.pdf' || ext.startsWith('.jp') || ext === '.png' || ext === '.webp' || ext === '.gif' || ext === '.svg' || ext === '.avif'
+// ...
+...(isInline ? { 'Content-Disposition': 'inline' } : {}),
+```
+
+Now when you click "Voir" on a supplier invoice, the PDF opens directly in the browser's built-in PDF viewer (where you can also print it).
+
+## 2. Print button for validated pre-orders
+
+### New API route: GET `/api/preorders/[id]/print`
+Generates a printable HTML document (bon de commande fournisseur) — similar to the boutique bon de préparation pattern:
+- Header: "BON DE COMMANDE" + subtitle (from BoutiqueSettings.preparationSlipSubtitle) + reference + date
+- Badges: status + order number + invoice number
+- Sections: name, supplier (name, email, phone, address), payment method
+- Notes (if any)
+- Articles table: designation, attributes (size/color/condition), quantity, unit price, total
+- Totals: subtotal, shipping, grand total
+- Footer: signature lines
+- Auto-print script: `window.onload = () => { setTimeout(() => window.print(), 300); }`
+
+### Detail page — "Imprimer" button
+Added a new button (outline variant, Printer icon) in the header — visible when the pre-order is `validated` OR `received`:
+```tsx
+{(isValidated || isReceived) && (
+  <Button
+    variant="outline"
+    onClick={() => window.open(`/api/preorders/${id}/print`, '_blank')}
+    title="Imprimer le bon de commande"
+  >
+    <Printer className="h-4 w-4 mr-2" /> Imprimer
+  </Button>
+)}
+```
+
+Clicking the button opens a new tab with the printable HTML, which auto-triggers the browser's print dialog.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages — new /print route).
+- `bash scripts/make-zip.sh`: zip = 1141 KB, MD5: `826d165fb8b21f5ebc301dfd8c6d6cad`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

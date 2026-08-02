@@ -75,3 +75,49 @@ export async function POST(
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }
+
+/**
+ * DELETE /api/preorders/[id]/invoice-upload
+ * Auth — delete the supplier invoice file from disk.
+ * The caller is responsible for PATCHing the pre-order to clear supplierInvoicePath/Name.
+ */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await requireAuth()
+    const { id } = await params
+
+    const existing = await db.preOrder.findFirst({
+      where: user.role === 'admin' ? { id } : { id, userId: user.id },
+    })
+    if (!existing) {
+      return NextResponse.json({ error: 'Pré-commande introuvable' }, { status: 404 })
+    }
+
+    if (existing.supplierInvoicePath) {
+      // Extract the disk path from the API URL
+      // supplierInvoicePath = "/api/uploads/preorder-invoices/invoice-xxx.pdf"
+      // disk path = public/uploads/preorder-invoices/invoice-xxx.pdf
+      const relativePath = existing.supplierInvoicePath.replace('/api/uploads/', '')
+      const diskPath = path.join(process.cwd(), 'public', 'uploads', relativePath)
+      try {
+        if (fs.existsSync(diskPath)) {
+          fs.unlinkSync(diskPath)
+        }
+      } catch (e) {
+        console.error('[invoice-delete] Failed to delete file:', e)
+        // Continue — the DB reference will be cleared anyway
+      }
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error('DELETE /api/preorders/[id]/invoice-upload error:', error)
+    if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}

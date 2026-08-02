@@ -817,8 +817,15 @@ function PreOrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
   }
 
   const deleteInvoice = async () => {
+    // 1. Delete the file from disk
+    try {
+      await fetch(`/api/preorders/${id}/invoice-upload`, { method: 'DELETE' })
+    } catch {
+      // Non-fatal — the DB reference will be cleared anyway
+    }
+    // 2. Clear the DB reference
     await save({ supplierInvoicePath: null, supplierInvoiceName: null })
-    toast.success('Facture détachée')
+    toast.success('Facture supprimée')
   }
 
   const validate = async () => {

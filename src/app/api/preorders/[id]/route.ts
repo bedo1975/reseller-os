@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/session'
+import fs from 'fs'
+import path from 'path'
 
 /**
  * GET /api/preorders/[id]
@@ -69,8 +71,13 @@ export async function PATCH(
     if (typeof body.notes === 'string') data.notes = body.notes || null
     if (typeof body.orderNumber === 'string') data.orderNumber = body.orderNumber || null
     if (typeof body.invoiceNumber === 'string') data.invoiceNumber = body.invoiceNumber || null
-    if (typeof body.supplierInvoicePath === 'string') data.supplierInvoicePath = body.supplierInvoicePath || null
-    if (typeof body.supplierInvoiceName === 'string') data.supplierInvoiceName = body.supplierInvoiceName || null
+    // Allow null to clear the invoice (detach) — check for 'string' OR explicit null
+    if (typeof body.supplierInvoicePath === 'string' || body.supplierInvoicePath === null) {
+      data.supplierInvoicePath = body.supplierInvoicePath || null
+    }
+    if (typeof body.supplierInvoiceName === 'string' || body.supplierInvoiceName === null) {
+      data.supplierInvoiceName = body.supplierInvoiceName || null
+    }
     if (typeof body.status === 'string') {
       if (!['pending', 'validated', 'received', 'cancelled'].includes(body.status)) {
         return NextResponse.json({ error: 'Statut invalide' }, { status: 400 })
@@ -157,6 +164,19 @@ export async function DELETE(
       } catch (e) {
         console.error('[preorders/delete] Failed to delete linked StockItems:', e)
         // Continue anyway
+      }
+    }
+
+    // Delete the supplier invoice file from disk (if any)
+    if (existing.supplierInvoicePath) {
+      try {
+        const relativePath = existing.supplierInvoicePath.replace('/api/uploads/', '')
+        const diskPath = path.join(process.cwd(), 'public', 'uploads', relativePath)
+        if (fs.existsSync(diskPath)) {
+          fs.unlinkSync(diskPath)
+        }
+      } catch (e) {
+        console.error('[preorders/delete] Failed to delete invoice file:', e)
       }
     }
 
