@@ -3224,3 +3224,52 @@ Added `Upload`, `ExternalLink`, `Loader2` to the lucide-react imports in `taxes-
 3. Click the FileText icon → the PDF opens in the browser (inline, not download).
 4. Click the Trash icon → the invoice is detached (file deleted from disk + DB cleared).
 5. For StockItem entries: the column shows "—" (no invoice attachment for stock items — they use the pre-order invoice system).
+
+---
+Task ID: expenses-in-registre + synthese-unification
+Agent: main
+Task: Fix 2 issues — (1) Achats Hors Stock (Purchase) not visible in Synthèse "Autres dépenses" card, (2) Expenses (from Synthèse → Dépenses → Ajouter) not visible in Registre des achats.
+
+## Root cause
+There were 3 separate charge systems that didn't talk to each other:
+1. **StockItem** (purchaseCost) → appeared in Registre + Synthèse "Achats" card
+2. **Purchase** (achats hors stock, created via Stock → "Achats Hors Stock") → appeared in Registre + Synthèse "Achats" card
+3. **Expense** (dépenses, created via Synthèse → Dépenses → Ajouter) → appeared ONLY in Synthèse "Autres dépenses" card, NOT in the Registre
+
+The user expected all charges to appear in the Registre des achats.
+
+## Fix
+
+### 1. Accounting API (`/api/accounting?type=achats`)
+Added Expense entries to the register — now the register includes 3 types:
+- **StockItem entries** (articles en stock, with purchaseCost × quantity)
+- **Purchase entries** (achats hors stock — fournitures, pré-commandes, etc.)
+- **Expense entries** (dépenses — frais port, abonnements, etc.) ← NEW
+
+Each Expense entry has:
+- `isExpense: true` flag (to distinguish from other types)
+- `typeFournisseur` = the expense category label (Frais de port, Abonnement, etc.)
+- `designation` = the expense label
+- No purchaseId (so the PurchaseInvoiceCell shows "—" — expenses don't have invoices)
+
+### 2. Synthèse — unified "Achats + Dépenses" card
+- Renamed the "Achats" card to **"Achats + Dépenses"** — it now shows `achatsData.total` (which includes StockItems + Purchases + Expenses).
+- The "Autres dépenses" card still shows `totalOtherExpenses` (Expenses only) for reference, with a hint "Dépenses saisies dans l'onglet Dépenses".
+- **Fixed double counting**: the `totalProfit` formula no longer deducts `totalOtherExpenses` separately (since Expenses are now included in `achatsData.total`). Previously: `CA - achatsData.total - totalOtherExpenses` (double counted Expenses). Now: `CA - achatsData.total` (no double counting).
+- Fallback when achatsData hasn't loaded: `totalPurchases + totalOtherExpenses`.
+
+### 3. Register table — "Dépense" badge
+- Added `isExpense?: boolean` to the `AchatEntry` interface.
+- The status column now shows a **"Dépense"** badge (sky blue) for Expense entries, distinct from HS/Vendu/En stock.
+- Updated the PDF export with the same logic.
+
+## Result
+- **Registre des achats** now shows ALL charges: StockItems + Purchases + Expenses, in one unified table.
+- **Synthèse** "Achats + Dépenses" card shows the grand total of all charges.
+- **Bénéfice net** is correct (no double counting of Expenses).
+- Each entry type has a distinct status badge: Vendu / En stock / HS / Dépense.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1160 KB, MD5: `2a40a4ded6b0174cbaaaa9bdd5f9a97e`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

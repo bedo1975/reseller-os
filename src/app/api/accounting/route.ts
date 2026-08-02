@@ -286,9 +286,12 @@ export async function GET(req: NextRequest) {
         const expenseMontantHT = vatEnabled ? expenseMontantTTC / (1 + vatRate / 100) : expenseMontantTTC
         return {
           numero: entries.length + purchaseEntries.length + idx + 1,
+          expenseId: e.id,  // needed for invoice upload/delete in the UI
           date: e.date,
           invoiceNumber: '—',
           orderNumber: '—',
+          invoicePath: e.invoicePath || null,
+          invoiceName: e.invoiceName || null,
           designation: e.label,
           fournisseur: '—',
           siret: null,
@@ -299,7 +302,7 @@ export async function GET(req: NextRequest) {
           montantHT: parseFloat(expenseMontantHT.toFixed(2)),
           sku: '—',
           prixVente: null,
-          isExpense: true,  // new flag to distinguish expenses
+          isExpense: true,  // flag to distinguish expenses
         }
       })
 

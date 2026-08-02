@@ -304,6 +304,10 @@ model Expense {
   label       String
   amount      Float
 
+  // Facture attachée
+  invoicePath String?  // chemin du PDF facture (ex: "/api/uploads/expense-invoices/xxx.pdf")
+  invoiceName String?  // nom du fichier original
+
   // Dépense récurrente
   isRecurring Boolean   @default(false)
   recurringFreq String? // weekly | monthly | yearly

@@ -10,6 +10,9 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog'
+import {
   FileDown, FileSpreadsheet, FileText, Plus, Trash2, Receipt, BookOpen,
   ClipboardList, BarChart3, BookCheck, BookMarked, Printer, Percent, Edit, AlertTriangle, Calendar,
   Upload, ExternalLink, Loader2,
@@ -1019,6 +1022,7 @@ function RecettesTab({ year }: { year: number }) {
 interface AchatEntry {
   numero: number
   purchaseId?: string
+  expenseId?: string
   date: string
   invoiceNumber: string
   orderNumber?: string
@@ -1062,6 +1066,7 @@ interface AchatsData {
 function AchatsTab({ year }: { year: number }) {
   const confirm = useConfirm()
   const [month, setMonth] = useState<string>('all')
+  const [selectedEntry, setSelectedEntry] = useState<AchatEntry | null>(null)
   const { data, loading, refresh: refreshAchats } = useFetch<AchatsData>(`/api/accounting?type=achats&year=${year}${month !== 'all' ? `&month=${month}` : ''}`)
 
   if (loading || !data) {
@@ -1354,7 +1359,21 @@ function AchatsTab({ year }: { year: number }) {
                       {data.vatEnabled && <td className="px-2 py-2 text-right">{formatEUR(e.montantHT)}</td>}
                       <td className="px-2 py-2 text-right font-semibold">{formatEUR(e.montant)}</td>
                       <td className="px-2 py-2">
-                        <PurchaseInvoiceCell entry={e} onRefresh={refreshAchats} />
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2"
+                          onClick={() => setSelectedEntry(e)}
+                          title="Voir les détails + facture"
+                        >
+                          {e.invoicePath ? (
+                            <><FileText className="h-3.5 w-3.5 mr-1 text-blue-600" /><span className="text-[10px]">Voir</span></>
+                          ) : (e.purchaseId || e.expenseId) ? (
+                            <><Upload className="h-3.5 w-3.5 mr-1 text-muted-foreground" /><span className="text-[10px]">Joindre</span></>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">—</span>
+                          )}
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -1372,12 +1391,17 @@ function AchatsTab({ year }: { year: number }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal détails + facture */}
+      {selectedEntry && (
+        <EntryDetailModal
+          entry={selectedEntry}
+          onOpenChange={(o) => { if (!o) setSelectedEntry(null); refreshAchats() }}
+        />
+      )}
     </div>
   )
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// ONGLET 4 — DÉCLARATION URSSAF
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface UrssafData {
@@ -1562,31 +1586,31 @@ function UrssafTab({ year }: { year: number }) {
   )
 }
 
-// ── Purchase invoice cell (for achats hors stock in the registre) ──────────
-// Inline component that handles upload/view/print/delete of a supplier invoice
-// for each purchase entry in the "Détail des achats" table.
+// ── Entry detail modal (opens when clicking "Facture" in the registre) ─────
+// Shows the entry details + invoice management (view/print/upload/delete).
 
-function PurchaseInvoiceCell({ entry, onRefresh }: { entry: AchatEntry; onRefresh: () => void }) {
+function EntryDetailModal({ entry, onOpenChange }: { entry: AchatEntry; onOpenChange: (o: boolean) => void }) {
   const [uploading, setUploading] = useState(false)
 
-  // Only purchases (hors stock) have a purchaseId — StockItems don't
-  if (!entry.purchaseId) {
-    return <span className="text-[10px] text-muted-foreground">—</span>
-  }
+  // Determine the type + ID for invoice operations
+  const isPurchase = !!entry.purchaseId
+  const isExpense = !!entry.expenseId
+  const recordId = entry.purchaseId || entry.expenseId
+  const apiBase = isExpense ? `/api/expenses/${recordId}` : `/api/purchases/${recordId}`
 
   const upload = async (file: File) => {
     setUploading(true)
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch(`/api/purchases/${entry.purchaseId}/invoice-upload`, {
+      const res = await fetch(`${apiBase}/invoice-upload`, {
         method: 'POST',
         body: formData,
       })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error || 'Erreur'); return }
       toast.success('Facture téléversée')
-      onRefresh()
+      onOpenChange(false)
     } catch {
       toast.error('Erreur réseau')
     } finally {
@@ -1596,67 +1620,126 @@ function PurchaseInvoiceCell({ entry, onRefresh }: { entry: AchatEntry; onRefres
 
   const remove = async () => {
     try {
-      const res = await fetch(`/api/purchases/${entry.purchaseId}/invoice-upload`, { method: 'DELETE' })
+      const res = await fetch(`${apiBase}/invoice-upload`, { method: 'DELETE' })
       if (!res.ok) { toast.error('Erreur'); return }
       toast.success('Facture supprimée')
-      onRefresh()
+      onOpenChange(false)
     } catch {
       toast.error('Erreur réseau')
     }
   }
 
-  if (entry.invoicePath) {
-    return (
-      <div className="flex items-center gap-1">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-          onClick={() => window.open(entry.invoicePath!, '_blank')}
-          title="Voir la facture"
-        >
-          <FileText className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 w-7 p-0"
-          onClick={() => window.open(entry.invoicePath!, '_blank')}
-          title="Imprimer"
-        >
-          <Printer className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
-          onClick={remove}
-          title="Supprimer la facture"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-    )
-  }
-
   return (
-    <label className="inline-flex items-center gap-1 cursor-pointer text-[10px] text-muted-foreground hover:text-[#007bff]">
-      <input
-        type="file"
-        accept="application/pdf,image/jpeg,image/png,image/webp,image/gif"
-        className="hidden"
-        onChange={e => {
-          const file = e.target.files?.[0]
-          if (file) upload(file)
-          e.target.value = ''
-        }}
-      />
-      {uploading ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-      ) : (
-        <Upload className="h-3.5 w-3.5" />
-      )}
-      <span>{uploading ? '…' : 'Joindre'}</span>
-    </label>
+    <Dialog open={true} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Détails de l'achat</DialogTitle>
+          <DialogDescription>N° {entry.numero} du {formatDate(entry.date)}</DialogDescription>
+        </DialogHeader>
+
+        {/* Details */}
+        <div className="space-y-2 text-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">Désignation</Label>
+              <p className="font-medium">{entry.designation}</p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Type</Label>
+              <p>{entry.typeFournisseur}</p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Fournisseur</Label>
+              <p>{entry.fournisseur}</p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">N° facture</Label>
+              <p className="font-mono text-xs">{entry.invoiceNumber}</p>
+            </div>
+            {entry.orderNumber && entry.orderNumber !== '—' && (
+              <div>
+                <Label className="text-xs text-muted-foreground">N° commande</Label>
+                <p className="font-mono text-xs">{entry.orderNumber}</p>
+              </div>
+            )}
+            <div>
+              <Label className="text-xs text-muted-foreground">Paiement</Label>
+              <p>{entry.modePaiement}</p>
+            </div>
+          </div>
+          <div className="flex justify-between pt-2 border-t">
+            <span className="text-muted-foreground">Montant TTC</span>
+            <span className="font-bold text-lg">{formatEUR(entry.montant)}</span>
+          </div>
+        </div>
+
+        {/* Invoice section */}
+        <div className="space-y-2 pt-3 border-t">
+          <Label className="text-xs font-semibold uppercase text-muted-foreground">Facture fournisseur</Label>
+          {entry.invoicePath ? (
+            <div className="flex items-center justify-between gap-2 p-3 rounded-md border bg-muted/30">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="h-5 w-5 text-red-600 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{entry.invoiceName || 'Facture'}</p>
+                  <p className="text-[10px] text-muted-foreground">Fichier joint</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.open(entry.invoicePath!, '_blank')}
+                  title="Voir / Ouvrir"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 mr-1" /> Voir
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.open(entry.invoicePath!, '_blank')}
+                  title="Imprimer"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-red-500 hover:text-red-600"
+                  onClick={remove}
+                  title="Supprimer la facture"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ) : (isPurchase || isExpense) ? (
+            <label className="flex items-center justify-center gap-2 p-4 rounded-md border-2 border-dashed border-gray-300 hover:border-[#007bff] hover:bg-blue-50 cursor-pointer transition-colors">
+              <input
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  if (file) upload(file)
+                  e.target.value = ''
+                }}
+              />
+              {uploading ? (
+                <><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> <span className="text-sm text-muted-foreground">Téléversement…</span></>
+              ) : (
+                <><Upload className="h-4 w-4 text-muted-foreground" /> <span className="text-sm text-muted-foreground">Téléverser une facture (PDF, JPG, PNG…)</span></>
+              )}
+            </label>
+          ) : (
+            <p className="text-xs text-muted-foreground py-2">Les articles en stock n'ont pas de facture rattachable ici. Utilisez les pré-commandes pour gérer les factures fournisseur.</p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Fermer</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
