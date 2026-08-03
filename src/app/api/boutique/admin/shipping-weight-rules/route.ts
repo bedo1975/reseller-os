@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 
 // GET — list weight rules for a shipping method
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { searchParams } = new URL(req.url)
     const shippingMethodId = searchParams.get('shippingMethodId')
     if (!shippingMethodId) {
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 // POST — create weight rule
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const body = await req.json()
     const { shippingMethodId, weightMin, weightMax, price } = body
 

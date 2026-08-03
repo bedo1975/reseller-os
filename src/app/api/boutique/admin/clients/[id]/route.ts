@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 
 // GET — client detail with orders and messages
@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { id } = await params
     const client = await db.boutiqueClient.findUnique({
       where: { id },
@@ -65,7 +65,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { id } = await params
     await db.boutiqueClient.delete({ where: { id } })
     return NextResponse.json({ ok: true })

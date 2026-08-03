@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
@@ -8,7 +8,7 @@ const HERO_DIR = path.join(process.cwd(), 'public', 'uploads', 'boutique-hero')
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     if (!fs.existsSync(HERO_DIR)) {
       fs.mkdirSync(HERO_DIR, { recursive: true })
     }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 
 // GET — list all boutique clients (authenticated staff)

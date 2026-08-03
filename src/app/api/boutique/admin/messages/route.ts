@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 import { notifyAdminReply } from '@/lib/email'
 
 // GET — list all messages grouped by client (admin inbox)
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { searchParams } = new URL(req.url)
     const clientId = searchParams.get('clientId')
 
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
 // POST — admin sends a message to a client
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const body = await req.json()
     const { clientId, subject, body: messageBody } = body
 

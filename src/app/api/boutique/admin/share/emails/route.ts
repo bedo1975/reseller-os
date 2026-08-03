@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 
 // GET — list all collected share emails
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { searchParams } = new URL(req.url)
     const search = searchParams.get('search') || ''
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 // DELETE — delete a single referral email (by id)
 export async function DELETE(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) {

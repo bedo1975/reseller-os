@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 
 // GET — list all campaigns
 export async function GET() {
   try {
-    await requireAdmin()
+    await requireAuth()
     const campaigns = await db.newsletterCampaign.findMany({
       orderBy: { createdAt: 'desc' },
     })
@@ -22,7 +22,7 @@ export async function GET() {
 // POST — create a new campaign
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const body = await req.json()
     const { name, subject, htmlContent, scheduledAt } = body
 

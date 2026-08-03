@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 import { getBoutiqueSettings } from '@/lib/boutique-settings'
 
@@ -21,7 +21,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { id } = await params
 
     const order = await db.boutiqueOrder.findUnique({

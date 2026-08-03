@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 
 // GET — list all newsletter subscribers
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { searchParams } = new URL(req.url)
     const search = searchParams.get('search') || ''
     const filter = searchParams.get('filter') || 'all'  // all | active | inactive
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 // POST — manually add a subscriber
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const body = await req.json()
     const { email } = body
 

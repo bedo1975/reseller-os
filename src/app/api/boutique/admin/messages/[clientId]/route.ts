@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 
 /**
@@ -11,7 +11,7 @@ export async function DELETE(
   { params }: { params: Promise<{ clientId: string }> },
 ) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { clientId } = await params
 
     const result = await db.boutiqueMessage.deleteMany({

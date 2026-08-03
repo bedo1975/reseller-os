@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 
@@ -9,7 +9,7 @@ export async function PATCH(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { slug } = await params
     const body = await req.json()
 
@@ -89,7 +89,7 @@ export async function DELETE(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { slug } = await params
     // Try to delete; if the record doesn't exist (e.g., it was a default fallback),
     // we just return ok — the category won't appear anymore once other persisted ones exist.

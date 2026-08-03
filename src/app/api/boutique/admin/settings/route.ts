@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 import { getBoutiqueSettings } from '@/lib/boutique-settings'
 
@@ -17,7 +17,7 @@ export async function GET() {
 // PUT — admin only
 export async function PUT(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const body = await req.json()
     const {
       heroTitle, heroSubtitle, heroCtaLabel, heroCtaLink, heroImage,

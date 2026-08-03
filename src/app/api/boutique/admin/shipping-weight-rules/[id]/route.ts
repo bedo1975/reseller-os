@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 
 export async function PATCH(
@@ -7,7 +7,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { id } = await params
     const body = await req.json()
     const data: any = {}
@@ -31,7 +31,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { id } = await params
     await db.shippingWeightRule.delete({ where: { id } })
     return NextResponse.json({ ok: true })

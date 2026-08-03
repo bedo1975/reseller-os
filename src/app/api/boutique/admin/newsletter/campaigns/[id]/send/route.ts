@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 import { getBoutiqueSettings } from '@/lib/boutique-settings'
 import { sendEmail } from '@/lib/email'
@@ -13,7 +13,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { id } = await params
 
     const campaign = await db.newsletterCampaign.findUnique({ where: { id } })

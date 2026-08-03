@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 
 // GET — returns shipping methods
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     let isAdmin = false
     if (wantAll) {
       try {
-        await requireAdmin()
+        await requireAuth()
         isAdmin = true
       } catch {
         // Not admin — fall back to active-only
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 // POST — admin only (create new shipping method)
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const body = await req.json()
     const { code, label, price, delay, carrierCode, active, order } = body
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 import { notifyOrderStatusChange } from '@/lib/email'
 
@@ -154,7 +154,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const { id } = await params
 
     // Récupère l'ordre avant suppression

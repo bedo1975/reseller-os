@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { getBoutiqueCategories } from '@/lib/boutique-settings'
 import { revalidatePath } from 'next/cache'
 
@@ -18,7 +18,7 @@ export async function GET() {
 // POST — admin only (create or update category)
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const body = await req.json()
     const { slug, label, emoji, backgroundImage, bgColor, bgOpacity, order } = body
 

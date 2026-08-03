@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/session'
+import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 
 // GET — admin: all coupons (including inactive)
 export async function GET() {
   try {
-    await requireAdmin()
+    await requireAuth()
     const coupons = await db.coupon.findMany({
       orderBy: { createdAt: 'desc' },
     })
@@ -22,7 +22,7 @@ export async function GET() {
 // POST — admin: create new coupon
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin()
+    await requireAuth()
     const body = await req.json()
     const {
       code,

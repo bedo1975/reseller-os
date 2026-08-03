@@ -11,9 +11,9 @@ export async function PATCH(
     const { id } = await params
     const body = await req.json()
 
-    // Verify ownership
+    // Verify existence (admin can edit any, staff can edit any too — permission checked in UI)
     const existingSale = await db.sale.findUnique({ where: { id } })
-    if (!existingSale || existingSale.userId !== user.id) {
+    if (!existingSale) {
       return NextResponse.json({ error: 'Vente introuvable' }, { status: 404 })
     }
 
@@ -85,7 +85,7 @@ export async function DELETE(
     const user = await requireAuth()
     const { id } = await params
     const sale = await db.sale.findUnique({ where: { id } })
-    if (!sale || sale.userId !== user.id) {
+    if (!sale) {
       return NextResponse.json({ error: 'Vente introuvable' }, { status: 404 })
     }
     await db.stockItem.update({

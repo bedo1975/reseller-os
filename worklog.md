@@ -3634,3 +3634,33 @@ Permission-based visibility (which buttons to show/hide) is handled in the UI vi
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1207 KB, MD5: `41a4065583d1584ef2e135c6c94ffc5c`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: dashboard-stats + publication-sales-permissions
+Agent: main
+Task: 3 fixes — (1) dashboard stats not showing for staff, (2) publication allowed delete with only 'view', (3) sales allowed edit/delete/create with only 'view'.
+
+## 1. Dashboard stats not showing
+### Root cause
+`/api/dashboard` GET filtered all queries by `userId: user.id` — staff saw empty data.
+### Fix
+Removed userId filters from all 5 queries (stockItems, sales, expenses, suppliers, taxSettings). TaxSettings now uses the admin's userId.
+
+## 2. Publication module — delete without permission
+### Fix (publication-module.tsx)
+- Imported `usePermissions` + added `const { can } = usePermissions()`.
+- Edit button: wrapped with `{can('publication', 'edit') && (...)}`.
+- Delete button (single): wrapped with `{can('publication', 'delete') && (...)}`.
+- Bulk delete bar: gated with `can('publication', 'delete')`.
+
+## 3. Sales module — edit/delete/create without permission
+### Fix (sales-module.tsx)
+- Imported `usePermissions` + added `const { can } = usePermissions()`.
+- "Nouvelle vente" button: wrapped with `{can('sales', 'create') && (...)}`.
+- Edit button (per row): wrapped with `{can('sales', 'edit') && (...)}`.
+- Delete button (per row): wrapped with `{can('sales', 'delete') && (...)}`.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1212 KB, MD5: `58c3b5235cf1982bbd34fcc7035c4719`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
