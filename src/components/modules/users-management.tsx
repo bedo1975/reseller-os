@@ -68,7 +68,16 @@ const MODULE_ACTIONS_MAP: Record<string, string[]> = {
   'boutique-admin:newsletter': ['view', 'create', 'edit', 'delete'],
   statistics: ['view', 'export'],
   'staff-messaging': ['view', 'create', 'delete'],
-  settings: ['view', 'edit'],
+  settings: ['view'],
+  'settings:attributes': ['view', 'edit'],
+  'settings:invoicing': ['view', 'edit'],
+  'settings:tax': ['view', 'edit'],
+  'settings:reminders': ['view', 'edit'],
+  'settings:ai': ['view', 'edit'],
+  'settings:email': ['view', 'edit'],
+  'settings:users': ['view', 'edit'],
+  'settings:maintenance': ['view', 'edit'],
+  'settings:howto': ['view'],
 }
 
 // Grouped module config for the permissions dialog — sections with color-coded headers
@@ -141,7 +150,20 @@ const PERM_SECTIONS: {
     color: 'border-l-stone-500',
     modules: [
       { key: 'staff-messaging', label: 'Messagerie interne', icon: '✉️' },
-      { key: 'settings', label: 'Paramètres', icon: '⚙️' },
+      {
+        key: 'settings', label: 'Paramètres', icon: '⚙️',
+        subItems: [
+          { key: 'settings:attributes', label: 'Attributs', icon: '🏷️' },
+          { key: 'settings:invoicing', label: 'Facturation', icon: '🧾' },
+          { key: 'settings:tax', label: 'Taux imposition', icon: '📊' },
+          { key: 'settings:reminders', label: 'Rappels', icon: '⏰' },
+          { key: 'settings:ai', label: 'IA', icon: '🤖' },
+          { key: 'settings:email', label: 'Email', icon: '📧' },
+          { key: 'settings:users', label: 'Utilisateurs', icon: '👥' },
+          { key: 'settings:maintenance', label: 'Maintenance', icon: '🔧' },
+          { key: 'settings:howto', label: 'Guide', icon: '📖' },
+        ],
+      },
     ],
   },
 ]

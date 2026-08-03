@@ -3413,3 +3413,65 @@ Now all 3 upload APIs (StockItem, Purchase, Expense) follow the same pattern: sa
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1186 KB, MD5: `443f338c5ce4724a86bccc1c596de3d9`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: permissions-redesign
+Agent: main
+Task: Redesign the permissions dialog with grouped sections + color-coded actions, and add 'preorders' to the permissions system.
+
+## 1. permissions.ts — add 'preorders'
+- Added `'preorders'` to `ALL_MODULES` array.
+- Added `preorders: ['view', 'create', 'edit', 'delete']` to `MODULE_ACTIONS`.
+- Added `preorders: ['view', 'create', 'edit']` to `DEFAULT_STAFF_ACTIONS`.
+
+## 2. users-management.tsx — complete redesign of the permissions dialog
+
+### New constants
+- **ALL_ACTIONS**: each action now has a `label`, `color`, `bg`, and `border` class for color-coding:
+  - Voir → blue
+  - Créer → green
+  - Éditer → amber
+  - Supprimer → red
+  - Exporter → violet
+  - Scanner → cyan
+  - Achats HS → pink
+
+- **PERM_SECTIONS**: replaces the flat `MODULES_CONFIG` with 5 grouped sections:
+  1. **Modules principaux** (blue border) — Dashboard, Stock, Sourcing, Publication, Ventes, Colis, Pré-commandes
+  2. **Finance & Analytics** (emerald border) — Rentabilité, Fiscalité, Intelligence métier, Statistiques
+  3. **Outils externes** (violet border) — Vinted Deals, Product Trend, Shooting Photo
+  4. **Boutique Admin** (pink border) — Boutique Admin + 10 sub-items (Commandes, Clients, etc.) as nested items
+  5. **Système** (stone border) — Messagerie interne, Paramètres
+
+- **MODULE_ACTIONS_MAP**: updated to include `preorders`.
+
+### New dialog layout
+- **Wider dialog** (max-w-3xl instead of max-w-2xl)
+- **Action legend** at the top — color-coded chips showing all available actions
+- **Grouped sections** — each section has a colored left border + icon + title header
+- **PermRow component** (new) — renders each module row with:
+  - Module icon + label on the left (fixed width 140px)
+  - Color-coded action chips in the middle (clickable toggle buttons)
+  - "Tout" button on the right (toggle all actions)
+  - Active actions show their color; inactive actions are greyed out
+  - Sub-items (boutique-admin sub-tabs) are indented with `ml-4` and slightly faded
+- **Quick actions** at the bottom: "Tout autoriser" / "Tout révoquer" (updated to iterate over PERM_SECTIONS including sub-items)
+
+### Color-coded action chips
+Instead of Switch toggles in a grid, each action is now a clickable chip:
+- **Active** → colored background + text + border (e.g., blue for "Voir", green for "Créer")
+- **Inactive** → transparent with grey border, hover effect
+- Click toggles the permission
+
+### Sub-items for Boutique Admin
+The 10 boutique-admin sub-tabs are now rendered as nested items under the main "Boutique Admin" row, with indentation + reduced opacity for visual hierarchy.
+
+## 3. Removed old constants
+- `MODULES_CONFIG` (replaced by `PERM_SECTIONS`)
+- `ALL_ACTIONS` old version (replaced with color-coded version)
+- `MODULE_ACTIONS_MAP` kept but updated with `preorders`
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1193 KB, MD5: `7c488bbf03437f586b8d3f42115b9d1e`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

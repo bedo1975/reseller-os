@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
+import { usePermissions } from '@/hooks/use-permissions'
 import { useSettings, type AttributeType } from '@/hooks/use-settings'
 import { useFetch } from '@/hooks/use-fetch'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -102,15 +103,40 @@ type SectionKey = 'attributes' | 'users' | 'invoicing' | 'maintenance' | 'ai' | 
 export function SettingsModule() {
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === 'admin'
+  const { can } = usePermissions()
   const [section, setSection] = useState<SectionKey>('attributes')
 
-  // If non-admin, force a non-admin section
-  if (!isAdmin && (section === 'users' || section === 'maintenance')) {
-    setSection('attributes')
+  // Map settings sections to permission keys
+  const sectionPermKey: Record<SectionKey, string> = {
+    attributes: 'settings:attributes',
+    invoicing: 'settings:invoicing',
+    tax: 'settings:tax',
+    reminders: 'settings:reminders',
+    ai: 'settings:ai',
+    email: 'settings:email',
+    users: 'settings:users',
+    maintenance: 'settings:maintenance',
+    howto: 'settings:howto',
+    boutique: 'settings:attributes', // boutique section uses attributes perm as fallback
   }
+
+  const canViewSection = (key: SectionKey): boolean => {
+    if (isAdmin) return true
+    return can(sectionPermKey[key], 'view')
+  }
+
+  // If current section is not allowed, find the first allowed one
+  useEffect(() => {
+    if (!canViewSection(section)) {
+      const first: SectionKey[] = ['attributes', 'invoicing', 'tax', 'reminders', 'ai', 'email', 'howto']
+      const allowed = first.find(s => canViewSection(s))
+      if (allowed) setSection(allowed)
+    }
+  }, [section, isAdmin])
 
   const navBtn = (key: SectionKey, icon: React.ElementType, label: string, adminOnly = false) => {
     if (adminOnly && !isAdmin) return null
+    if (!canViewSection(key)) return null
     const Icon = icon
     const active = section === key
     return (
@@ -146,24 +172,28 @@ export function SettingsModule() {
         {navBtn('howto', BookOpen, 'Guide')}
       </div>
 
-      {section === 'users' && isAdmin ? (
+      {section === 'users' && isAdmin && canViewSection('users') ? (
         <UsersManagement />
-      ) : section === 'invoicing' ? (
+      ) : section === 'invoicing' && canViewSection('invoicing') ? (
         <InvoicingSection />
-      ) : section === 'tax' ? (
+      ) : section === 'tax' && canViewSection('tax') ? (
         <TaxSection />
-      ) : section === 'reminders' ? (
+      ) : section === 'reminders' && canViewSection('reminders') ? (
         <RemindersSection />
-      ) : section === 'ai' ? (
+      ) : section === 'ai' && canViewSection('ai') ? (
         <AISection />
-      ) : section === 'email' ? (
+      ) : section === 'email' && canViewSection('email') ? (
         <EmailSection />
-      ) : section === 'maintenance' && isAdmin ? (
+      ) : section === 'maintenance' && isAdmin && canViewSection('maintenance') ? (
         <MaintenanceSection />
-      ) : section === 'howto' ? (
+      ) : section === 'howto' && canViewSection('howto') ? (
         <HowToSection />
-      ) : (
+      ) : canViewSection('attributes') ? (
         <AttributesSection />
+      ) : (
+        <div className="text-center py-12 text-muted-foreground">
+          <p>Vous n'avez accès à aucune section des paramètres.</p>
+        </div>
       )}
     </div>
   )

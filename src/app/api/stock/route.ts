@@ -12,11 +12,9 @@ export async function GET(req: NextRequest) {
     const platform = searchParams.get('platform')
     const search = searchParams.get('search')
 
-    // Admin sees all stock items; staff sees only their own
-    const userIdFilter = user.role === 'admin' ? {} : { userId: user.id }
+    // All authenticated users can see all stock items (permission-based visibility is handled in the UI)
     const items = await db.stockItem.findMany({
       where: {
-        ...userIdFilter,
         AND: [
           status ? { status } : {},
           brand ? { brand } : {},

@@ -29,6 +29,15 @@ export const ALL_MODULES = [
   'statistics',
   'staff-messaging',
   'settings',
+  'settings:attributes',
+  'settings:invoicing',
+  'settings:tax',
+  'settings:reminders',
+  'settings:ai',
+  'settings:email',
+  'settings:users',
+  'settings:maintenance',
+  'settings:howto',
 ] as const
 
 // All possible actions
@@ -66,7 +75,16 @@ export const MODULE_ACTIONS: Record<string, string[]> = {
   'boutique-admin:newsletter': ['view', 'create', 'edit', 'delete'],
   statistics: ['view', 'export'],
   'staff-messaging': ['view', 'create', 'delete'],
-  settings: ['view', 'edit'],
+  settings: ['view'],
+  'settings:attributes': ['view', 'edit'],
+  'settings:invoicing': ['view', 'edit'],
+  'settings:tax': ['view', 'edit'],
+  'settings:reminders': ['view', 'edit'],
+  'settings:ai': ['view', 'edit'],
+  'settings:email': ['view', 'edit'],
+  'settings:users': ['view', 'edit'],
+  'settings:maintenance': ['view', 'edit'],
+  'settings:howto': ['view'],
 }
 
 // Default actions for each module when a staff user is created
@@ -98,6 +116,15 @@ export const DEFAULT_STAFF_ACTIONS: Record<string, string[]> = {
   statistics: [],
   'staff-messaging': ['view', 'create'],
   settings: [],
+  'settings:attributes': ['view', 'edit'],
+  'settings:invoicing': [],
+  'settings:tax': [],
+  'settings:reminders': [],
+  'settings:ai': [],
+  'settings:email': [],
+  'settings:users': [],
+  'settings:maintenance': [],
+  'settings:howto': ['view'],
 }
 
 // Cache for permissions (per request)
