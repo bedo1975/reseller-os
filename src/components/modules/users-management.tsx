@@ -29,46 +29,18 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/constants'
 
-const MODULES_CONFIG = [
-  { key: 'dashboard', label: 'Tableau de bord', icon: '📊', viewOnly: true },
-  { key: 'stock', label: 'Stock', icon: '📦', viewOnly: false },
-  { key: 'sourcing', label: 'Sourcing', icon: '🚚', viewOnly: false },
-  { key: 'publication', label: 'Publication', icon: '📝', viewOnly: false },
-  { key: 'sales', label: 'Ventes', icon: '🛒', viewOnly: false },
-  { key: 'parcels', label: 'Colis', icon: '📬', viewOnly: false },
-  { key: 'profitability', label: 'Rentabilité', icon: '📈', viewOnly: false },
-  { key: 'taxes', label: 'Fiscalité', icon: '🧾', viewOnly: false },
-  { key: 'bi', label: 'Intelligence métier', icon: '📊', viewOnly: true },
-  { key: 'vinted', label: 'Vinted Deals', icon: '🔍', viewOnly: false },
-  { key: 'product-trend', label: 'Product Trend', icon: '✨', viewOnly: false },
-  { key: 'photos', label: 'Shooting Photo', icon: '📸', viewOnly: false },
-  { key: 'boutique-admin', label: 'Boutique Admin', icon: '🛍️', viewOnly: false },
-  { key: 'boutique-admin:orders', label: 'BA → Commandes', icon: '📦', viewOnly: false },
-  { key: 'boutique-admin:clients', label: 'BA → Clients', icon: '👥', viewOnly: false },
-  { key: 'boutique-admin:messages', label: 'BA → Messagerie', icon: '✉️', viewOnly: false },
-  { key: 'boutique-admin:appearance', label: 'BA → Apparence', icon: '🎨', viewOnly: false },
-  { key: 'boutique-admin:shipping', label: 'BA → Livraison', icon: '🚚', viewOnly: false },
-  { key: 'boutique-admin:payments', label: 'BA → Paiements', icon: '💳', viewOnly: false },
-  { key: 'boutique-admin:categories', label: 'BA → Catégories', icon: '🗂️', viewOnly: false },
-  { key: 'boutique-admin:coupons', label: 'BA → Coupons', icon: '🎟️', viewOnly: false },
-  { key: 'boutique-admin:share', label: 'BA → Partage', icon: '🎁', viewOnly: false },
-  { key: 'boutique-admin:newsletter', label: 'BA → Newsletter', icon: '📧', viewOnly: false },
-  { key: 'statistics', label: 'Statistiques', icon: '📊', viewOnly: true },
-  { key: 'staff-messaging', label: 'Messagerie interne', icon: '✉️', viewOnly: false },
-  { key: 'settings', label: 'Paramètres', icon: '⚙️', viewOnly: false },
-]
-
+// Actions with labels + colors for the permission UI
 const ALL_ACTIONS = [
-  { key: 'view', label: 'Voir' },
-  { key: 'create', label: 'Créer' },
-  { key: 'edit', label: 'Éditer' },
-  { key: 'delete', label: 'Suppr.' },
-  { key: 'export', label: 'Export' },
-  { key: 'scan', label: 'Scanner' },
-  { key: 'purchase', label: 'Achat HS' },
+  { key: 'view', label: 'Voir', color: 'text-blue-600', bg: 'bg-blue-100 dark:bg-blue-950/30', border: 'border-blue-300 dark:border-blue-800' },
+  { key: 'create', label: 'Créer', color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-950/30', border: 'border-green-300 dark:border-green-800' },
+  { key: 'edit', label: 'Éditer', color: 'text-amber-600', bg: 'bg-amber-100 dark:bg-amber-950/30', border: 'border-amber-300 dark:border-amber-800' },
+  { key: 'delete', label: 'Supprimer', color: 'text-red-600', bg: 'bg-red-100 dark:bg-red-950/30', border: 'border-red-300 dark:border-red-800' },
+  { key: 'export', label: 'Exporter', color: 'text-violet-600', bg: 'bg-violet-100 dark:bg-violet-950/30', border: 'border-violet-300 dark:border-violet-800' },
+  { key: 'scan', label: 'Scanner', color: 'text-cyan-600', bg: 'bg-cyan-100 dark:bg-cyan-950/30', border: 'border-cyan-300 dark:border-cyan-800' },
+  { key: 'purchase', label: 'Achats HS', color: 'text-pink-600', bg: 'bg-pink-100 dark:bg-pink-950/30', border: 'border-pink-300 dark:border-pink-800' },
 ]
 
-// Actions available per module (determines which columns are shown)
+// Actions available per module
 const MODULE_ACTIONS_MAP: Record<string, string[]> = {
   dashboard: ['view'],
   stock: ['view', 'create', 'edit', 'delete', 'export', 'scan', 'purchase'],
@@ -76,6 +48,7 @@ const MODULE_ACTIONS_MAP: Record<string, string[]> = {
   publication: ['view', 'edit', 'create'],
   sales: ['view', 'create', 'edit', 'delete', 'export'],
   parcels: ['view', 'edit'],
+  preorders: ['view', 'create', 'edit', 'delete'],
   profitability: ['view', 'export'],
   taxes: ['view', 'export'],
   bi: ['view', 'export'],
@@ -97,6 +70,81 @@ const MODULE_ACTIONS_MAP: Record<string, string[]> = {
   'staff-messaging': ['view', 'create', 'delete'],
   settings: ['view', 'edit'],
 }
+
+// Grouped module config for the permissions dialog — sections with color-coded headers
+const PERM_SECTIONS: {
+  title: string
+  icon: string
+  color: string
+  modules: { key: string; label: string; icon: string; subItems?: { key: string; label: string; icon: string }[] }[]
+}[] = [
+  {
+    title: 'Modules principaux',
+    icon: '📁',
+    color: 'border-l-blue-500',
+    modules: [
+      { key: 'dashboard', label: 'Tableau de bord', icon: '📊' },
+      { key: 'stock', label: 'Stock', icon: '📦' },
+      { key: 'sourcing', label: 'Sourcing', icon: '🚚' },
+      { key: 'publication', label: 'Publication', icon: '📝' },
+      { key: 'sales', label: 'Ventes', icon: '🛒' },
+      { key: 'parcels', label: 'Colis', icon: '📬' },
+      { key: 'preorders', label: 'Pré-commandes', icon: '📋' },
+    ],
+  },
+  {
+    title: 'Finance & Analytics',
+    icon: '💰',
+    color: 'border-l-emerald-500',
+    modules: [
+      { key: 'profitability', label: 'Rentabilité', icon: '📈' },
+      { key: 'taxes', label: 'Fiscalité', icon: '🧾' },
+      { key: 'bi', label: 'Intelligence métier', icon: '📊' },
+      { key: 'statistics', label: 'Statistiques', icon: '📊' },
+    ],
+  },
+  {
+    title: 'Outils externes',
+    icon: '🔍',
+    color: 'border-l-violet-500',
+    modules: [
+      { key: 'vinted', label: 'Vinted Deals', icon: '🔍' },
+      { key: 'product-trend', label: 'Product Trend', icon: '✨' },
+      { key: 'photos', label: 'Shooting Photo', icon: '📸' },
+    ],
+  },
+  {
+    title: 'Boutique Admin',
+    icon: '🛍️',
+    color: 'border-l-pink-500',
+    modules: [
+      {
+        key: 'boutique-admin', label: 'Boutique Admin', icon: '🛍️',
+        subItems: [
+          { key: 'boutique-admin:orders', label: 'Commandes', icon: '📦' },
+          { key: 'boutique-admin:clients', label: 'Clients', icon: '👥' },
+          { key: 'boutique-admin:messages', label: 'Messagerie', icon: '✉️' },
+          { key: 'boutique-admin:appearance', label: 'Apparence', icon: '🎨' },
+          { key: 'boutique-admin:shipping', label: 'Livraison', icon: '🚚' },
+          { key: 'boutique-admin:payments', label: 'Paiements', icon: '💳' },
+          { key: 'boutique-admin:categories', label: 'Catégories', icon: '🗂️' },
+          { key: 'boutique-admin:coupons', label: 'Coupons', icon: '🎟️' },
+          { key: 'boutique-admin:share', label: 'Partage', icon: '🎁' },
+          { key: 'boutique-admin:newsletter', label: 'Newsletter', icon: '📧' },
+        ],
+      },
+    ],
+  },
+  {
+    title: 'Système',
+    icon: '⚙️',
+    color: 'border-l-stone-500',
+    modules: [
+      { key: 'staff-messaging', label: 'Messagerie interne', icon: '✉️' },
+      { key: 'settings', label: 'Paramètres', icon: '⚙️' },
+    ],
+  },
+]
 
 interface UserRow {
   id: string
@@ -382,14 +430,14 @@ export function UsersManagement() {
 
       {/* Permissions Dialog */}
       <Dialog open={!!permUser} onOpenChange={(o) => !o && setPermUser(null)}>
-        <DialogContent className="sm:!max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:!max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
               Permissions — {permUser?.name}
             </DialogTitle>
             <DialogDescription>
-              Cochez les actions autorisées pour chaque module. Décochez « Voir » pour masquer le module.
+              Activez ou désactivez les actions pour chaque module. Désactivez « Voir » pour masquer complètement un module du menu.
             </DialogDescription>
           </DialogHeader>
 
@@ -398,57 +446,71 @@ export function UsersManagement() {
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
           ) : (
-            <div className="space-y-2 py-2">
-              {/* Header row */}
-              <div className="grid grid-cols-[1fr_repeat(7,auto)] gap-2 items-center px-2 pb-2 border-b text-[10px] text-muted-foreground uppercase font-medium">
-                <span>Module</span>
-                {ALL_ACTIONS.map(a => <span key={a.key} className="text-center w-12">{a.label}</span>)}
-                <span className="text-center w-12">Tout</span>
+            <div className="space-y-4 py-2">
+              {/* Action legend */}
+              <div className="flex flex-wrap gap-2 pb-3 border-b">
+                {ALL_ACTIONS.map(a => (
+                  <span key={a.key} className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full border', a.bg, a.color, a.border)}>
+                    {a.label}
+                  </span>
+                ))}
               </div>
 
-              {MODULES_CONFIG.map(mod => {
-                const actions = permData[mod.key] || []
-                const modActions = MODULE_ACTIONS_MAP[mod.key] || ['view']
-                return (
-                  <div key={mod.key} className="grid grid-cols-[1fr_repeat(7,auto)] gap-2 items-center px-2 py-1.5 rounded hover:bg-muted/30">
-                    <span className="text-sm flex items-center gap-2">
-                      <span>{mod.icon}</span>
-                      <span className="font-medium">{mod.label}</span>
-                    </span>
-                    {ALL_ACTIONS.map(a => {
-                      // Only show actions that are available for this module
-                      if (!modActions.includes(a.key)) {
-                        return <div key={a.key} className="w-12 text-center text-muted-foreground/20">·</div>
-                      }
-                      const checked = actions.includes(a.key)
+              {/* Grouped sections */}
+              {PERM_SECTIONS.map(section => (
+                <div key={section.title} className={cn('border-l-4 pl-3', section.color)}>
+                  <h3 className="text-xs font-bold uppercase text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <span>{section.icon}</span> {section.title}
+                  </h3>
+                  <div className="space-y-1">
+                    {section.modules.map(mod => {
+                      const modActions = MODULE_ACTIONS_MAP[mod.key] || ['view']
                       return (
-                        <div key={a.key} className="w-12 flex justify-center">
-                          <Switch
-                            checked={checked}
-                            onCheckedChange={() => togglePerm(mod.key, a.key)}
-                            className="scale-75"
+                        <div key={mod.key}>
+                          {/* Module row */}
+                          <PermRow
+                            modKey={mod.key}
+                            modLabel={mod.label}
+                            modIcon={mod.icon}
+                            modActions={modActions}
+                            permData={permData}
+                            togglePerm={togglePerm}
+                            toggleAllPerm={toggleAllPerm}
                           />
+                          {/* Sub-items (for boutique-admin) */}
+                          {mod.subItems?.map(sub => {
+                            const subActions = MODULE_ACTIONS_MAP[sub.key] || ['view']
+                            return (
+                              <div key={sub.key} className="ml-4">
+                                <PermRow
+                                  modKey={sub.key}
+                                  modLabel={sub.label}
+                                  modIcon={sub.icon}
+                                  modActions={subActions}
+                                  permData={permData}
+                                  togglePerm={togglePerm}
+                                  toggleAllPerm={toggleAllPerm}
+                                  isSubItem
+                                />
+                              </div>
+                            )
+                          })}
                         </div>
                       )
                     })}
-                    <div className="w-12 flex justify-center">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded"
-                        checked={modActions.length > 0 && modActions.every(a => actions.includes(a))}
-                        onChange={(e) => toggleAllPerm(mod.key, e.target.checked)}
-                      />
-                    </div>
                   </div>
-                )
-              })}
+                </div>
+              ))}
 
               {/* Quick actions */}
               <div className="flex gap-2 pt-3 border-t">
                 <Button variant="outline" size="sm" onClick={() => {
                   const all: Record<string, string[]> = {}
-                  for (const m of MODULES_CONFIG) {
-                    all[m.key] = MODULE_ACTIONS_MAP[m.key] || ['view']
+                  for (const sec of PERM_SECTIONS) {
+                    for (const m of sec.modules) {
+                      all[m.key] = MODULE_ACTIONS_MAP[m.key] || ['view']
+                      m.subItems?.forEach(s => { all[s.key] = MODULE_ACTIONS_MAP[s.key] || ['view'] })
+                    }
                   }
                   setPermData(all)
                 }}>
@@ -652,5 +714,82 @@ function UserForm({ open, onOpenChange, user, onSaved }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ── Permission row component (used in the permissions dialog) ──────────────
+// Renders a single module row with color-coded action toggle chips.
+
+function PermRow({
+  modKey,
+  modLabel,
+  modIcon,
+  modActions,
+  permData,
+  togglePerm,
+  toggleAllPerm,
+  isSubItem,
+}: {
+  modKey: string
+  modLabel: string
+  modIcon: string
+  modActions: string[]
+  permData: Record<string, string[]>
+  togglePerm: (module: string, action: string) => void
+  toggleAllPerm: (module: string, checked: boolean) => void
+  isSubItem?: boolean
+}) {
+  const actions = permData[modKey] || []
+  const allChecked = modActions.length > 0 && modActions.every(a => actions.includes(a))
+
+  return (
+    <div className={cn(
+      'flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/30 transition-colors',
+      isSubItem && 'opacity-90',
+    )}>
+      {/* Module name */}
+      <div className="flex items-center gap-1.5 min-w-[140px] shrink-0">
+        <span className="text-sm">{modIcon}</span>
+        <span className={cn('text-sm font-medium', isSubItem && 'text-muted-foreground')}>{modLabel}</span>
+      </div>
+
+      {/* Action chips */}
+      <div className="flex flex-wrap gap-1 flex-1">
+        {ALL_ACTIONS.map(a => {
+          if (!modActions.includes(a.key)) return null
+          const checked = actions.includes(a.key)
+          return (
+            <button
+              key={a.key}
+              type="button"
+              onClick={() => togglePerm(modKey, a.key)}
+              className={cn(
+                'text-[10px] font-medium px-2 py-0.5 rounded-full border transition-all',
+                checked
+                  ? cn(a.bg, a.color, a.border)
+                  : 'bg-transparent text-muted-foreground/40 border-muted-foreground/20 hover:border-muted-foreground/40',
+              )}
+            >
+              {a.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* All toggle */}
+      <button
+        type="button"
+        onClick={() => toggleAllPerm(modKey, !allChecked)}
+        className={cn(
+          'text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 transition-all',
+          allChecked
+            ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-400'
+            : 'bg-transparent text-muted-foreground/40 border-muted-foreground/20 hover:border-muted-foreground/40',
+        )}
+        title="Activer/désactiver toutes les actions"
+      >
+        Tout
+      </button>
+    </div>
   )
 }

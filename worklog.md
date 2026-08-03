@@ -3382,3 +3382,34 @@ Updated to handle StockItems in addition to Purchases and Expenses:
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages — new /stock/[id]/invoice-upload route).
 - `bash scripts/make-zip.sh`: zip = 1186 KB, MD5: `0554e04a4bed5ba62386a3dd068a2418`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: purchase-invoice-upload-db-fix
+Agent: main
+Task: Fix — uploading a PDF invoice on a Purchase (achat hors stock) didn't update the button from "Joindre" to "Voir" in the register.
+
+## Root cause
+The Purchase invoice upload API (`/api/purchases/[id]/invoice-upload` POST) saved the file to disk and returned `{ path, filename }`, but did NOT update the `invoicePath`/`invoiceName` fields in the database. The EntryDetailModal's `upload()` function only calls the upload API + `onOpenChange(false)` — it doesn't do a separate PATCH to persist the path. So the DB never got updated, and the register (which reads from the DB) still showed no invoice.
+
+Compare with the Expense upload API which DOES update the DB directly:
+```ts
+await db.expense.update({ where: { id }, data: { invoicePath: publicPath, invoiceName: file.name } })
+```
+
+The Purchase upload API was missing this step.
+
+## Fix
+Added the DB update to the Purchase upload API POST handler — same pattern as the Expense upload API:
+```ts
+await db.purchase.update({
+  where: { id },
+  data: { invoicePath: publicPath, invoiceName: file.name },
+})
+```
+
+Now all 3 upload APIs (StockItem, Purchase, Expense) follow the same pattern: save file to disk + update DB directly.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1186 KB, MD5: `443f338c5ce4724a86bccc1c596de3d9`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
