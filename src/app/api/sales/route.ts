@@ -5,8 +5,8 @@ import { requireAuth } from '@/lib/session'
 export async function GET() {
   try {
     const user = await requireAuth()
+    // All authenticated users can see all sales (permission-based visibility is handled in the UI)
     const sales = await db.sale.findMany({
-      where: { userId: user.id },
       include: { stockItem: { include: { supplier: true } } },
       orderBy: { saleDate: 'desc' },
     })

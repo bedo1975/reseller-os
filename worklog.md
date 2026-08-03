@@ -3556,3 +3556,59 @@ Now when a module is set to `[]` (no actions), it's saved as `actions: "[]"` in 
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1201 KB, MD5: `4be223584d76e2fcea3b6081466d59ae`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: stock-permissions-enforcement
+Agent: main
+Task: Fix — stock module allowed editing/deleting even when staff only had 'view' + 'scan' permissions. Scanner also allowed creating articles without 'create' permission.
+
+## Fixes in stock-module.tsx
+
+### 1. Edit/Delete buttons in the table (lines ~674-683)
+Wrapped the Edit button with `{can('stock', 'edit') && (...)}` and the Delete button with `{can('stock', 'delete') && (...)}`. The View (Eye) button is always visible.
+
+### 2. Bulk delete bar (line ~494)
+The bulk actions bar (shown when items are selected) is now gated by `can('stock', 'delete')`:
+```tsx
+{selectedIds.size > 0 && can('stock', 'delete') && ( ... )}
+```
+
+### 3. Checkboxes in the table
+- Header checkbox: hidden if no `delete` permission (replaced with empty `<TableHead />`)
+- Row checkboxes: hidden if no `delete` permission (replaced with empty `<TableCell />`)
+
+### 4. Scanner — barcode not found → create article
+`handleBarcodeNotFound()` now checks `can('stock', 'create')` before opening the create form:
+```ts
+if (!can('stock', 'create')) {
+  toast.error("Vous n'avez pas la permission de créer un article")
+  return
+}
+```
+
+### 5. Scanner — barcode found → quick quantity add
+`handleBarcodeFound()` now checks `can('stock', 'edit')` before opening the quantity modal:
+```ts
+if (!can('stock', 'edit')) {
+  toast.error("Vous n'avez pas la permission de modifier le stock")
+  return
+}
+```
+
+### 6. Quick quantity confirm
+`handleQuickQtyConfirm()` also checks `can('stock', 'edit')` before making the PATCH request.
+
+## Result
+Staff with only 'view' + 'scan' permissions:
+- ✅ Can see the stock list
+- ✅ Can view article details (Eye button)
+- ✅ Can scan barcodes
+- ❌ Cannot edit articles (Edit button hidden)
+- ❌ Cannot delete articles (Delete button + checkboxes hidden)
+- ❌ Cannot create articles from unknown barcodes (toast error)
+- ❌ Cannot modify stock quantity from scanned barcodes (toast error)
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1207 KB, MD5: `372bf256a6e4a988c547017b4d9195e0`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

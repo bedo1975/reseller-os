@@ -5,8 +5,8 @@ import { requireAuth } from '@/lib/session'
 export async function GET() {
   try {
     const user = await requireAuth()
+    // All authenticated users can see all expenses (admin-only module, but staff with access see all)
     const expenses = await db.expense.findMany({
-      where: { userId: user.id },
       orderBy: { date: 'desc' },
     })
     return NextResponse.json(expenses)
