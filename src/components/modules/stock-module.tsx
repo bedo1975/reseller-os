@@ -107,6 +107,10 @@ export function StockModule() {
   // Quand le scanner trouve un code-barres inconnu → ouvrir le formulaire d'ajout avec le code pré-rempli
   const handleBarcodeNotFound = (barcode: string) => {
     setShowScanner(false)
+    if (!can('stock', 'create')) {
+      toast.error("Vous n'avez pas la permission de créer un article")
+      return
+    }
     setEditingItem(null)
     setPrefillBarcode(barcode)
     setShowForm(true)
@@ -115,11 +119,19 @@ export function StockModule() {
   // Quand le scanner trouve un article → ouvrir la modal "quantité à ajouter"
   const handleBarcodeFound = (item: any) => {
     setShowScanner(false)
+    if (!can('stock', 'edit')) {
+      toast.error("Vous n'avez pas la permission de modifier le stock")
+      return
+    }
     setQuickQtyItem(item)
   }
 
   // Quand l'utilisateur valide la quantité à ajouter → PATCH l'article
   const handleQuickQtyConfirm = async (item: any, qtyToAdd: number) => {
+    if (!can('stock', 'edit')) {
+      toast.error("Vous n'avez pas la permission de modifier le stock")
+      return
+    }
     const res = await fetch(`/api/stock/${item.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -491,7 +503,7 @@ export function StockModule() {
       </Card>
 
       {/* Barre d'actions bulk (visible quand des items sont sélectionnés) */}
-      {selectedIds.size > 0 && (
+      {selectedIds.size > 0 && can('stock', 'delete') && (
         <Card className="border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
           <CardContent className="p-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -541,6 +553,7 @@ export function StockModule() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/30">
+                    {can('stock', 'delete') ? (
                     <TableHead className="w-10">
                       <input
                         type="checkbox"
@@ -551,6 +564,9 @@ export function StockModule() {
                         title="Tout sélectionner"
                       />
                     </TableHead>
+                    ) : (
+                    <TableHead className="w-10" />
+                    )}
                     <TableHead className="w-12"></TableHead>
                     <TableHead>SKU</TableHead>
                     <TableHead>Marque</TableHead>
@@ -580,6 +596,7 @@ export function StockModule() {
                           selectedIds.has(item.id) && 'bg-emerald-50/50 dark:bg-emerald-950/20'
                         )}
                       >
+                        {can('stock', 'delete') ? (
                         <TableCell className="p-2" onClick={e => e.stopPropagation()}>
                           <input
                             type="checkbox"
@@ -588,6 +605,9 @@ export function StockModule() {
                             className="h-4 w-4 rounded border-border cursor-pointer"
                           />
                         </TableCell>
+                        ) : (
+                        <TableCell className="p-2" />
+                        )}
                         <TableCell className="p-1.5 cursor-pointer" onClick={() => setViewItem(item)}>
                           <div className="h-10 w-10 rounded-md overflow-hidden bg-muted shrink-0">
                             {photos[0] ? (
@@ -671,12 +691,16 @@ export function StockModule() {
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setViewItem(item)}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditingItem(item); setShowForm(true) }}>
-                              <Edit className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700" onClick={() => askDeleteSingle(item)}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            {can('stock', 'edit') && (
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditingItem(item); setShowForm(true) }}>
+                                <Edit className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {can('stock', 'delete') && (
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700" onClick={() => askDeleteSingle(item)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

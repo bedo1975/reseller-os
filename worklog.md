@@ -3526,3 +3526,33 @@ Staff users now see only the settings sections they have permission for. Each se
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1201 KB, MD5: `b930ca66ebc79e18744f89ffcfff2002`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: permissions-save-fix
+Agent: main
+Task: Fix — permissions not saving correctly, reverting to defaults after save.
+
+## Root cause
+The PUT handler only created DB rows for modules with non-empty actions (`actions.length > 0`). Modules with empty actions (`[]`) were skipped — no DB row was created. When the GET handler later read the permissions, it found no DB row for those modules and fell back to `DEFAULT_STAFF_ACTIONS[m]`, effectively reverting any changes where the user had removed all actions from a module.
+
+## Fix
+Changed the PUT handler to create a DB row for ALL modules, even those with empty actions:
+```ts
+// Before (buggy): only save non-empty modules
+if (Array.isArray(actions) && actions.length > 0) { ... }
+
+// After (fixed): save ALL modules, including empty ones
+for (const module of ALL_MODULES) {
+  const validActions = Array.isArray(actions) ? actions.filter(...) : []
+  await db.userPermission.create({
+    data: { userId: id, module, actions: JSON.stringify(validActions) },
+  })
+}
+```
+
+Now when a module is set to `[]` (no actions), it's saved as `actions: "[]"` in the DB. The GET handler reads it back as `[]` (empty array) — not falling back to defaults.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1201 KB, MD5: `4be223584d76e2fcea3b6081466d59ae`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
