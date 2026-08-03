@@ -82,22 +82,22 @@ export async function PUT(
     // Delete existing permissions for this user
     await db.userPermission.deleteMany({ where: { userId: id } })
 
-    // Create new permissions
+    // Create new permissions — save ALL modules, even empty ones (actions: "[]")
+    // This ensures that when we read them back, we get the saved value instead of
+    // falling back to DEFAULT_STAFF_ACTIONS.
     for (const module of ALL_MODULES) {
       const actions = permissions[module]
-      if (Array.isArray(actions) && actions.length > 0) {
-        // Filter to only valid actions
-        const validActions = actions.filter(a => ALL_ACTIONS.includes(a as any))
-        if (validActions.length > 0) {
-          await db.userPermission.create({
-            data: {
-              userId: id,
-              module,
-              actions: JSON.stringify(validActions),
-            },
-          })
-        }
-      }
+      // Filter to only valid actions
+      const validActions = Array.isArray(actions)
+        ? actions.filter(a => ALL_ACTIONS.includes(a as any))
+        : []
+      await db.userPermission.create({
+        data: {
+          userId: id,
+          module,
+          actions: JSON.stringify(validActions),
+        },
+      })
     }
 
     // Clear cache

@@ -3475,3 +3475,54 @@ The 10 boutique-admin sub-tabs are now rendered as nested items under the main "
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1193 KB, MD5: `7c488bbf03437f586b8d3f42115b9d1e`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: stock-list-fix + settings-sub-permissions
+Agent: main
+Task: (1) Fix stock list not showing for staff with 'view' permission, (2) Add settings sub-modules to the permissions system.
+
+## 1. Stock list not showing for staff
+### Root cause
+The `/api/stock` GET route filtered by `userId: user.id` for non-admin users. So a staff member could only see articles they created themselves — not the admin's articles. Even with 'view' permission, the list appeared empty.
+
+### Fix
+Removed the `userId` filter from the stock GET API — all authenticated users can now see all stock items. Permission-based visibility is handled in the UI (buttons are shown/hidden based on `can()` checks).
+
+## 2. Settings sub-modules permissions
+
+### permissions.ts
+Added 9 new sub-module keys to `ALL_MODULES`:
+- `settings:attributes`, `settings:invoicing`, `settings:tax`, `settings:reminders`, `settings:ai`, `settings:email`, `settings:users`, `settings:maintenance`, `settings:howto`
+
+Added to `MODULE_ACTIONS` (all have `view` + `edit`, except `settings:howto` which is view-only).
+Added to `DEFAULT_STAFF_ACTIONS` (only `settings:attributes` and `settings:howto` are enabled by default for staff).
+
+### users-management.tsx
+Updated `MODULE_ACTIONS_MAP` with the new keys.
+Updated `PERM_SECTIONS` — the "Système" section now shows "Paramètres" as a parent with 9 sub-items (Attributs, Facturation, Taux imposition, Rappels, IA, Email, Utilisateurs, Maintenance, Guide) rendered as nested items (same pattern as Boutique Admin).
+
+### settings-module.tsx
+- Imported `usePermissions` hook.
+- Added `sectionPermKey` map — maps each settings section to its permission key.
+- Added `canViewSection(key)` function — checks if the user has 'view' permission for that section (admins always return true).
+- Updated `navBtn()` to return `null` if `canViewSection(key)` is false — hides the nav button.
+- Updated the section rendering to check `canViewSection()` before rendering each section.
+- Added a `useEffect` that auto-redirects to the first allowed section if the current section is not permitted.
+- Fallback message: "Vous n'avez accès à aucune section des paramètres." if no sections are allowed.
+
+### Result
+Staff users now see only the settings sections they have permission for. Each section can be individually toggled in the permissions dialog:
+- 🏷️ Attributs (view/edit)
+- 🧾 Facturation (view/edit)
+- 📊 Taux imposition (view/edit)
+- ⏰ Rappels (view/edit)
+- 🤖 IA (view/edit)
+- 📧 Email (view/edit)
+- 👥 Utilisateurs (view/edit, admin-only)
+- 🔧 Maintenance (view/edit, admin-only)
+- 📖 Guide (view)
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1201 KB, MD5: `b930ca66ebc79e18744f89ffcfff2002`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
