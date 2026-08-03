@@ -3612,3 +3612,25 @@ Staff with only 'view' + 'scan' permissions:
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1207 KB, MD5: `372bf256a6e4a988c547017b4d9195e0`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: api-userid-filter-removal
+Agent: main
+Task: Fix — staff couldn't see sales/parcels, expenses, suppliers, purchases because APIs filtered by userId.
+
+## Root cause
+Multiple GET APIs filtered data by `userId: user.id`, so staff only saw records they created themselves. Since admin creates most records, staff saw empty lists.
+
+## Fix — removed userId filter from 5 GET APIs
+1. **GET /api/sales** — removed `where: { userId: user.id }` → staff now see all sales (parcels module uses this)
+2. **GET /api/expenses** — removed `where: { userId: user.id }` → staff now see all expenses
+3. **GET /api/suppliers** — removed `where: { userId: user.id }` → staff now see all suppliers
+4. **GET /api/purchases** — removed `where: { userId: user.id }` → staff now see all purchases
+5. **GET /api/stock** — already fixed in previous task
+
+Permission-based visibility (which buttons to show/hide) is handled in the UI via `usePermissions().can()`.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1207 KB, MD5: `41a4065583d1584ef2e135c6c94ffc5c`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

@@ -20,6 +20,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, ShoppingCart, Search, Euro, TrendingUp, Percent, Edit, Trash2, FileText } from 'lucide-react'
 import { toast } from 'sonner'
+import { usePermissions } from '@/hooks/use-permissions'
 import {
   formatEUR, formatDateTime, PLATFORMS, CARRIERS, PARCEL_STATUSES,
   getPlatformLabel, getPlatformColor, getCarrierLabel, getParcelStatusLabel, getParcelStatusColor,
@@ -65,6 +66,7 @@ export function SalesModule() {
   const platforms = getByType('platform')
   const { data: sales, loading, refresh } = useFetch<Sale[]>('/api/sales')
   const { data: stockItems } = useFetch<StockItem[]>('/api/stock')
+  const { can } = usePermissions()
   const [search, setSearch] = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
   const [showForm, setShowForm] = useState(false)
@@ -174,12 +176,14 @@ export function SalesModule() {
                 {platforms.map(p => <SelectItem key={p.code} value={p.code}>{p.value}</SelectItem>)}
               </SelectContent>
             </Select>
+            {can('sales', 'create') && (
             <Button
               onClick={() => { setEditingSale(null); setShowForm(true) }}
               disabled={availableItems.length === 0 && !editingSale}
             >
               <Plus className="h-4 w-4 mr-2" /> Nouvelle vente
             </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -274,6 +278,7 @@ export function SalesModule() {
                         </td>
                         <td className="px-3 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {can('sales', 'edit') && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -282,6 +287,8 @@ export function SalesModule() {
                             >
                               <Edit className="h-3.5 w-3.5" />
                             </Button>
+                            )}
+                            {can('sales', 'delete') && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -290,6 +297,7 @@ export function SalesModule() {
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
+                            )}
                           </div>
                         </td>
                       </tr>

@@ -13,12 +13,16 @@ export async function GET(req: NextRequest) {
     const currentMonth = monthStr ? parseInt(monthStr) - 1 : now.getMonth()
     const currentYear = yearStr ? parseInt(yearStr) : now.getFullYear()
 
+    // Find admin user for shared data (tax settings, etc.)
+    const adminUser = await db.user.findFirst({ where: { role: 'admin' } })
+    const adminId = adminUser?.id || user.id
+
     const [stockItems, sales, expenses, suppliers, taxSettings] = await Promise.all([
-      db.stockItem.findMany({ where: { userId: user.id }, include: { supplier: true, sales: { orderBy: { saleDate: 'desc' } } } }),
-      db.sale.findMany({ where: { userId: user.id }, include: { stockItem: true } }),
-      db.expense.findMany({ where: { userId: user.id } }),
-      db.supplier.findMany({ where: { userId: user.id }, include: { stockItems: { include: { sales: { orderBy: { saleDate: 'desc' } } } } } }),
-      db.taxSettings.findUnique({ where: { userId: user.id } }),
+      db.stockItem.findMany({ include: { supplier: true, sales: { orderBy: { saleDate: 'desc' } } } }),
+      db.sale.findMany({ include: { stockItem: true } }),
+      db.expense.findMany({}),
+      db.supplier.findMany({ include: { stockItems: { include: { sales: { orderBy: { saleDate: 'desc' } } } } } }),
+      db.taxSettings.findUnique({ where: { userId: adminId } }),
     ])
 
     const taxRate = taxSettings?.taxRate || 0

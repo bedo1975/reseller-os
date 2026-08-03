@@ -28,6 +28,7 @@ import {
   getPlatformLabel, getPlatformColor, PLATFORMS,
 } from '@/lib/constants'
 import { useSettings } from '@/hooks/use-settings'
+import { usePermissions } from '@/hooks/use-permissions'
 import { cn } from '@/lib/utils'
 
 const STAGE_ICONS: Record<string, React.ElementType> = {
@@ -89,6 +90,7 @@ function parsePlatforms(s: string | null | undefined): string[] {
 
 export function PublicationModule() {
   const { data: items, loading, refresh } = useFetch<StockItem[]>('/api/stock')
+  const { can } = usePermissions()
 
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [platformFilter, setPlatformFilter] = useState<string>('all')
@@ -277,7 +279,7 @@ export function PublicationModule() {
       </div>
 
       {/* Barre d'actions bulk */}
-      {selectedIds.size > 0 && (
+      {selectedIds.size > 0 && can('publication', 'delete') && (
         <Card className="border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
           <CardContent className="p-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -482,6 +484,7 @@ export function PublicationModule() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {can('publication', 'edit') && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -491,6 +494,8 @@ export function PublicationModule() {
                           >
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
+                          )}
+                          {can('publication', 'delete') && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -500,6 +505,7 @@ export function PublicationModule() {
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
