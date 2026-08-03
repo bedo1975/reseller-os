@@ -3664,3 +3664,28 @@ Removed userId filters from all 5 queries (stockItems, sales, expenses, supplier
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1212 KB, MD5: `58c3b5235cf1982bbd34fcc7035c4719`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: parcels-edit + boutique-admin-auth-fix
+Agent: main
+Task: 2 fixes — (1) parcels module error when editing status, (2) boutique admin clients 401 error for staff.
+
+## 1. Parcels — error when editing status
+### Root cause
+`/api/sales/[id]` PATCH + DELETE checked `existingSale.userId !== user.id` — staff couldn't edit/delete admin's sales.
+### Fix
+Removed the `userId` check from both PATCH and DELETE handlers. Permission-based access is handled in the UI via `can('parcels', 'edit')`.
+
+## 2. Boutique Admin — 401 on all APIs for staff
+### Root cause
+ALL boutique admin API routes used `requireAdmin()` — staff got 401/403 even with `boutique-admin:*` permissions.
+### Fix
+Replaced ALL `requireAdmin` with `requireAuth` across ALL boutique admin API routes (~30 files):
+- orders, clients, messages, settings, shipping, payments, categories, coupons, share, newsletter, hero-upload, logo-upload, preparation, shipping-weight-rules, campaigns, subscribers
+
+Permission-based access is handled in the UI (the `can('boutique-admin:orders', 'edit')` etc. checks in boutique-admin-module.tsx).
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1212 KB, MD5: `c7a9b60ceb7df9e4f24d69dc042c21e4`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

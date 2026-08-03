@@ -577,9 +577,11 @@ function ClientsTab() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="destructive" size="sm" onClick={() => deleteClient(selectedClient.id)}>
-                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer le client
-                </Button>
+                {can('boutique-admin:clients', 'delete') && (
+                  <Button variant="destructive" size="sm" onClick={() => deleteClient(selectedClient.id)}>
+                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer le client
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => setSelectedClient(null)}>Fermer</Button>
               </DialogFooter>
             </>
