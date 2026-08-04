@@ -66,6 +66,7 @@ export async function GET(req: NextRequest) {
         weight: true,
         quantity: true,
         createdAt: true,
+        isLot: true,
       },
     })
 
@@ -95,6 +96,7 @@ export async function GET(req: NextRequest) {
         weight: item.weight || 0,
         quantity: item.quantity ?? 1,
         createdAt: item.createdAt,
+        isLot: item.isLot || false,
       }
     })
 

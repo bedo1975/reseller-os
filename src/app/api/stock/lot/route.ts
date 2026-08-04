@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
         }, { status: 400 })
       }
       const unitPrice = stockItem.suggestedPrice ? parseFloat(stockItem.suggestedPrice.toString()) : 0
+      const unitCost = stockItem.purchaseCost ? parseFloat(stockItem.purchaseCost.toString()) : 0
       // Parse first photo
       let firstPhoto: string | null = null
       try {
@@ -69,9 +70,13 @@ export async function POST(req: NextRequest) {
         color: stockItem.color,
         quantity: qty,
         unitPrice,
+        unitCost,
         photo: firstPhoto,
       })
     }
+
+    // Calculate total purchase cost (for accounting)
+    const totalPurchaseCost = lotItemsData.reduce((sum, li) => sum + (li.unitCost || 0) * li.quantity, 0)
 
     // Auto-generate description with item names
     const itemNames = lotItemsData.map(li => {
@@ -120,7 +125,7 @@ export async function POST(req: NextRequest) {
           brand: 'LOT',
           category: 'vetements',
           condition: 'bon',
-          purchaseCost: 0, // lot cost = sum of item costs (for accounting, keep 0 to avoid double counting)
+          purchaseCost: totalPurchaseCost, // sum of source items' purchase costs (for accounting)
           purchaseDate: new Date(),
           quantity: 1,
           suggestedPrice: parseFloat(lotPrice) || 0,

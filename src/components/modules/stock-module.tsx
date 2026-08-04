@@ -75,6 +75,8 @@ interface StockItem {
   suggestedPrice: number | null
   description: string | null
   measurements: string | null
+  isLot?: boolean
+  lotItems?: string | null
   sales?: Array<{ id: string; salePrice: number; profit: number; saleDate: string; invoiceNumber: string | null }> | null
 }
 
@@ -222,6 +224,20 @@ export function StockModule() {
   const askDeleteSingle = (item: StockItem) => {
     setDeleteTarget({ type: 'single', item })
     setShowDeleteModal(true)
+  }
+
+  // ─── Dissocier un lot (restaure le stock source + supprime le lot) ───
+  const unlinkLot = async (item: StockItem) => {
+    if (!confirm(`Dissocier le lot "${item.title}" ? Les articles seront remis en stock.`)) return
+    try {
+      const res = await fetch(`/api/stock/${item.id}/unlink-lot`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+      toast.success(data.message || 'Lot dissocié')
+      refresh()
+    } catch {
+      toast.error('Erreur réseau')
+    }
   }
 
   const askDeleteBulk = () => {
@@ -698,6 +714,11 @@ export function StockModule() {
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setViewItem(item)}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
+                            {item.isLot && can('stock', 'delete') && (
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-amber-600 hover:text-amber-700" onClick={() => unlinkLot(item)} title="Dissocier le lot (restaurer le stock)">
+                                Dissocier
+                              </Button>
+                            )}
                             {can('stock', 'edit') && (
                               <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditingItem(item); setShowForm(true) }}>
                                 <Edit className="h-3.5 w-3.5" />
@@ -2193,6 +2214,9 @@ function LotForm({ stockItems, onOpenChange, onSaved }: {
   const [lotPrice, setLotPrice] = useState('')
   const [saving, setSaving] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerCategory, setPickerCategory] = useState('')
+  const [pickerSubcat, setPickerSubcat] = useState('')
+  const [pickerSearch, setPickerSearch] = useState('')
 
   // Calculate total from selected items
   const calculatedTotal = useMemo(() => {
@@ -2364,9 +2388,30 @@ function LotForm({ stockItems, onOpenChange, onSaved }: {
               <DialogTitle>Ajouter un article au lot</DialogTitle>
               <DialogDescription>Sélectionnez un article en stock (non vendu, quantité supérieure à 0).</DialogDescription>
             </DialogHeader>
-            <div className="max-h-[50vh] overflow-y-auto space-y-1">
+            {/* Filters */}
+            <div className="grid grid-cols-3 gap-2 pb-2">
+              <Select value={pickerCategory || '__all__'} onValueChange={v => { setPickerCategory(v === '__all__' ? '' : v); setPickerSubcat('') }}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Catégorie" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Toutes catégories</SelectItem>
+                  {Array.from(new Set(stockItems.map(s => s.category))).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={pickerSubcat || '__all__'} onValueChange={v => setPickerSubcat(v === '__all__' ? '' : v)} disabled={!pickerCategory}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sous-cat." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Toutes</SelectItem>
+                  {Array.from(new Set(stockItems.filter(s => s.category === pickerCategory && s.subcategory).map(s => s.subcategory))).map(sc => <SelectItem key={sc} value={sc as string}>{sc}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Input value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} placeholder="Rechercher…" className="h-8 text-xs" />
+            </div>
+            <div className="max-h-[45vh] overflow-y-auto space-y-1">
               {stockItems
                 .filter(s => s.status !== 'VENDU' && s.quantity > 0 && !lotItems.find(li => li.stockItemId === s.id))
+                .filter(s => !pickerCategory || s.category === pickerCategory)
+                .filter(s => !pickerSubcat || s.subcategory === pickerSubcat)
+                .filter(s => !pickerSearch || s.brand.toLowerCase().includes(pickerSearch.toLowerCase()) || (s.title || '').toLowerCase().includes(pickerSearch.toLowerCase()) || s.sku.toLowerCase().includes(pickerSearch.toLowerCase()))
                 .map(s => {
                   const photos: string[] = (() => { try { return JSON.parse(s.photos) } catch { return [] } })()
                   const photo = photos[0] ? (photos[0].startsWith('/uploads/') ? `/api${photos[0]}` : photos[0]) : null
@@ -2396,7 +2441,12 @@ function LotForm({ stockItems, onOpenChange, onSaved }: {
                     </button>
                   )
                 })}
-              {stockItems.filter(s => s.status !== 'VENDU' && s.quantity > 0 && !lotItems.find(li => li.stockItemId === s.id)).length === 0 && (
+              {stockItems
+                .filter(s => s.status !== 'VENDU' && s.quantity > 0 && !lotItems.find(li => li.stockItemId === s.id))
+                .filter(s => !pickerCategory || s.category === pickerCategory)
+                .filter(s => !pickerSubcat || s.subcategory === pickerSubcat)
+                .filter(s => !pickerSearch || s.brand.toLowerCase().includes(pickerSearch.toLowerCase()) || (s.title || '').toLowerCase().includes(pickerSearch.toLowerCase()) || s.sku.toLowerCase().includes(pickerSearch.toLowerCase()))
+                .length === 0 && (
                 <p className="text-center py-8 text-muted-foreground text-sm">Aucun article disponible.</p>
               )}
             </div>

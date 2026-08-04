@@ -15,6 +15,7 @@ interface ProductCardProps {
     price: number | null
     hasVariants?: boolean
     variantCount?: number
+    isLot?: boolean
     originalPrice?: number | null
     saleActive?: boolean
     mainPhoto?: string | null
@@ -66,6 +67,11 @@ export function ProductCard({ product }: ProductCardProps) {
         {outOfStock && (
           <span className="absolute top-2 right-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase">
             Indisponible
+          </span>
+        )}
+        {product.isLot && (
+          <span className="absolute top-2 right-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase">
+            LOT
           </span>
         )}
         {product.hasVariants && (

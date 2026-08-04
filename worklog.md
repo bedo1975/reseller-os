@@ -3845,3 +3845,32 @@ Task: Add "Nouveau Lot" button in Stock — compose a lot from existing stock it
 - `npx next build --webpack`: ✓ Compiled successfully (114/114 static pages — +1 for new /api/stock/lot route).
 - `bash scripts/make-zip.sh`: zip = 1255 KB, MD5: `4778dc933894dc3b2b5262039f50adcd`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: lot-product-page-details
+Agent: main
+Task: On the boutique product page for a lot, show: auto-generated description with item names, first photo of each item, and attributes (size/color) for each item.
+
+## 1. Lot API — enriched lotItems data + auto description
+- `lotItemsData` now includes `photo` (first photo of each source item)
+- Auto-generates a description: "Lot composé de X article(s) :\nBrand Title Taille S Bleu ×2\n..."
+- Photos gallery = all first-photos from the lot items (instead of just the first item's photos)
+
+## 2. Boutique product API — returns lotItems
+- Added `isLot` and `lotItems` to the select query
+- `lotItems` is parsed from JSON and photos are rewritten (`/uploads/` → `/api/uploads/`)
+- Added to the `Product` interface: `isLot?: boolean`, `lotItems?: [...]`
+
+## 3. Boutique product page — "Contenu du lot" section
+Added after the Description section, only shown when `product.isLot`:
+- Title: "Contenu du lot (X articles)"
+- For each lot item, a card showing:
+  - **Photo** (14×14 thumbnail, or Package icon placeholder)
+  - **Name**: brand + title + quantity (×N if > 1)
+  - **Attributes**: Taille badge (blue), Couleur badge (violet)
+  - **Unit price** (right-aligned, grey)
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (114/114 static pages).
+- `bash scripts/make-zip.sh`: zip = 1270 KB, MD5: `81d83c1fe5c42a090fa5630872658095`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
