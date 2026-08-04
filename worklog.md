@@ -3780,3 +3780,29 @@ When `multiVariant` is true and creating a new item:
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1230 KB, MD5: `2c02d1d21b4b9e7d7684bedb7e671024`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: boutique-variant-grouping
+Agent: main
+Task: Group multi-variant products on the boutique list — show only one card per product with a "variantes" badge.
+
+## API change (`/api/boutique/products` GET)
+- After formatting all products, groups them by `title + brand` (variants share the same title + brand)
+- For each group, picks the first in-stock item as the representative (falls back to the first item if all out of stock)
+- Adds `hasVariants: boolean` and `variantCount: number` to the response
+- The list now returns one product per group instead of one per variant
+
+## Product card (`product-card.tsx`)
+- Added `hasVariants?` and `variantCount?` to the interface
+- Added a blue badge at the bottom-left of the photo: "X variantes" (only shown when `hasVariants` is true)
+
+## Result
+- The boutique list shows ONE card per product (not one per variant)
+- Products with variants show a blue badge "X variantes"
+- Clicking the card opens the product page where the variant selectors (size/color) are shown
+- Each variant is accessible via its own product page URL
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1232 KB, MD5: `71c76663f0b34d5ee69ee3a60fb3fb7d`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

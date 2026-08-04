@@ -251,6 +251,10 @@ model StockItem {
   invoicePath   String?  // chemin du PDF facture
   invoiceName   String?  // nom du fichier original
 
+  // Lot : article composé de plusieurs autres articles du stock
+  isLot         Boolean  @default(false)
+  lotItems      String?  // JSON: [{ stockItemId, sku, brand, title, size, color, quantity, unitPrice }]
+
   // 1 StockItem peut avoir plusieurs Sales (utile pour quantité > 1)
   sales         Sale[]
 }

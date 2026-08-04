@@ -95,6 +95,7 @@ export function StockModule() {
   const [page, setPage] = useState(1)
   const [showForm, setShowForm] = useState(false)
   const [showPurchaseForm, setShowPurchaseForm] = useState(false)
+  const [showLotForm, setShowLotForm] = useState(false)
   const [editingItem, setEditingItem] = useState<StockItem | null>(null)
   const [viewItem, setViewItem] = useState<StockItem | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -493,6 +494,11 @@ export function StockModule() {
                   <Barcode className="h-4 w-4 mr-2" /> Scanner code-barres
                 </Button>
               )}
+              {can('stock', 'create') && (
+                <Button variant="outline" onClick={() => setShowLotForm(true)}>
+                  <Layers className="h-4 w-4 mr-2" /> Nouveau Lot
+                </Button>
+              )}
               {can('stock', 'purchase') && (
                 <Button variant="outline" onClick={() => setShowPurchaseForm(true)}>
                   <Plus className="h-4 w-4 mr-2" /> Achat hors stock
@@ -801,6 +807,14 @@ export function StockModule() {
         suppliers={suppliers || []}
         onSaved={() => { setShowPurchaseForm(false); refresh() }}
       />
+
+      {showLotForm && (
+        <LotForm
+          stockItems={items || []}
+          onOpenChange={(o) => { if (!o) setShowLotForm(false) }}
+          onSaved={() => { setShowLotForm(false); refresh() }}
+        />
+      )}
 
       {/* Modale de confirmation de suppression */}
       <Dialog open={showDeleteModal} onOpenChange={(o) => { setShowDeleteModal(o); if (!o) setDeleteTarget(null) }}>
@@ -2161,6 +2175,234 @@ function PurchaseForm({ open, onOpenChange, suppliers, onSaved }: {
           </Button>
         </DialogFooter>
       </DialogContent>
+    </Dialog>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LotForm — Créer un lot à partir d'articles existants en stock
+// ═══════════════════════════════════════════════════════════════════════════
+
+function LotForm({ stockItems, onOpenChange, onSaved }: {
+  stockItems: StockItem[]
+  onOpenChange: (o: boolean) => void
+  onSaved: () => void
+}) {
+  const [name, setName] = useState('')
+  const [lotItems, setLotItems] = useState<{ stockItemId: string; quantity: number }[]>([])
+  const [lotPrice, setLotPrice] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+
+  // Calculate total from selected items
+  const calculatedTotal = useMemo(() => {
+    return lotItems.reduce((sum, li) => {
+      const item = stockItems.find(s => s.id === li.stockItemId)
+      if (!item) return sum
+      const price = item.suggestedPrice ? parseFloat(item.suggestedPrice.toString()) : 0
+      return sum + price * li.quantity
+    }, 0)
+  }, [lotItems, stockItems])
+
+  const updateQty = (stockItemId: string, qty: number) => {
+    setLotItems(prev => prev.map(li => li.stockItemId === stockItemId ? { ...li, quantity: Math.max(1, qty) } : li))
+  }
+
+  const removeItem = (stockItemId: string) => {
+    setLotItems(prev => prev.filter(li => li.stockItemId !== stockItemId))
+  }
+
+  const addItem = (stockItemId: string) => {
+    if (lotItems.find(li => li.stockItemId === stockItemId)) return
+    const item = stockItems.find(s => s.id === stockItemId)
+    if (!item) return
+    setLotItems(prev => [...prev, { stockItemId, quantity: 1 }])
+    setPickerOpen(false)
+  }
+
+  const submit = async () => {
+    if (!name.trim()) { toast.error('Nom du lot requis'); return }
+    if (lotItems.length === 0) { toast.error('Ajoutez au moins un article'); return }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/stock/lot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          lotPrice: parseFloat(lotPrice) || calculatedTotal,
+          items: lotItems,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
+      toast.success('Lot créé ! Stock décrémenté.')
+      onSaved()
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={true} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:!max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Layers className="h-5 w-5" /> Nouveau Lot
+          </DialogTitle>
+          <DialogDescription>
+            Composez un lot à partir d'articles en stock. Le stock de chaque article sera décrémenté.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Nom du lot */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Nom du lot *</Label>
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Lot été 2026 — 5 articles" />
+          </div>
+
+          {/* Bouton ajouter article */}
+          <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Ajouter un article
+          </Button>
+
+          {/* Liste des articles du lot */}
+          {lotItems.length > 0 ? (
+            <div className="border rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/30 border-b">
+                  <tr className="text-left text-[10px] uppercase text-muted-foreground">
+                    <th className="px-3 py-2">Article</th>
+                    <th className="px-3 py-2 text-center">Qté</th>
+                    <th className="px-3 py-2 text-right">Prix unit.</th>
+                    <th className="px-3 py-2 text-right">Total</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lotItems.map(li => {
+                    const item = stockItems.find(s => s.id === li.stockItemId)
+                    if (!item) return null
+                    const price = item.suggestedPrice ? parseFloat(item.suggestedPrice.toString()) : 0
+                    return (
+                      <tr key={li.stockItemId} className="border-b last:border-0">
+                        <td className="px-3 py-2">
+                          <div className="font-medium">{item.brand} {item.title || item.category}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {item.size && `Taille ${item.size}`}
+                            {item.color && ` · ${item.color}`}
+                            {` · Stock: ${item.quantity}`}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <Input
+                            type="number"
+                            min="1"
+                            max={item.quantity}
+                            value={li.quantity}
+                            onChange={e => updateQty(li.stockItemId, parseInt(e.target.value) || 1)}
+                            className="w-16 h-8 text-center text-sm mx-auto"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right text-sm">{price.toFixed(2)} €</td>
+                        <td className="px-3 py-2 text-right text-sm font-semibold">{(price * li.quantity).toFixed(2)} €</td>
+                        <td className="px-3 py-2 text-right">
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => removeItem(li.stockItemId)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground border rounded-lg">
+              <Layers className="h-10 w-10 mx-auto mb-2 opacity-50" />
+              <p>Aucun article dans le lot. Cliquez sur "Ajouter un article".</p>
+            </div>
+          )}
+
+          {/* Total + prix du lot */}
+          <div className="flex items-end justify-between gap-4 pt-3 border-t">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Total calculé (somme des articles)</p>
+              <p className="text-lg font-bold">{calculatedTotal.toFixed(2)} €</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Prix du lot (€) — modifiable</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={lotPrice || calculatedTotal.toFixed(2)}
+                onChange={e => setLotPrice(e.target.value)}
+                className="w-32 text-right"
+                placeholder={calculatedTotal.toFixed(2)}
+              />
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
+          <Button onClick={submit} disabled={saving || lotItems.length === 0 || !name.trim()}>
+            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Layers className="h-4 w-4 mr-2" />}
+            {saving ? 'Création...' : 'Créer le lot'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+
+      {/* Product picker (reuse the pattern from preorder) */}
+      {pickerOpen && (
+        <Dialog open={true} onOpenChange={(o) => { if (!o) setPickerOpen(false) }}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Ajouter un article au lot</DialogTitle>
+              <DialogDescription>Sélectionnez un article en stock (non vendu, quantité supérieure à 0).</DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[50vh] overflow-y-auto space-y-1">
+              {stockItems
+                .filter(s => s.status !== 'VENDU' && s.quantity > 0 && !lotItems.find(li => li.stockItemId === s.id))
+                .map(s => {
+                  const photos: string[] = (() => { try { return JSON.parse(s.photos) } catch { return [] } })()
+                  const photo = photos[0] ? (photos[0].startsWith('/uploads/') ? `/api${photos[0]}` : photos[0]) : null
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => addItem(s.id)}
+                      className="w-full flex items-center gap-3 p-2 rounded-lg border hover:border-[#007bff] hover:bg-blue-50 transition-all text-left"
+                    >
+                      <div className="h-10 w-10 rounded-md overflow-hidden bg-muted shrink-0">
+                        {photo ? (
+                          <img src={photo} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="flex items-center justify-center w-full h-full text-gray-300"><Package className="h-6 w-6" /></div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{s.brand} {s.title || s.category}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {s.size && `Taille ${s.size} · `}{s.color && `${s.color} · `}Stock: {s.quantity}
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold shrink-0">
+                        {s.suggestedPrice ? parseFloat(s.suggestedPrice.toString()).toFixed(2) + ' €' : '—'}
+                      </span>
+                    </button>
+                  )
+                })}
+              {stockItems.filter(s => s.status !== 'VENDU' && s.quantity > 0 && !lotItems.find(li => li.stockItemId === s.id)).length === 0 && (
+                <p className="text-center py-8 text-muted-foreground text-sm">Aucun article disponible.</p>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   )
 }
