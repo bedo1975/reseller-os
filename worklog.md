@@ -3724,3 +3724,59 @@ It appears in blue, uppercase, above the product title. Also shown in the breadc
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1218 KB, MD5: `b9136c4080e968c161bbfbf03360c365`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: multi-variant-stock + boutique-variant-display
+Agent: main
+Task: Add multi-variant stock creation (multiple sizes/colors in one form) + display variants on the boutique product page.
+
+## 1. Stock form — multi-variant creation mode
+
+### New state
+- `multiVariant: boolean` — toggle for multi-variant mode (only shown for new items)
+- `variants: { size, color, quantity }[]` — array of variant lines
+
+### UI changes
+- Added a toggle button "Article multi-variantes (tailles/couleurs)" in the Identification section
+- When activated:
+  - The single Taille/Couleur fields are hidden
+  - The single Quantité field is hidden
+  - A variant table appears with columns: Taille (Select) | Couleur (Select) | Qté (Input) | Delete
+  - "Ajouter une variante" button to add rows
+  - Each row can be deleted (if more than 1)
+  - Help text: "Chaque variante créera un article séparé en stock avec le même titre, marque, prix et photos. Le SKU sera automatiquement suffixé."
+
+### Submit logic
+When `multiVariant` is true and creating a new item:
+1. Filters out empty variants (no size AND no color)
+2. Generates a base SKU if none provided
+3. For each variant, generates a suffixed SKU: `{baseSku}-{SIZE}-{COLOR}` (e.g., `ART-001-S-BLEU`)
+4. Creates one StockItem per variant via POST `/api/stock` — all sharing the same title, brand, category, photos, price, etc.
+5. Shows toast: "X article(s) créé(s)"
+
+## 2. Boutique — variant display on product page
+
+### API change (`/api/boutique/products/[sku]`)
+- After fetching the main product, queries for sibling items with the same `title` + `brand` + `status: PUBLIE` but different SKU
+- Returns `variants: [{ sku, size, color, quantity, inStock }]` alongside the `product`
+
+### Product page UI
+- Added "Disponible en plusieurs déclinaisons :" section (only shown if variants exist)
+- **Tailles** row: clickable buttons for each unique size
+  - Current size is highlighted (blue border + blue background)
+  - In-stock sizes are clickable links to the variant's product page
+  - Out-of-stock sizes are greyed out with line-through
+- **Couleurs** row: same pattern for colors
+- Clicking a size/color navigates to that variant's product page (`/boutique/produit/{variant-sku}`)
+
+### How it works
+1. User creates a multi-variant product in Stock (e.g., "T-shirt Nike" with S/Bleu/qt:5, S/Rouge/qt:10, M/Bleu/qt:3)
+2. 3 StockItems are created with SKUs: ART-001-S-BLEU, ART-001-S-ROUGE, ART-001-M-BLEU
+3. All share the same title "T-shirt Nike" + brand "Nike" + photos + price
+4. On the boutique, when viewing any of these, the page shows all available sizes and colors as clickable buttons
+5. Clicking "M" navigates to the M/Bleu variant
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1230 KB, MD5: `2c02d1d21b4b9e7d7684bedb7e671024`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
