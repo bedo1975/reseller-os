@@ -426,6 +426,7 @@ interface ClientDetail extends ClientSummary {
 }
 
 function ClientsTab() {
+  const { can } = usePermissions()
   const [clients, setClients] = useState<ClientSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedClient, setSelectedClient] = useState<ClientDetail | null>(null)
