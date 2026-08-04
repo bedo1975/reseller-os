@@ -34,6 +34,8 @@ export async function GET(
         weight: true,
         quantity: true,
         createdAt: true,
+        isLot: true,
+        lotItems: true,
       },
     })
 
@@ -68,6 +70,17 @@ export async function GET(
       weight: item.weight || 0,
       quantity: item.quantity ?? 1,
       createdAt: item.createdAt,
+      isLot: item.isLot || false,
+      lotItems: (() => {
+        if (!item.lotItems) return null
+        try {
+          const parsed = JSON.parse(item.lotItems)
+          return parsed.map((li: any) => ({
+            ...li,
+            photo: li.photo ? (li.photo.startsWith('/uploads/') ? `/api${li.photo}` : li.photo) : null,
+          }))
+        } catch { return null }
+      })(),
     }
 
     // Fetch variants: other published items with the same title + brand (but different SKU)

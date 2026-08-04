@@ -52,6 +52,14 @@ export async function POST(req: NextRequest) {
         }, { status: 400 })
       }
       const unitPrice = stockItem.suggestedPrice ? parseFloat(stockItem.suggestedPrice.toString()) : 0
+      // Parse first photo
+      let firstPhoto: string | null = null
+      try {
+        const itemPhotos = JSON.parse(stockItem.photos || '[]')
+        if (Array.isArray(itemPhotos) && itemPhotos.length > 0) {
+          firstPhoto = itemPhotos[0]
+        }
+      } catch {}
       lotItemsData.push({
         stockItemId: stockItem.id,
         sku: stockItem.sku,
@@ -61,8 +69,20 @@ export async function POST(req: NextRequest) {
         color: stockItem.color,
         quantity: qty,
         unitPrice,
+        photo: firstPhoto,
       })
     }
+
+    // Auto-generate description with item names
+    const itemNames = lotItemsData.map(li => {
+      const parts = [li.brand]
+      if (li.title) parts.push(li.title)
+      if (li.size) parts.push(`Taille ${li.size}`)
+      if (li.color) parts.push(li.color)
+      if (li.quantity > 1) parts.push(`×${li.quantity}`)
+      return parts.join(' ')
+    })
+    const autoDescription = `Lot composé de ${lotItemsData.length} article(s) :\n${itemNames.join('\n')}`
 
     // Use admin userId for the lot item
     const adminUser = await db.user.findFirst({ where: { role: 'admin' } })
@@ -71,9 +91,9 @@ export async function POST(req: NextRequest) {
     // Generate SKU
     const sku = `LOT-${Date.now().toString(36).toUpperCase()}`
 
-    // Get photos from first item (optional)
-    const firstItem = stockItems[0]
-    const photos = firstItem?.photos || JSON.stringify([])
+    // Collect all first-photos from lot items for the gallery
+    const allLotPhotos = lotItemsData.map(li => li.photo).filter(Boolean)
+    const photos = JSON.stringify(allLotPhotos)
 
     // Create the lot item + decrement source items in a transaction
     const result = await db.$transaction(async (tx) => {
@@ -104,7 +124,7 @@ export async function POST(req: NextRequest) {
           purchaseDate: new Date(),
           quantity: 1,
           suggestedPrice: parseFloat(lotPrice) || 0,
-          description: description || `Lot composé de ${lotItemsData.length} article(s)`,
+          description: description || autoDescription,
           photos,
           status: status || 'A_PHOTOGRAPHIER',
           isLot: true,

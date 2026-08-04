@@ -46,6 +46,8 @@ interface Product {
   weight?: number
   quantity?: number
   createdAt: string
+  isLot?: boolean
+  lotItems?: { brand: string; title?: string | null; size?: string | null; color?: string | null; quantity: number; unitPrice: number; photo?: string | null }[]
 }
 
 export default function ProductPage({ params }: { params: Promise<{ sku: string }> }) {
@@ -348,6 +350,55 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
               <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                 {product.description}
               </p>
+            </div>
+          )}
+
+          {/* Contenu du lot */}
+          {product.isLot && product.lotItems && product.lotItems.length > 0 && (
+            <div className="mb-6">
+              <h2 className="text-sm font-semibold text-gray-900 uppercase mb-3">Contenu du lot ({product.lotItems.length} articles)</h2>
+              <div className="space-y-3">
+                {product.lotItems.map((li: any, i: number) => (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                    {/* Photo */}
+                    <div className="h-14 w-14 rounded-md overflow-hidden bg-gray-200 shrink-0">
+                      {li.photo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={li.photo} alt={li.brand} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-full text-gray-300">
+                          <Package className="h-6 w-6" />
+                        </div>
+                      )}
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">
+                        {li.brand} {li.title || ''}
+                        {li.quantity > 1 && <span className="text-gray-500 ml-1">×{li.quantity}</span>}
+                      </p>
+                      <div className="flex flex-wrap gap-2 mt-0.5">
+                        {li.size && (
+                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">
+                            Taille {li.size}
+                          </span>
+                        )}
+                        {li.color && (
+                          <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-medium">
+                            {li.color}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Prix unitaire */}
+                    {li.unitPrice > 0 && (
+                      <span className="text-sm text-gray-500 shrink-0">
+                        {li.unitPrice.toFixed(2)} €
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
