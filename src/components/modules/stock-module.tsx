@@ -86,6 +86,7 @@ export function StockModule() {
 
   const categories = getByType('category')
   const conditions = getByType('condition')
+  const brandAttributes = getByType('brand')
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -1284,7 +1285,20 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Marque *</Label>
-                <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="Ralph Lauren" />
+                {brandAttributes.length > 0 ? (
+                  <Select value={form.brand || '__custom__'} onValueChange={v => setForm({ ...form, brand: v === '__custom__' ? '' : v })}>
+                    <SelectTrigger><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
+                    <SelectContent>
+                      {brandAttributes.map(b => <SelectItem key={b.id} value={b.value}>{b.value}</SelectItem>)}
+                      <SelectItem value="__custom__">+ Autre (saisie manuelle)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="Ralph Lauren" />
+                )}
+                {form.brand === '' && brandAttributes.length > 0 && (
+                  <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="Saisir la marque…" className="mt-1" autoFocus />
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">État</Label>

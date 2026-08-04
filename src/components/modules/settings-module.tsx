@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Plus, Trash2, Star, Edit, Tag, Layers, Ruler, Palette, AlertCircle, Truck, ExternalLink, Users, Settings as SettingsIcon,
+  Plus, Trash2, Star, Edit, Tag, Layers, Ruler, Palette, AlertCircle, Truck, ExternalLink, Users, Settings as SettingsIcon, Award,
   FileText, Database, Download, Upload, HardDrive, ShieldAlert, RefreshCw, FileDown, Sparkles, Key, ExternalLink as LinkIcon, CheckCircle2, Percent, Bell, Clock, Calendar, Store, Package, Mail, BookOpen, ChevronDown, Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -95,6 +95,12 @@ const TABS: TabDef[] = [
     accent: 'text-orange-600 bg-orange-50 dark:bg-orange-950/30',
     description: 'Lots d\'origine pour tracer vos achats (Lot 1, Lot 2, Friperie Janvier...)',
     codePlaceholder: 'lot-1', valuePlaceholder: 'Lot 1',
+  },
+  {
+    type: 'brand', label: 'Marques', singular: 'Marque', icon: Award,
+    accent: 'text-pink-600 bg-pink-50 dark:bg-pink-950/30',
+    description: 'Marques disponibles pour les articles (Nike, Adidas, Zara, H&M...)',
+    codePlaceholder: 'nike', valuePlaceholder: 'Nike',
   },
 ]
 

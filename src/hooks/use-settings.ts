@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 
 // Types d'attributs personnalisables via Settings
-export type AttributeType = 'category' | 'subcategory' | 'condition' | 'size' | 'color' | 'carrier' | 'platform' | 'lot_origin'
+export type AttributeType = 'category' | 'subcategory' | 'condition' | 'size' | 'color' | 'carrier' | 'platform' | 'lot_origin' | 'brand'
 
 export interface Attribute {
   id: string
@@ -82,6 +82,7 @@ const DEFAULTS: Record<AttributeType, { value: string; code: string; trackingUrl
     { value: 'Lot 2', code: 'lot-2' },
     { value: 'Lot 3', code: 'lot-3' },
   ],
+  brand: [],
 }
 
 // Cache global partagé entre toutes les instances du hook
