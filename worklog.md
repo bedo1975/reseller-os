@@ -3874,3 +3874,42 @@ Added after the Description section, only shown when `product.isLot`:
 - `npx next build --webpack`: ✓ Compiled successfully (114/114 static pages).
 - `bash scripts/make-zip.sh`: zip = 1270 KB, MD5: `81d83c1fe5c42a090fa5630872658095`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: lot-improvements-batch
+Agent: main
+Task: 4 improvements — (1) category/subcategory filters in lot picker, (2) "Dissocier le lot" button, (3) sum purchaseCost for accounting, (4) LOT badge on boutique.
+
+## 1. Lot picker — category + subcategory + search filters
+Added 3 filter fields at the top of the lot article picker:
+- Catégorie dropdown (derived from stock items)
+- Sous-catégorie dropdown (filtered by selected category)
+- Search input (brand, title, SKU)
+The picker list is filtered by all 3 criteria.
+
+## 2. "Dissocier le lot" — restore stock + delete lot
+New API: `POST /api/stock/[id]/unlink-lot`
+- Only works on items with `isLot=true`
+- Transaction:
+  1. For each item in lotItems: increment source item quantity (restore stock)
+  2. If source item was VENDU (marked when stock reached 0), restore to PUBLIE
+  3. Delete the lot item
+- Returns: `{ ok: true, message: 'Lot dissocié. Stock restauré.' }`
+
+Stock module: added "Dissocier" button (amber text) on lot rows in the table, next to View/Edit/Delete. Only shown when `item.isLot === true` and user has `delete` permission.
+
+## 3. Lot purchaseCost — sum of source items
+- Lot API now calculates `totalPurchaseCost = sum(unitCost × quantity)` from all source items
+- Sets `purchaseCost: totalPurchaseCost` on the lot item (was 0 before)
+- This ensures the lot appears in the ACHATS register with the correct cost (the sum of its components' costs)
+- Note: the source items' quantities are decremented, so their accounting impact is reduced proportionally — the lot carries the combined cost
+
+## 4. LOT badge on boutique product card
+- Added `isLot?: boolean` to ProductCardProps
+- Added `isLot: true` to the boutique products API select + response
+- Badge: amber background, white text, "LOT", positioned top-right of the photo (replaces "Indisponible" if both are true — LOT takes priority)
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (114/114 static pages — +1 for /api/stock/[id]/unlink-lot route).
+- `bash scripts/make-zip.sh`: zip = 1278 KB, MD5: `613ef786efb8f1b88dc1737c67a29003`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

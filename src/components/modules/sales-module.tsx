@@ -18,7 +18,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, ShoppingCart, Search, Euro, TrendingUp, Percent, Edit, Trash2, FileText } from 'lucide-react'
+import { Plus, ShoppingCart, Search, Euro, TrendingUp, Percent, Edit, Trash2, FileText, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePermissions } from '@/hooks/use-permissions'
 import {
@@ -330,6 +330,9 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
   onSaved: () => void
 }) {
   const [saving, setSaving] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerCategory, setPickerCategory] = useState('')
+  const [pickerSearch, setPickerSearch] = useState('')
   const { getByType } = useSettings()
   const platforms = getByType('platform')
   // Plateforme par défaut = première plateforme des settings, ou 'vinted' en fallback
@@ -494,17 +497,24 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
                 value={`${editingSale.stockItem.sku} — ${editingSale.stockItem.brand} (${editingSale.stockItem.size || '—'})`}
                 disabled
               />
+            ) : form.stockItemId ? (
+              <div className="flex items-center justify-between gap-2 p-2 rounded-md border bg-muted/30">
+                <span className="text-xs text-muted-foreground truncate">
+                  {selectedItem ? `${selectedItem.brand} ${selectedItem.title || selectedItem.category} ${selectedItem.size ? '· ' + selectedItem.size : ''} ${selectedItem.color ? '· ' + selectedItem.color : ''}` : ''}
+                </span>
+                <div className="flex gap-1 shrink-0">
+                  <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setPickerOpen(true)} title="Changer d'article">
+                    <Search className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => setForm({ ...form, stockItemId: '' })} title="Détacher">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
             ) : (
-              <Select value={form.stockItemId} onValueChange={v => setForm({ ...form, stockItemId: v })}>
-                <SelectTrigger><SelectValue placeholder="Sélectionner un article" /></SelectTrigger>
-                <SelectContent>
-                  {availableItems.map(i => (
-                    <SelectItem key={i.id} value={i.id}>
-                      {i.sku} — {i.brand} ({i.size})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)} className="w-full justify-start text-muted-foreground">
+                <Search className="h-4 w-4 mr-2" /> Rechercher un article…
+              </Button>
             )}
             {selectedItem && (
               <p className="text-xs text-muted-foreground">
@@ -667,6 +677,68 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Article picker modal */}
+      {pickerOpen && (
+        <Dialog open={true} onOpenChange={(o) => { if (!o) setPickerOpen(false) }}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Rechercher un article</DialogTitle>
+              <DialogDescription>Sélectionnez un article en stock (non vendu).</DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-2 pb-2">
+              <Select value={pickerCategory || '__all__'} onValueChange={v => setPickerCategory(v === '__all__' ? '' : v)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Catégorie" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Toutes catégories</SelectItem>
+                  {Array.from(new Set(availableItems.map(s => s.category))).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Input value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} placeholder="Rechercher…" className="h-8 text-xs" />
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto space-y-1">
+              {availableItems
+                .filter(s => !pickerCategory || s.category === pickerCategory)
+                .filter(s => !pickerSearch || s.brand.toLowerCase().includes(pickerSearch.toLowerCase()) || (s.title || '').toLowerCase().includes(pickerSearch.toLowerCase()) || s.sku.toLowerCase().includes(pickerSearch.toLowerCase()))
+                .map(s => {
+                  const photos: string[] = (() => { try { return JSON.parse(s.photos) } catch { return [] } })()
+                  const photo = photos[0] ? (photos[0].startsWith('/uploads/') ? `/api${photos[0]}` : photos[0]) : null
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => { setForm({ ...form, stockItemId: s.id }); setPickerOpen(false) }}
+                      className="w-full flex items-center gap-3 p-2 rounded-lg border hover:border-[#007bff] hover:bg-blue-50 transition-all text-left"
+                    >
+                      <div className="h-10 w-10 rounded-md overflow-hidden bg-muted shrink-0">
+                        {photo ? (
+                          <img src={photo} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="flex items-center justify-center w-full h-full text-gray-300"><Package className="h-6 w-6" /></div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{s.brand} {s.title || s.category}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {s.size && `Taille ${s.size} · `}{s.color && `${s.color} · `}Stock: {s.quantity}
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold shrink-0">
+                        {s.suggestedPrice ? parseFloat(s.suggestedPrice.toString()).toFixed(2) + ' €' : '—'}
+                      </span>
+                    </button>
+                  )
+                })}
+              {availableItems
+                .filter(s => !pickerCategory || s.category === pickerCategory)
+                .filter(s => !pickerSearch || s.brand.toLowerCase().includes(pickerSearch.toLowerCase()) || (s.title || '').toLowerCase().includes(pickerSearch.toLowerCase()) || s.sku.toLowerCase().includes(pickerSearch.toLowerCase()))
+                .length === 0 && (
+                <p className="text-center py-8 text-muted-foreground text-sm">Aucun article disponible.</p>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   )
 }

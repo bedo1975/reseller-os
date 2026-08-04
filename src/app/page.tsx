@@ -63,7 +63,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'product-trend', label: 'Product Trend', short: 'Trend', icon: Sparkles, description: 'Produits tendance multi-marketplaces' },
   { key: 'photos', label: 'Shooting Photo', short: 'Photos', icon: Camera, description: 'Sessions photos produits' },
   { key: 'boutique-admin', label: 'Boutique Admin', short: 'Boutique', icon: ShoppingBag, description: 'Gestion boutique en ligne' },
-  { key: 'statistics', label: 'Statistiques', short: 'Stats', icon: BarChart3, description: 'Visiteurs, pages vues, avis', adminOnly: true },
+  { key: 'statistics', label: 'Statistiques', short: 'Stats', icon: BarChart3, description: 'Visiteurs, pages vues, avis' },
   { key: 'staff-messaging', label: 'Messagerie', short: 'Messages', icon: Mail, description: 'Messagerie interne staff' },
   { key: 'settings', label: 'Paramètres', short: 'Paramètres', icon: Settings, description: 'Catégories, états, tailles, couleurs' },
 ]
@@ -462,7 +462,7 @@ export default function Home() {
             {activeModule === 'product-trend' && <ProductTrendModule />}
             {activeModule === 'photos' && <PhotoSessionModule />}
             {activeModule === 'boutique-admin' && <BoutiqueAdminModule />}
-            {activeModule === 'statistics' && isAdmin && <StatisticsModule />}
+            {activeModule === 'statistics' && <StatisticsModule />}
             {activeModule === 'staff-messaging' && <StaffMessagingModule />}
             {activeModule === 'settings' && <SettingsModule />}
           </div>
