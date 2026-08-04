@@ -69,8 +69,8 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    // Format for the storefront
-    const products = items.map(item => {
+    // Format for the storefront — group variants (same title + brand) into a single product
+    const allProducts = items.map(item => {
       let photos: string[] = []
       try { photos = JSON.parse(item.photos) } catch {}
       const basePrice = item.suggestedPrice ? parseFloat(item.suggestedPrice.toString()) : null
@@ -97,6 +97,27 @@ export async function GET(req: NextRequest) {
         createdAt: item.createdAt,
       }
     })
+
+    // Group by title + brand — only show one product per group (prefer in-stock)
+    const groupKey = (p: any) => `${p.title || ''}||${p.brand || ''}`
+    const groups = new Map<string, any[]>()
+    for (const p of allProducts) {
+      const key = groupKey(p)
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(p)
+    }
+
+    const products: any[] = []
+    for (const [, group] of groups) {
+      // Prefer an in-stock item as the representative; fall back to the first
+      const inStock = group.find(p => p.quantity > 0)
+      const representative = inStock || group[0]
+      products.push({
+        ...representative,
+        hasVariants: group.length > 1,
+        variantCount: group.length,
+      })
+    }
 
     return NextResponse.json({ products, count: products.length })
   } catch (error) {
