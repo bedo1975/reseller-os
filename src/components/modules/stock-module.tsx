@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Plus, Search, MapPin, Barcode, Edit, Trash2, Package, ChevronLeft, ChevronRight,
   Eye, AlertCircle, Camera, Upload, RefreshCw, Sparkles, ScanEye, QrCode, Link2, Download,
-  Tag, Euro, Layers,
+  Tag, Euro, Layers, Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {

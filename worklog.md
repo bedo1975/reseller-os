@@ -3806,3 +3806,42 @@ Task: Group multi-variant products on the boutique list — show only one card p
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1232 KB, MD5: `71c76663f0b34d5ee69ee3a60fb3fb7d`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: lot-creation-feature
+Agent: main
+Task: Add "Nouveau Lot" button in Stock — compose a lot from existing stock items, decrement source stock, create a new lot item.
+
+## Schema
+- Added `isLot Boolean @default(false)` + `lotItems String?` (JSON) to StockItem model.
+- `bunx prisma db push` — DB in sync.
+
+## API — POST /api/stock/lot (new route)
+- Receives: `{ name, lotPrice, items: [{ stockItemId, quantity }] }`
+- Validates all items exist + have enough stock
+- Transaction:
+  1. Decrement each source item's quantity (if reaches 0 → mark as VENDU)
+  2. Create a new StockItem with `isLot=true`, `lotItems=JSON`, `suggestedPrice=lotPrice`, `brand='LOT'`, `purchaseCost=0` (avoids double counting)
+- Returns the created lot item.
+
+## Stock module — "Nouveau Lot" button + LotForm component
+- Button added next to "Achat hors stock" (gated by `can('stock', 'create')`)
+- `LotForm` component (~230 lines):
+  - Name input
+  - "Ajouter un article" button → opens a picker dialog showing all in-stock items (with photo, brand, title, size, color, stock qty, price)
+  - Table of selected items: article info, quantity input (max=stock), unit price, line total, delete button
+  - Calculated total (sum of all line totals) displayed
+  - Editable "Prix du lot" input (defaults to calculated total, can be changed)
+  - Submit: POST to `/api/stock/lot` → toast "Lot créé ! Stock décrémenté."
+
+## How stock decrement works
+- If an item has 5 in stock and you use 3 in a lot → stock becomes 2
+- If an item has 2 in stock and you use 2 → stock becomes 0 + status changes to VENDU
+- The lot item itself has quantity=1 (it's a single lot)
+- `purchaseCost=0` on the lot item → no double counting in accounting (the source items already counted their purchase cost)
+
+## Build & zip
+- `bunx prisma db push`: ✓ schema in sync.
+- `npx next build --webpack`: ✓ Compiled successfully (114/114 static pages — +1 for new /api/stock/lot route).
+- `bash scripts/make-zip.sh`: zip = 1255 KB, MD5: `4778dc933894dc3b2b5262039f50adcd`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
