@@ -70,7 +70,34 @@ export async function GET(
       createdAt: item.createdAt,
     }
 
-    return NextResponse.json({ product })
+    // Fetch variants: other published items with the same title + brand (but different SKU)
+    let variants: any[] = []
+    if (item.title) {
+      const siblingItems = await db.stockItem.findMany({
+        where: {
+          title: item.title,
+          brand: item.brand,
+          status: 'PUBLIE',
+          sku: { not: item.sku },
+          suggestedPrice: { gt: 0 },
+        },
+        select: {
+          sku: true,
+          size: true,
+          color: true,
+          quantity: true,
+        },
+      })
+      variants = siblingItems.map(s => ({
+        sku: s.sku,
+        size: s.size,
+        color: s.color,
+        quantity: s.quantity ?? 1,
+        inStock: (s.quantity ?? 1) > 0,
+      }))
+    }
+
+    return NextResponse.json({ product, variants })
   } catch (error) {
     console.error('GET /api/boutique/products/[sku] error:', error)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

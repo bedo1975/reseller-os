@@ -914,6 +914,11 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
     barcode: '',
   })
+  // Multi-variant mode
+  const [multiVariant, setMultiVariant] = useState(false)
+  const [variants, setVariants] = useState<{ size: string; color: string; quantity: string }[]>([
+    { size: '', color: '', quantity: '1' },
+  ])
 
   useMemo(() => {
     if (item) {
@@ -1120,8 +1125,56 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
   }
 
   const submit = async () => {
-    if (!form.sku || !form.brand) {
-      toast.error('SKU et marque requis')
+    if (!form.brand) {
+      toast.error('Marque requise')
+      return
+    }
+
+    // Multi-variant mode: create one StockItem per variant
+    if (multiVariant && !item) {
+      const validVariants = variants.filter(v => v.size || v.color)
+      if (validVariants.length === 0) {
+        toast.error('Ajoutez au moins une variante (taille ou couleur)')
+        return
+      }
+      setSaving(true)
+      let created = 0
+      let failed = 0
+      const baseSku = form.sku || `ART-${Date.now().toString(36).toUpperCase()}`
+      for (let i = 0; i < validVariants.length; i++) {
+        const v = validVariants[i]
+        const suffix = [v.size, v.color].filter(Boolean).join('-').toUpperCase()
+        const sku = suffix ? `${baseSku}-${suffix}` : `${baseSku}-${i + 1}`
+        const payload = {
+          ...form,
+          sku,
+          size: v.size || null,
+          color: v.color || null,
+          quantity: parseInt(v.quantity) || 1,
+          photos: JSON.stringify(photos),
+        }
+        if (form.status !== 'VENDU') delete (payload as Record<string, unknown>).platform
+        try {
+          const res = await fetch('/api/stock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (res.ok) created++
+          else failed++
+        } catch {
+          failed++
+        }
+      }
+      toast.success(`${created} article(s) créé(s)${failed > 0 ? `, ${failed} échec(s)` : ''}`)
+      setSaving(false)
+      onSaved()
+      return
+    }
+
+    // Single item mode (original)
+    if (!form.sku) {
+      toast.error('SKU requis')
       return
     }
     setSaving(true)
@@ -1129,7 +1182,6 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
       const url = item ? `/api/stock/${item.id}` : '/api/stock'
       const method = item ? 'PATCH' : 'POST'
       const payload = { ...form, photos: JSON.stringify(photos) }
-      // Si l'article n'est pas vendu, on ne touche pas à platform (sinon on l'écrase avec '')
       if (form.status !== 'VENDU') {
         delete (payload as Record<string, unknown>).platform
       }
@@ -1333,51 +1385,132 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                     </SelectContent>
                   </Select>
                 </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Taille</Label>
-                  <Select
-                    value={form.size || '__none__'}
-                    onValueChange={v => setForm({ ...form, size: v === '__none__' ? '' : v })}
+              ) : null}
+              {/* Multi-variant toggle (only for new items) */}
+              {!item && (
+                <div className="md:col-span-2 flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setMultiVariant(!multiVariant)}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
+                      multiVariant
+                        ? 'border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800'
+                        : 'border-border text-muted-foreground hover:border-foreground/20'
+                    )}
                   >
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {sizes.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                    <Layers className="h-3.5 w-3.5" />
+                    Article multi-variantes (tailles/couleurs)
+                  </button>
                 </div>
               )}
-              {subcategories.length > 0 && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Taille</Label>
-                  <Select
-                    value={form.size || '__none__'}
-                    onValueChange={v => setForm({ ...form, size: v === '__none__' ? '' : v })}
-                  >
-                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {sizes.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Single size/color (when not multi-variant) */}
+              {!multiVariant && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Taille</Label>
+                    <Select
+                      value={form.size || '__none__'}
+                      onValueChange={v => setForm({ ...form, size: v === '__none__' ? '' : v })}
+                    >
+                      <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {sizes.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Couleur</Label>
+                    <Select
+                      value={form.color || '__none__'}
+                      onValueChange={v => setForm({ ...form, color: v === '__none__' ? '' : v })}
+                    >
+                      <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {colors.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
               )}
-              <div className="space-y-1.5">
-                <Label className="text-xs">Couleur</Label>
-                <Select
-                  value={form.color || '__none__'}
-                  onValueChange={v => setForm({ ...form, color: v === '__none__' ? '' : v })}
-                >
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">—</SelectItem>
-                    {colors.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           </div>
+
+          {/* Multi-variant table */}
+          {multiVariant && !item && (
+            <div className="border rounded-lg p-3 bg-blue-50/30 dark:bg-blue-950/10">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <Layers className="h-4 w-4" /> Variantes ({variants.length})
+                </h4>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVariants([...variants, { size: '', color: '', quantity: '1' }])}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Ajouter une variante
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <div className="grid grid-cols-[1fr_1fr_80px_32px] gap-2 items-center text-[10px] font-medium text-muted-foreground uppercase">
+                  <span>Taille</span>
+                  <span>Couleur</span>
+                  <span className="text-center">Qté</span>
+                  <span></span>
+                </div>
+                {variants.map((v, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_80px_32px] gap-2 items-center">
+                    <Select
+                      value={v.size || '__none__'}
+                      onValueChange={val => setVariants(prev => prev.map((p, idx) => idx === i ? { ...p, size: val === '__none__' ? '' : val } : p))}
+                    >
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {sizes.map(s => <SelectItem key={s.id} value={s.code}>{s.value}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={v.color || '__none__'}
+                      onValueChange={val => setVariants(prev => prev.map((p, idx) => idx === i ? { ...p, color: val === '__none__' ? '' : val } : p))}
+                    >
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {colors.map(c => <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={v.quantity}
+                      onChange={e => setVariants(prev => prev.map((p, idx) => idx === i ? { ...p, quantity: e.target.value } : p))}
+                      className="h-8 text-xs text-center"
+                      placeholder="1"
+                    />
+                    {variants.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-red-500"
+                        onClick={() => setVariants(prev => prev.filter((_, idx) => idx !== i))}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Chaque variante créera un article séparé en stock avec le même titre, marque, prix et photos.
+                Le SKU sera automatiquement suffixé (ex: ART-001-S-BLEU).
+              </p>
+            </div>
+          )}
 
           {/* Achat */}
           <div className="border rounded-lg p-3 bg-muted/20">
@@ -1467,6 +1600,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 <Label className="text-xs">Poids (g)</Label>
                 <Input type="number" value={form.weight} onChange={e => setForm({ ...form, weight: e.target.value })} placeholder="500" />
               </div>
+              {!multiVariant && (
               <div className="space-y-1.5">
                 <Label className="text-xs">Quantité disponible</Label>
                 <Input type="number" min="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="1" />
@@ -1476,6 +1610,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                   </p>
                 )}
               </div>
+              )}
             </div>
           </div>
 

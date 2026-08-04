@@ -52,13 +52,23 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
   const { sku } = use(params)
   const router = useRouter()
   const settings = useBoutiqueSettings()
-  const { data, loading } = useFetch<{ product: Product }>(`/api/boutique/products/${sku}`)
+  const { data, loading } = useFetch<{ product: Product; variants?: { sku: string; size: string | null; color: string | null; quantity: number; inStock: boolean }[] }>(`/api/boutique/products/${sku}`)
   const [activePhoto, setActivePhoto] = useState(0)
   const [zoomed, setZoomed] = useState(false)
   const [adding, setAdding] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
 
   const product = data?.product
+  const variants = data?.variants || []
+  const hasVariants = variants.length > 0
+
+  // Collect unique sizes and colors from variants + current product
+  const allVariantOptions = [
+    { sku: product?.sku || '', size: product?.size || null, color: product?.color || null, quantity: product?.quantity || 0, inStock: (product?.quantity ?? 0) > 0 },
+    ...variants,
+  ]
+  const uniqueSizes = Array.from(new Set(allVariantOptions.map(v => v.size).filter(Boolean)))
+  const uniqueColors = Array.from(new Set(allVariantOptions.map(v => v.color).filter(Boolean)))
 
   useEffect(() => {
     setActivePhoto(0)
@@ -268,6 +278,65 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Disponibilité</span>
                 <span className="font-medium text-red-600">Non disponible actuellement</span>
+              </div>
+            )}
+
+            {/* Variantes disponibles */}
+            {hasVariants && (
+              <div className="space-y-3 pt-2 border-t">
+                <p className="text-sm font-semibold text-gray-700">Disponible en plusieurs déclinaisons :</p>
+                {uniqueSizes.length > 0 && (
+                  <div>
+                    <span className="text-xs text-gray-500 mb-1 block">Tailles</span>
+                    <div className="flex flex-wrap gap-2">
+                      {uniqueSizes.map(s => {
+                        const matching = allVariantOptions.find(v => v.size === s)
+                        const inStock = matching?.inStock
+                        return (
+                          <Link
+                            key={s}
+                            href={`/boutique/produit/${matching?.sku || product.sku}`}
+                            className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+                              matching?.sku === product.sku
+                                ? 'border-[#007bff] bg-blue-50 text-[#007bff]'
+                                : inStock
+                                ? 'border-gray-300 hover:border-[#007bff] hover:bg-blue-50 text-gray-700'
+                                : 'border-gray-200 text-gray-400 line-through cursor-not-allowed'
+                            }`}
+                          >
+                            {s}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+                {uniqueColors.length > 0 && (
+                  <div>
+                    <span className="text-xs text-gray-500 mb-1 block">Couleurs</span>
+                    <div className="flex flex-wrap gap-2">
+                      {uniqueColors.map(c => {
+                        const matching = allVariantOptions.find(v => v.color === c)
+                        const inStock = matching?.inStock
+                        return (
+                          <Link
+                            key={c}
+                            href={`/boutique/produit/${matching?.sku || product.sku}`}
+                            className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+                              matching?.sku === product.sku
+                                ? 'border-[#007bff] bg-blue-50 text-[#007bff]'
+                                : inStock
+                                ? 'border-gray-300 hover:border-[#007bff] hover:bg-blue-50 text-gray-700'
+                                : 'border-gray-200 text-gray-400 line-through cursor-not-allowed'
+                            }`}
+                          >
+                            {c}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
