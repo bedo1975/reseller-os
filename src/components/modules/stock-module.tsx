@@ -888,6 +888,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
   const [generating, setGenerating] = useState(false)
   const { getSubcategories: getBoutiqueSubcategories, categories: boutiqueCats } = useBoutiqueCategories()
   const { getByType: getByTypeLocal } = useSettings()
+  const brandAttributes = getByTypeLocal('brand')
   const [analyzing, setAnalyzing] = useState(false)
   const [photos, setPhotos] = useState<string[]>([])
   const [dragActive, setDragActive] = useState(false)

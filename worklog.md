@@ -3689,3 +3689,38 @@ Permission-based access is handled in the UI (the `can('boutique-admin:orders', 
 - `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
 - `bash scripts/make-zip.sh`: zip = 1212 KB, MD5: `c7a9b60ceb7df9e4f24d69dc042c21e4`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: brand-attribute-system
+Agent: main
+Task: Add "MARQUE" as a configurable attribute in Settings → Attributs, use it as a dropdown in the stock form, and display it on the boutique product page.
+
+## 1. Settings → Attributs — new "Marques" tab
+- Added `brand: []` to the DEFAULTS in `use-settings.ts` (empty by default — user-defined).
+- Added a new tab in `TABS` array in `settings-module.tsx`:
+  - type: 'brand', label: 'Marques', icon: Award, accent: pink
+  - description: "Marques disponibles pour les articles (Nike, Adidas, Zara, H&M...)"
+  - codePlaceholder: 'nike', valuePlaceholder: 'Nike'
+- Imported `Award` icon from lucide-react.
+- The `AttributeType` already included `'brand'` — no type change needed.
+
+## 2. Stock module — brand dropdown from attributes
+- Added `const brandAttributes = getByType('brand')` in `StockModule`.
+- Replaced the free-text `<Input>` for brand with a conditional:
+  - If `brandAttributes.length > 0` → `<Select>` dropdown with all brands + "+ Autre (saisie manuelle)" option
+  - If user selects "Autre" → a free-text `<Input>` appears below for manual entry
+  - If no brand attributes configured → falls back to the original free-text `<Input>` (backward compat)
+
+## 3. Boutique product page — brand already displayed
+The brand was already shown on the product page (line 207):
+```tsx
+<p className="text-xs text-[#007bff] font-semibold uppercase tracking-wider mb-2">
+  {product.brand}
+</p>
+```
+It appears in blue, uppercase, above the product title. Also shown in the breadcrumb. No change needed.
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (113/113 static pages).
+- `bash scripts/make-zip.sh`: zip = 1218 KB, MD5: `b9136c4080e968c161bbfbf03360c365`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
