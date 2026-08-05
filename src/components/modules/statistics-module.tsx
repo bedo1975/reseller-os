@@ -4,13 +4,15 @@ import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from 'recharts'
 import {
   Globe, Users, Eye, ShoppingCart, Star, TrendingUp, MapPin, Monitor, MousePointerClick,
-  FileText, Package, Award, ExternalLink,
+  FileText, Package, Award, ExternalLink, Trash2, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { formatEUR } from '@/lib/constants'
+import { toast } from 'sonner'
 
 const PERIODS = [
   { value: '7d', label: '7 derniers jours' },
@@ -68,6 +70,37 @@ interface StatsData {
   }
 }
 
+// ── Pagination hook ───────────────────────────────────────────────────────
+function usePagination<T>(items: T[], pageSize: number) {
+  const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const paginated = items.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  return { paginated, currentPage, totalPages, setPage, total: items.length }
+}
+
+// ── Pagination controls ───────────────────────────────────────────────────
+function PaginationControls({ currentPage, totalPages, total, setPage, pageSize }: {
+  currentPage: number; totalPages: number; total: number; setPage: (n: number) => void; pageSize: number
+}) {
+  if (total <= pageSize) return null
+  return (
+    <div className="flex items-center justify-between pt-2 border-t mt-2">
+      <span className="text-[10px] text-muted-foreground">
+        {total} au total · Page {currentPage}/{totalPages}
+      </span>
+      <div className="flex gap-1">
+        <Button size="sm" variant="outline" className="h-6 w-6 p-0" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+          <ChevronLeft className="h-3 w-3" />
+        </Button>
+        <Button size="sm" variant="outline" className="h-6 w-6 p-0" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+          <ChevronRight className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function StatCard({ icon: Icon, label, value, hint, color = 'text-blue-600' }: {
   icon: React.ElementType; label: string; value: string | number; hint?: string; color?: string
 }) {
@@ -98,6 +131,25 @@ export function StatisticsModule() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [period])
+
+  // Pagination for each section
+  const citiesPag = usePagination(data?.visitorsByCity || [], 10)
+  const pagesPag = usePagination(data?.topPages || [], 10)
+  const visitorsPag = usePagination(data?.recentVisitors || [], 15)
+  const reviewsPag = usePagination(data?.reviews.recent || [], 5)
+
+  const deleteReview = async (id: string) => {
+    if (!confirm('Supprimer cet avis ?')) return
+    try {
+      const res = await fetch(`/api/admin/reviews/${id}`, { method: 'DELETE' })
+      if (!res.ok) { toast.error('Erreur'); return }
+      toast.success('Avis supprimé')
+      // Refetch data
+      fetch(`/api/admin/stats?period=${period}`).then(r => r.json()).then(d => setData(d))
+    } catch {
+      toast.error('Erreur réseau')
+    }
+  }
 
   if (loading || !data) {
     return (
@@ -171,7 +223,6 @@ export function StatisticsModule() {
 
       {/* Two columns: Sources + Devices */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Sources */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2"><MousePointerClick className="h-4 w-4" /> Provenance des visiteurs</CardTitle>
@@ -200,7 +251,6 @@ export function StatisticsModule() {
           </CardContent>
         </Card>
 
-        {/* Devices */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2"><Monitor className="h-4 w-4" /> Appareils</CardTitle>
@@ -249,7 +299,7 @@ export function StatisticsModule() {
         </Card>
       </div>
 
-      {/* Geolocation */}
+      {/* Top villes + Top pages (with pagination) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
@@ -257,36 +307,41 @@ export function StatisticsModule() {
           </CardHeader>
           <CardContent>
             {data.visitorsByCity.length > 0 ? (
-              <div className="space-y-1">
-                {data.visitorsByCity.map(([city, count]) => (
-                  <div key={city} className="flex justify-between items-center text-sm py-1 border-b last:border-0">
-                    <span className="flex items-center gap-2"><MapPin className="h-3 w-3 text-muted-foreground" /> {city}</span>
-                    <Badge variant="secondary">{count}</Badge>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="space-y-1">
+                  {citiesPag.paginated.map(([city, count]) => (
+                    <div key={city} className="flex justify-between items-center text-sm py-1 border-b last:border-0">
+                      <span className="flex items-center gap-2"><MapPin className="h-3 w-3 text-muted-foreground" /> {city}</span>
+                      <Badge variant="secondary">{count}</Badge>
+                    </div>
+                  ))}
+                </div>
+                <PaginationControls currentPage={citiesPag.currentPage} totalPages={citiesPag.totalPages} total={citiesPag.total} setPage={citiesPag.setPage} pageSize={10} />
+              </>
             ) : <p className="text-sm text-muted-foreground text-center py-4">Aucune donnée de géolocalisation</p>}
           </CardContent>
         </Card>
 
-        {/* Top pages */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4" /> Pages les plus visitées</CardTitle>
           </CardHeader>
           <CardContent>
             {data.topPages.length > 0 ? (
-              <div className="space-y-1">
-                {data.topPages.map((p, i) => (
-                  <div key={p.path} className="flex justify-between items-center text-sm py-1 border-b last:border-0">
-                    <span className="flex items-center gap-2 min-w-0">
-                      <span className="text-muted-foreground font-mono text-xs">{i + 1}.</span>
-                      <span className="truncate" title={p.path}>{p.path}</span>
-                    </span>
-                    <Badge variant="secondary" className="shrink-0">{p.count} vues</Badge>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="space-y-1">
+                  {pagesPag.paginated.map((p, i) => (
+                    <div key={p.path} className="flex justify-between items-center text-sm py-1 border-b last:border-0">
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="text-muted-foreground font-mono text-xs">{(pagesPag.currentPage - 1) * 10 + i + 1}.</span>
+                        <span className="truncate" title={p.path}>{p.path}</span>
+                      </span>
+                      <Badge variant="secondary" className="shrink-0">{p.count} vues</Badge>
+                    </div>
+                  ))}
+                </div>
+                <PaginationControls currentPage={pagesPag.currentPage} totalPages={pagesPag.totalPages} total={pagesPag.total} setPage={pagesPag.setPage} pageSize={10} />
+              </>
             ) : <p className="text-sm text-muted-foreground text-center py-4">Aucune donnée</p>}
           </CardContent>
         </Card>
@@ -327,7 +382,7 @@ export function StatisticsModule() {
         </Card>
       )}
 
-      {/* Recent visitors with details */}
+      {/* Recent visitors (with pagination) */}
       {data.recentVisitors && data.recentVisitors.length > 0 && (
         <Card>
           <CardHeader>
@@ -351,7 +406,7 @@ export function StatisticsModule() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.recentVisitors.map(v => (
+                  {visitorsPag.paginated.map(v => (
                     <tr key={v.id} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">
                         {new Date(v.createdAt).toLocaleDateString('fr-FR')} {new Date(v.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -371,11 +426,12 @@ export function StatisticsModule() {
                 </tbody>
               </table>
             </div>
+            <PaginationControls currentPage={visitorsPag.currentPage} totalPages={visitorsPag.totalPages} total={visitorsPag.total} setPage={visitorsPag.setPage} pageSize={15} />
           </CardContent>
         </Card>
       )}
 
-      {/* Reviews section */}
+      {/* Reviews section (with pagination + delete) */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2"><Award className="h-4 w-4" /> Avis clients</CardTitle>
@@ -423,35 +479,53 @@ export function StatisticsModule() {
             </div>
           )}
 
-          {/* Recent reviews */}
+          {/* Recent reviews (with pagination + delete) */}
           {data.reviews.recent.length > 0 && (
             <div>
               <p className="text-xs text-muted-foreground uppercase mb-2">Avis récents</p>
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                {data.reviews.recent.map(r => (
-                  <a
+              <div className="space-y-2">
+                {reviewsPag.paginated.map(r => (
+                  <div
                     key={r.id}
-                    href={`/boutique/produit/${encodeURIComponent(r.productSku)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block p-2 border rounded-md hover:bg-muted/30 text-sm"
+                    className="flex items-start gap-2 p-2 border rounded-md hover:bg-muted/30 text-sm"
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium">{r.authorName}</span>
-                      <span className="flex items-center gap-1">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star key={i} className={`h-3 w-3 ${i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />
-                        ))}
-                      </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium">{r.authorName}</span>
+                        <span className="flex items-center gap-1">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} className={`h-3 w-3 ${i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />
+                          ))}
+                        </span>
+                      </div>
+                      {r.title && <p className="text-xs font-semibold">{r.title}</p>}
+                      {r.comment && <p className="text-xs text-muted-foreground line-clamp-2">{r.comment}</p>}
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {new Date(r.createdAt).toLocaleDateString('fr-FR')} · {r.productSku}
+                      </p>
                     </div>
-                    {r.title && <p className="text-xs font-semibold">{r.title}</p>}
-                    {r.comment && <p className="text-xs text-muted-foreground line-clamp-2">{r.comment}</p>}
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      {new Date(r.createdAt).toLocaleDateString('fr-FR')} · {r.productSku}
-                    </p>
-                  </a>
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <a
+                        href={`/boutique/produit/${encodeURIComponent(r.productSku)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-[#007bff]"
+                        title="Voir le produit"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                      <button
+                        onClick={() => deleteReview(r.id)}
+                        className="text-red-500 hover:text-red-600"
+                        title="Supprimer l'avis"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
+              <PaginationControls currentPage={reviewsPag.currentPage} totalPages={reviewsPag.totalPages} total={reviewsPag.total} setPage={reviewsPag.setPage} pageSize={5} />
             </div>
           )}
 

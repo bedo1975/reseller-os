@@ -3913,3 +3913,30 @@ Stock module: added "Dissocier" button (amber text) on lot rows in the table, ne
 - `npx next build --webpack`: ✓ Compiled successfully (114/114 static pages — +1 for /api/stock/[id]/unlink-lot route).
 - `bash scripts/make-zip.sh`: zip = 1278 KB, MD5: `613ef786efb8f1b88dc1737c67a29003`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: sales-picker-modal + statistics-sidebar-fix
+Agent: main
+Task: 2 fixes — (1) replace inline Select article picker in sales form with modal picker, (2) fix Statistics not showing for staff despite 'view' permission.
+
+## 1. Sales form — modal article picker
+- Replaced the inline `<Select>` for article selection with a button + modal picker (same pattern as preorder/lot)
+- When no article selected: "Rechercher un article…" button → opens modal
+- When article selected: shows brand + title + size + color + change/detach buttons
+- Modal has: category filter dropdown + search input + scrollable list of articles with photos, brand, title, size, color, stock, price
+- Clicking an article selects it and closes the modal
+- Imported `Package` and `Search` from lucide-react (Search was already imported, Package was not)
+
+## 2. Statistics module — not showing for staff
+### Root cause (2 issues):
+1. `NAV_ITEMS` had `adminOnly: true` on the statistics entry — this hard-hides it for all non-admins, overriding the permission system
+2. The module render had `activeModule === 'statistics' && isAdmin` — double-gated on admin
+
+### Fix:
+- Removed `adminOnly: true` from the statistics NAV_ITEMS entry → now controlled by the permission system (`sidebarPerms['statistics']`)
+- Removed `&& isAdmin` from the module render → renders for anyone who has access to the module
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (114/114 static pages).
+- `bash scripts/make-zip.sh`: zip = 1286 KB, MD5: `e7d897e924c87c63703eb063f51a7104`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
