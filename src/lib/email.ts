@@ -469,8 +469,8 @@ export async function notifyClientRegistration(clientEmail: string, clientFirstN
 </ul>`
 
       const result = buildEmailTemplate({
-        title: 'Bienvenue ! 🎉',
-        headerColor: '#10b981',
+        title: 'Bienvenue !',
+        headerColor: '#007bff',
         firstName: clientFirstName,
         bodyHtml,
         siteUrl,
@@ -757,37 +757,30 @@ export async function notifyBackInStock(opts: {
 
     const subject = `Bon retour ! « ${title} » est de nouveau en stock`
 
-    // Plain text fallback
-    const text = `Bonjour,\n\nL'article que vous convoitez est de nouveau disponible sur notre boutique.\n\n${title}\n\nDécouvrez-le dès maintenant : ${productUrl}\n\nÀ bientôt !`
+    // Plain text fallback — same phrasing style as notifyNewOrder
+    const text = `Bonjour,\n\nL'article que vous attendez est de nouveau disponible sur notre boutique !\n\n${title}\nSKU : ${opts.productSku}\n\nDécouvrez-le dès maintenant : ${productUrl}\n\nÀ bientôt !`
 
-    // HTML body — same look-and-feel as the other boutique emails (notifyNewOrder, notifyOrderStatusChange…)
-    // Uses a table-based product card so it renders correctly in all email clients (Outlook included).
-    const productCardHtml = `
-<table role="presentation" style="width:100%;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;margin:12px 0;border-collapse:separate;border-spacing:0;">
-  <tr>
-    <td style="padding:12px;width:80px;vertical-align:middle;">
-      ${photoUrl
-        ? `<img src="${photoUrl}" alt="${escapeHtml(opts.productBrand)}" width="80" height="80" style="width:80px;height:80px;object-fit:cover;border-radius:6px;display:block;background:#e5e7eb;" />`
-        : `<div style="width:80px;height:80px;border-radius:6px;background:#e5e7eb;text-align:center;line-height:80px;font-size:28px;color:#9ca3af;">📦</div>`
-      }
-    </td>
-    <td style="padding:12px;vertical-align:middle;">
-      <p style="margin:0 0 4px 0;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(opts.productBrand)}</p>
-      <p style="margin:0 0 6px 0;font-size:15px;font-weight:600;color:#1a1a1a;">${escapeHtml(opts.productTitle || 'Article')}</p>
-      <p style="margin:0;font-size:11px;color:#9ca3af;font-family:monospace;">SKU : ${escapeHtml(opts.productSku)}</p>
-    </td>
-  </tr>
-</table>`
-
+    // HTML body — EXACT same structure as notifyNewOrder (confirmation de commande)
+    // Uses the same <div> "info card" with #f9fafb bg, #e5e7eb border, uppercase labels, etc.
     const bodyHtml = `
 <p style="margin:0 0 12px 0;">L'article que vous convoitez est de nouveau disponible sur notre boutique. Ne tardez pas — il pourrait repartir très vite !</p>
-${productCardHtml}`
+<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
+${photoUrl
+  ? `<img src="${photoUrl}" alt="${escapeHtml(opts.productBrand)}" width="80" height="80" style="width:80px;height:80px;object-fit:cover;border-radius:6px;display:block;background:#e5e7eb;margin:0 0 12px 0;" />`
+  : ''
+}
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Marque</p>
+<p style="margin:0 0 12px 0;font-weight:600;font-size:15px;">${escapeHtml(opts.productBrand)}</p>
+${opts.productTitle ? `<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Article</p><p style="margin:0 0 12px 0;font-weight:600;font-size:15px;">${escapeHtml(opts.productTitle)}</p>` : ''}
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Référence</p>
+<p style="margin:0;font-family:monospace;font-weight:600;font-size:15px;">${escapeHtml(opts.productSku)}</p>
+</div>`
 
-    // Same wrapper + same blue brand color as the other boutique emails (order confirmation, status change, etc.)
+    // Same wrapper, same blue brand color as notifyNewOrder (confirmation de commande)
     const result = buildEmailTemplate({
       title: 'De retour en stock !',
       headerColor: '#007bff',
-      firstName: '',  // visitor didn't give us their name — buildEmailTemplate will render "Bonjour,"
+      firstName: '',  // visitor didn't give us their name — buildEmailTemplate renders "Bonjour,"
       bodyHtml,
       siteUrl,
       buttonText: "Voir l'article →",
