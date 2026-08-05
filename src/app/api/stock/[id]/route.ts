@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
+import { notifyBackInStock } from '@/lib/email'
 
 // Helper: check if a stock item is "visible on the boutique"
 function isBoutiqueVisible(item: { status: string; suggestedPrice: number | null }): boolean {
@@ -103,6 +104,63 @@ export async function PATCH(
       } catch (e) {
         console.error('[sitemap] revalidatePath failed:', e)
       }
+    }
+
+    // ── Back-in-stock alert trigger ──
+    // If the quantity went from 0 (or null/undefined) to >0 on a published boutique item,
+    // send a notification email to every pending subscriber and mark them as notified.
+    try {
+      const wasOutOfStock = !existing.quantity || existing.quantity <= 0
+      const isInStockNow = (item.quantity ?? 0) > 0
+      const isPublished = item.status === 'PUBLIE'
+      const hasPrice = !!item.suggestedPrice && item.suggestedPrice > 0
+
+      if (wasOutOfStock && isInStockNow && isPublished && hasPrice) {
+        console.log('[stock-alert] Back-in-stock detected for SKU', item.sku, '— checking pending alerts…')
+
+        const pendingAlerts = await db.stockAlert.findMany({
+          where: { productSku: item.sku, status: 'pending' },
+          take: 500,  // safety cap
+        })
+
+        if (pendingAlerts.length > 0) {
+          console.log(`[stock-alert] Notifying ${pendingAlerts.length} subscriber(s) for SKU ${item.sku}`)
+
+          // Send emails in parallel (with a small concurrency to avoid SMTP overload)
+          // We chunk by batches of 10 to stay friendly with SMTP servers.
+          const CHUNK = 10
+          let sentCount = 0
+          for (let i = 0; i < pendingAlerts.length; i += CHUNK) {
+            const batch = pendingAlerts.slice(i, i + CHUNK)
+            const results = await Promise.all(
+              batch.map(alert =>
+                notifyBackInStock({
+                  email: alert.email,
+                  productSku: alert.productSku,
+                  productBrand: alert.productBrand,
+                  productTitle: alert.productTitle,
+                  productPhoto: alert.productPhoto,
+                }).then(ok => ({ id: alert.id, ok }))
+              )
+            )
+            for (const r of results) {
+              if (r.ok) sentCount++
+              // Mark as notified whether or not the email succeeded — we don't want to
+              // spam a failing address on every stock update. The admin can see the
+              // status and resend manually if needed (future improvement).
+              await db.stockAlert.update({
+                where: { id: r.id },
+                data: { status: 'notified', notifiedAt: new Date() },
+              })
+            }
+          }
+
+          console.log(`[stock-alert] ✓ ${sentCount}/${pendingAlerts.length} emails sent for SKU ${item.sku}`)
+        }
+      }
+    } catch (alertErr: any) {
+      // Failure to send stock-alert emails must NOT fail the stock update itself.
+      console.error('[stock-alert] Error while processing back-in-stock notifications:', alertErr?.message)
     }
 
     return NextResponse.json(item)

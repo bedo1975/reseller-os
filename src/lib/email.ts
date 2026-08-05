@@ -707,3 +707,106 @@ export async function notifyAccountValidation(
     console.error('[email] notifyAccountValidation error:', e?.message)
   }
 }
+
+// ── Back-in-stock alert ────────────────────────────────────────────────
+/**
+ * Sends a "back in stock" email to one visitor who subscribed to a stock alert.
+ * Uses the snapshot captured at subscription time (brand, title, photo) so the
+ * email renders correctly even if the product info has changed meanwhile.
+ *
+ * Returns true if the email was sent successfully, false otherwise.
+ */
+export async function notifyBackInStock(opts: {
+  email: string
+  productSku: string
+  productBrand: string
+  productTitle?: string | null
+  productPhoto?: string | null  // relative URL like "/api/uploads/..." or absolute
+}): Promise<boolean> {
+  try {
+    console.log('[email] notifyBackInStock triggered for SKU:', opts.productSku, 'to:', opts.email)
+
+    const config = await getEmailConfig()
+    const bs = await getBoutiqueSettings()
+    const siteUrl = bs.shareSiteUrl || ''
+    const logoText = bs.logoText || 'Boutique'
+
+    // Build absolute product URL (boutique product page)
+    const productUrl = siteUrl
+      ? `${siteUrl.replace(/\/+$/, '')}/boutique/produit/${encodeURIComponent(opts.productSku)}`
+      : `/boutique/produit/${encodeURIComponent(opts.productSku)}`
+
+    // Build absolute photo URL (only if a snapshot was captured)
+    let photoUrl: string | null = null
+    if (opts.productPhoto) {
+      if (/^https?:\/\//i.test(opts.productPhoto)) {
+        photoUrl = opts.productPhoto
+      } else if (siteUrl) {
+        photoUrl = `${siteUrl.replace(/\/+$/, '')}${opts.productPhoto}`
+      } else {
+        photoUrl = opts.productPhoto  // relative — may not render in some email clients, but better than nothing
+      }
+    }
+
+    const title = opts.productTitle
+      ? `${opts.productBrand} — ${opts.productTitle}`
+      : opts.productBrand
+
+    const subject = `Bon retour ! « ${title} » est de nouveau en stock`
+
+    // Plain text fallback
+    const text = `Bonjour,\n\nBon retour ! L'article que vous convoitez est de nouveau disponible sur notre boutique.\n\n${title}\n\nDécouvrez-le dès maintenant : ${productUrl}\n\nÀ bientôt !`
+
+    // HTML body — photo + product info + CTA button, in the same look-and-feel as the admin's other emails
+    const productCardHtml = `
+<div style="display:flex;align-items:center;gap:16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:12px 0;">
+  ${photoUrl
+    ? `<img src="${photoUrl}" alt="${opts.productBrand}" width="80" height="80" style="width:80px;height:80px;object-fit:cover;border-radius:6px;flex-shrink:0;background:#e5e7eb;" />`
+    : `<div style="width:80px;height:80px;border-radius:6px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;">📦</div>`
+  }
+  <div style="flex:1;min-width:0;">
+    <p style="margin:0 0 4px 0;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(opts.productBrand)}</p>
+    <p style="margin:0;font-size:15px;font-weight:600;color:#1a1a1a;">${escapeHtml(opts.productTitle || 'Article')}</p>
+    <p style="margin:6px 0 0 0;font-size:11px;color:#9ca3af;font-family:monospace;">SKU : ${escapeHtml(opts.productSku)}</p>
+  </div>
+</div>`
+
+    const bodyHtml = `
+<p style="margin:0 0 12px 0;">Bon retour ! 👋</p>
+<p style="margin:0 0 12px 0;">L'article que vous convoitez est de nouveau disponible sur notre boutique. Ne tardez pas — il pourrait repartir très vite !</p>
+${productCardHtml}`
+
+    const result = buildEmailTemplate({
+      title: '✅ De retour en stock !',
+      headerColor: '#10b981',  // emerald-500 — signals "available again"
+      firstName: '',  // we don't capture the visitor's name, leave empty
+      bodyHtml,
+      siteUrl,
+      buttonText: "Voir l'article →",
+      buttonUrl: productUrl,
+      logoText,
+    })
+
+    const sent = await sendEmail({
+      to: opts.email,
+      subject,
+      text,
+      html: result.html,
+    })
+
+    return sent
+  } catch (e: any) {
+    console.error('[email] notifyBackInStock error:', e?.message)
+    return false
+  }
+}
+
+// Minimal HTML escaper — protects against user-controlled brand/title in the email HTML
+function escapeHtml(s: string): string {
+  return (s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}

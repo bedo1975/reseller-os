@@ -728,6 +728,28 @@ model ShareReferral {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// STOCK ALERTS — Alerte "M'alerter quand ce produit est de retour en stock"
+// ═══════════════════════════════════════════════════════════════════════
+model StockAlert {
+  id            String   @id @default(cuid())
+  email         String                   // email du visiteur
+  stockItemId   String                   // ID logique du StockItem (snapshot, non FK pour éviter contraintes)
+  productSku    String                   // SKU du produit (clé métier)
+  productBrand  String                   // snapshot marque (au moment de la souscription)
+  productTitle  String?                  // snapshot titre (au moment de la souscription)
+  productPhoto  String?                  // snapshot photo principale (URL absolue)
+  // Statut: pending (en attente de retour en stock) | notified (email envoyé) | cancelled (admin a supprimé)
+  status        String   @default("pending")
+  notifiedAt    DateTime?                // date d'envoi de l'email de retour en stock
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([productSku])
+  @@index([email])
+  @@index([status])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // AVIS PRODUITS — Notes et commentaires des clients
 // ═══════════════════════════════════════════════════════════════════════
 model ProductReview {

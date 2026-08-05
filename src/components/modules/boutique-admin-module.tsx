@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2, MailOpen,
+  TicketPercent, Share2, MailOpen, BellRing,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils'
 import { usePermissions } from '@/hooks/use-permissions'
 import { formatEUR, formatDate } from '@/lib/constants'
 
-type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter'
+type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter' | 'stock-alerts'
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'orders', label: 'Commandes', icon: Package },
@@ -42,6 +42,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'coupons', label: 'Coupons', icon: TicketPercent },
   { id: 'share', label: 'Partage', icon: Share2 },
   { id: 'newsletter', label: 'Newsletter', icon: MailOpen },
+  { id: 'stock-alerts', label: 'Alertes stock', icon: BellRing },
 ]
 
 export function BoutiqueAdminModule() {
@@ -96,6 +97,7 @@ export function BoutiqueAdminModule() {
       {tab === 'coupons' && <CouponsTab />}
       {tab === 'share' && <ShareTab />}
       {tab === 'newsletter' && <NewsletterTab />}
+      {tab === 'stock-alerts' && <StockAlertsTab />}
     </div>
   )
 }
@@ -4612,6 +4614,221 @@ function NewsletterCampaignsSection() {
       <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3 text-[11px] text-amber-800 dark:text-amber-200">
         ⏰ <strong>Envoi programmé :</strong> configurez un cron job qui appelle <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">https://junashop.fr/api/cron/newsletter-send</code> toutes les 5-15 min. Crontab : <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">*/10 * * * * curl -s https://junashop.fr/api/cron/newsletter-send</code>
       </div>
+    </div>
+  )
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET 11 — ALERTES STOCK ("M'alerter quand ce produit est de retour en stock")
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface StockAlert {
+  id: string
+  email: string
+  stockItemId: string
+  productSku: string
+  productBrand: string
+  productTitle: string | null
+  productPhoto: string | null
+  status: string  // pending | notified | cancelled
+  notifiedAt: string | null
+  createdAt: string
+}
+
+function StockAlertsTab() {
+  const [alerts, setAlerts] = useState<StockAlert[]>([])
+  const [stats, setStats] = useState({ total: 0, pending: 0, notified: 0, uniqueEmails: 0 })
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'notified'>('all')
+
+  const fetchAlerts = useCallback(() => {
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (statusFilter !== 'all') params.set('status', statusFilter)
+    if (search) params.set('search', search)
+    fetch(`/api/boutique/admin/stock-alerts?${params.toString()}`)
+      .then(r => r.json())
+      .then(data => {
+        setAlerts(data.alerts || [])
+        setStats(data.stats || { total: 0, pending: 0, notified: 0, uniqueEmails: 0 })
+      })
+      .catch(() => {
+        toast.error('Erreur lors du chargement')
+      })
+      .finally(() => setLoading(false))
+  }, [statusFilter, search])
+
+  useEffect(() => { fetchAlerts() }, [fetchAlerts])
+
+  const removeAlert = async (id: string) => {
+    if (!confirm('Supprimer cette alerte ?')) return
+    const res = await fetch(`/api/boutique/admin/stock-alerts?id=${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      toast.success('Alerte supprimée')
+      fetchAlerts()
+    } else {
+      toast.error('Erreur')
+    }
+  }
+
+  const exportCsv = () => {
+    const csv = ['email,productSku,productBrand,productTitle,status,createdAt,notifiedAt']
+    for (const a of alerts) {
+      csv.push([
+        a.email,
+        a.productSku,
+        `"${a.productBrand.replace(/"/g, '""')}"`,
+        `"${(a.productTitle || '').replace(/"/g, '""')}"`,
+        a.status,
+        new Date(a.createdAt).toISOString(),
+        a.notifiedAt ? new Date(a.notifiedAt).toISOString() : '',
+      ].join(','))
+    }
+    const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `alertes-stock-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    toast.success(`${alerts.length} alertes exportées`)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200">
+        <BellRing className="h-4 w-4 inline mr-1" />
+        <strong>Module Alerte stock :</strong> sur la page boutique, quand un article est en rupture, un bouton "M'alerter quand ce produit est de retour en stock" permet au visiteur de laisser son email. Dès que vous remettez du stock sur l'article (statut PUBLIE + quantité &gt; 0), un email HTML est automatiquement envoyé à tous les inscrits.
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase">Total alertes</p>
+            <p className="text-2xl font-bold mt-1">{stats.total}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase">En attente</p>
+            <p className="text-2xl font-bold mt-1 text-amber-600">{stats.pending}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase">Notifiés</p>
+            <p className="text-2xl font-bold mt-1 text-emerald-600">{stats.notified}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase">Emails uniques</p>
+            <p className="text-2xl font-bold mt-1">{stats.uniqueEmails}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex gap-2 flex-wrap items-center">
+        <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
+          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous statuts</SelectItem>
+            <SelectItem value="pending">En attente</SelectItem>
+            <SelectItem value="notified">Notifiés</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          placeholder="Rechercher par email, marque, SKU…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') fetchAlerts() }}
+          className="max-w-xs"
+        />
+        <Button variant="outline" size="sm" onClick={fetchAlerts}>
+          <RefreshCw className="h-4 w-4 mr-1" /> Actualiser
+        </Button>
+        <Button variant="outline" size="sm" onClick={exportCsv} disabled={alerts.length === 0}>
+          <FileText className="h-4 w-4 mr-1" /> Exporter CSV
+        </Button>
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <Skeleton className="h-32" />
+      ) : alerts.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <BellRing className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm font-medium">Aucune alerte pour le moment</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Les visiteurs qui cliquent sur "M'alerter" apparaîtront ici.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="border rounded-md overflow-hidden overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/50">
+              <tr className="text-left text-[10px] text-muted-foreground uppercase border-b">
+                <th className="px-3 py-2 font-medium">Email</th>
+                <th className="px-3 py-2 font-medium">Produit</th>
+                <th className="px-3 py-2 font-medium">Statut</th>
+                <th className="px-3 py-2 font-medium">Souscription</th>
+                <th className="px-3 py-2 font-medium">Notifié le</th>
+                <th className="px-3 py-2 font-medium text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {alerts.map(a => (
+                <tr key={a.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <td className="px-3 py-2 font-mono text-[11px] break-all">{a.email}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      {a.productPhoto ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={a.productPhoto} alt="" className="h-9 w-9 rounded object-cover bg-muted" />
+                      ) : (
+                        <div className="h-9 w-9 rounded bg-muted flex items-center justify-center text-muted-foreground">
+                          <Package className="h-4 w-4" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{a.productBrand}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {a.productTitle || '—'}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground font-mono">{a.productSku}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    {a.status === 'pending' && (
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">En attente</Badge>
+                    )}
+                    {a.status === 'notified' && (
+                      <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300">Notifié</Badge>
+                    )}
+                    {a.status === 'cancelled' && (
+                      <Badge variant="outline" className="bg-gray-100 text-gray-600 border-gray-300">Annulé</Badge>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">{formatDate(a.createdAt)}</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {a.notifiedAt ? formatDate(a.notifiedAt) : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button size="sm" variant="ghost" className="text-red-600 h-7 w-7 p-0" onClick={() => removeAlert(a.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

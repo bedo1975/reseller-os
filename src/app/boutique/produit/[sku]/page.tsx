@@ -8,7 +8,11 @@ import { useFetch } from '@/hooks/use-fetch'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog'
+import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2, BellRing, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShareModal } from '@/components/boutique/share-modal'
 import { ReviewsSection } from '@/components/boutique/reviews-section'
@@ -59,6 +63,10 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
   const [zoomed, setZoomed] = useState(false)
   const [adding, setAdding] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [alertOpen, setAlertOpen] = useState(false)
+  const [alertEmail, setAlertEmail] = useState('')
+  const [alertSubmitting, setAlertSubmitting] = useState(false)
+  const [alertDone, setAlertDone] = useState(false)
 
   const product = data?.product
   const variants = data?.variants || []
@@ -112,6 +120,43 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
   const buyNow = () => {
     addToCart()
     setTimeout(() => router.push('/boutique/panier'), 500)
+  }
+
+  const submitAlert = async () => {
+    if (!product) return
+    const email = alertEmail.trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Adresse email invalide')
+      return
+    }
+    setAlertSubmitting(true)
+    try {
+      const res = await fetch('/api/boutique/stock-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, sku: product.sku }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data?.error || 'Erreur')
+        return
+      }
+      setAlertDone(true)
+      toast.success(data?.message || 'Merci ! Nous vous alerterons dès le retour en stock.')
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setAlertSubmitting(false)
+    }
+  }
+
+  const resetAlertModal = () => {
+    setAlertOpen(false)
+    // Slight delay so the modal closing animation doesn't show the form flipping back to "done"
+    setTimeout(() => {
+      setAlertDone(false)
+      setAlertEmail('')
+    }, 250)
   }
 
   if (loading) {
@@ -427,11 +472,22 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
               </Button>
             </div>
           ) : (
-            <div className="mb-6 rounded-lg border border-red-300 bg-red-50 text-red-800 px-4 py-3 text-sm flex items-start gap-2">
-              <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-              <span>
-                Cet article est actuellement en rupture de stock. Revenez bientôt !
-              </span>
+            <div className="mb-6 space-y-3">
+              <div className="rounded-lg border border-red-300 bg-red-50 text-red-800 px-4 py-3 text-sm flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+                <span>
+                  Cet article est actuellement en rupture de stock. Revenez bientôt !
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setAlertDone(false); setAlertOpen(true) }}
+                className="w-full h-11 border-2 border-[#007bff] text-[#007bff] hover:bg-blue-50 gap-2"
+              >
+                <BellRing className="h-4 w-4" />
+                M'alerter quand ce produit est de retour en stock
+              </Button>
             </div>
           )}
 
@@ -492,6 +548,75 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
             shareCollectEmails: settings.shareCollectEmails !== false,
           }}
         />
+      )}
+
+      {/* Back-in-stock alert modal */}
+      {product && (
+        <Dialog open={alertOpen} onOpenChange={(o) => { if (!o) resetAlertModal() }}>
+          <DialogContent className="max-w-md">
+            {alertDone ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <span className="flex items-center justify-center h-8 w-8 rounded-full bg-emerald-100 text-emerald-600">
+                      <Check className="h-5 w-5" />
+                    </span>
+                    C'est noté !
+                  </DialogTitle>
+                  <DialogDescription>
+                    Nous avons bien enregistré votre demande. Dès que <strong>{product.brand}{product.title ? ` ${product.title}` : ''}</strong> sera de retour en stock, vous recevrez un email à l'adresse <strong className="break-all">{alertEmail.trim().toLowerCase()}</strong>.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-xs text-blue-800">
+                  💡 Astuce : ajoutez notre email à vos contacts pour éviter qu'il ne finisse dans les spams.
+                </div>
+                <DialogFooter>
+                  <Button onClick={resetAlertModal} className="bg-[#007bff] hover:bg-[#0056b3]">
+                    Fermer
+                  </Button>
+                </DialogFooter>
+              </>
+            ) : (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <BellRing className="h-5 w-5 text-[#007bff]" />
+                    M'alerter quand ce produit est de retour en stock
+                  </DialogTitle>
+                  <DialogDescription>
+                    Laissez votre adresse email : nous vous préviendrons dès que <strong>{product.brand}{product.title ? ` ${product.title}` : ''}</strong> sera à nouveau disponible.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 py-2">
+                  <Input
+                    type="email"
+                    placeholder="Votre adresse email"
+                    value={alertEmail}
+                    onChange={e => setAlertEmail(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !alertSubmitting) submitAlert() }}
+                    autoFocus
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    En soumettant ce formulaire, vous acceptez de recevoir un email unique de notification de retour en stock. Votre email ne sera pas utilisé à d'autres fins.
+                  </p>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={resetAlertModal}>Annuler</Button>
+                  <Button
+                    onClick={submitAlert}
+                    disabled={alertSubmitting || !alertEmail.trim()}
+                    className="bg-[#007bff] hover:bg-[#0056b3]"
+                  >
+                    {alertSubmitting
+                      ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enregistrement…</>
+                      : <><BellRing className="h-4 w-4 mr-2" /> M'alerter</>
+                    }
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )
