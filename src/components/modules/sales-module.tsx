@@ -332,6 +332,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
   const [saving, setSaving] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerCategory, setPickerCategory] = useState('')
+  const [pickerSubcat, setPickerSubcat] = useState('')
   const [pickerSearch, setPickerSearch] = useState('')
   const { getByType } = useSettings()
   const platforms = getByType('platform')
@@ -686,12 +687,19 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
               <DialogTitle>Rechercher un article</DialogTitle>
               <DialogDescription>Sélectionnez un article en stock (non vendu).</DialogDescription>
             </DialogHeader>
-            <div className="grid grid-cols-2 gap-2 pb-2">
-              <Select value={pickerCategory || '__all__'} onValueChange={v => setPickerCategory(v === '__all__' ? '' : v)}>
+            <div className="grid grid-cols-3 gap-2 pb-2">
+              <Select value={pickerCategory || '__all__'} onValueChange={v => { setPickerCategory(v === '__all__' ? '' : v); setPickerSubcat('') }}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Catégorie" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">Toutes catégories</SelectItem>
                   {Array.from(new Set(availableItems.map(s => s.category))).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={pickerSubcat || '__all__'} onValueChange={v => setPickerSubcat(v === '__all__' ? '' : v)} disabled={!pickerCategory}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sous-cat." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Toutes</SelectItem>
+                  {Array.from(new Set(availableItems.filter(s => s.category === pickerCategory && s.subcategory).map(s => s.subcategory))).map(sc => <SelectItem key={sc} value={sc as string}>{sc}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Input value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} placeholder="Rechercher…" className="h-8 text-xs" />
@@ -699,6 +707,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
             <div className="max-h-[50vh] overflow-y-auto space-y-1">
               {availableItems
                 .filter(s => !pickerCategory || s.category === pickerCategory)
+                .filter(s => !pickerSubcat || s.subcategory === pickerSubcat)
                 .filter(s => !pickerSearch || s.brand.toLowerCase().includes(pickerSearch.toLowerCase()) || (s.title || '').toLowerCase().includes(pickerSearch.toLowerCase()) || s.sku.toLowerCase().includes(pickerSearch.toLowerCase()))
                 .map(s => {
                   const photos: string[] = (() => { try { return JSON.parse(s.photos) } catch { return [] } })()
@@ -731,6 +740,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
                 })}
               {availableItems
                 .filter(s => !pickerCategory || s.category === pickerCategory)
+                .filter(s => !pickerSubcat || s.subcategory === pickerSubcat)
                 .filter(s => !pickerSearch || s.brand.toLowerCase().includes(pickerSearch.toLowerCase()) || (s.title || '').toLowerCase().includes(pickerSearch.toLowerCase()) || s.sku.toLowerCase().includes(pickerSearch.toLowerCase()))
                 .length === 0 && (
                 <p className="text-center py-8 text-muted-foreground text-sm">Aucun article disponible.</p>

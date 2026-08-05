@@ -55,6 +55,7 @@ interface StockItem {
   brand: string
   url: string | null
   category: string
+  subcategory?: string | null
   size: string | null
   color: string | null
   condition: string
