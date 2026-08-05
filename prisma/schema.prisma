@@ -967,8 +967,10 @@ model EmailSettings {
   templateValidate         String?  // validation inscription
   templatePasswordLost     String?  // mot de passe perdu (lien de réinitialisation)
   templatePasswordChanged  String?  // mot de passe modifié (confirmation après changement)
-  templateOrder            String?  // nouvelle commande
+  templateOrder            String?  // nouvelle commande (envoyé au client)
   templateOrderStatus      String?  // changement status commande
+  templateAdminOrder       String?  // nouvelle commande (envoyé à l'admin)
+  templateBackInStock      String?  // alerte retour en stock (envoyé au visiteur inscrit)
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

@@ -282,7 +282,28 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
     if (adminUser?.email) {
       console.log('[email] notifyNewOrder: also notifying admin:', adminUser.email)
 
-      const adminBodyHtml = `
+      // Use the admin-specific custom template if defined as HTML
+      const adminTemplate = config?.templateAdminOrder || null
+      const adminUrl = siteUrl ? `${siteUrl}/?module=boutique-admin` : ''
+
+      let adminHtml: string
+      if (adminTemplate && /<[a-z][\s\S]*>/i.test(adminTemplate)) {
+        let processedTemplate = adminTemplate
+        const adminVars: Record<string, string> = {
+          firstName: adminUser.name || 'Admin',
+          clientFirstName,
+          orderId,
+          total: total.toFixed(2) + ' €',
+          email: clientEmail,
+          adminUrl,
+        }
+        for (const [key, value] of Object.entries(adminVars)) {
+          processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+        }
+        adminHtml = migrateRelativeUrls(processedTemplate, siteUrl)
+      } else {
+        // Default HTML for admin — uses green header (semantic: "new revenue" notification)
+        const adminBodyHtml = `
 <p style="margin:0 0 12px 0;">Une nouvelle commande vient d'être passée sur la boutique.</p>
 <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
 <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Client</p>
@@ -293,16 +314,18 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
 <p style="margin:0;font-size:20px;font-weight:700;color:#10b981;">${total.toFixed(2)} €</p>
 </div>`
 
-      const { html: adminHtml } = buildEmailTemplate({
-        title: '🛒 Nouvelle commande boutique',
-        headerColor: '#10b981',
-        firstName: adminUser.name || 'Admin',
-        bodyHtml: adminBodyHtml,
-        siteUrl,
-        buttonText: siteUrl ? 'Traiter la commande →' : undefined,
-        buttonUrl: siteUrl ? `${siteUrl}/?module=boutique-admin` : undefined,
-        logoText,
-      })
+        const { html: defaultAdminHtml } = buildEmailTemplate({
+          title: '🛒 Nouvelle commande boutique',
+          headerColor: '#10b981',
+          firstName: adminUser.name || 'Admin',
+          bodyHtml: adminBodyHtml,
+          siteUrl,
+          buttonText: adminUrl ? 'Traiter la commande →' : undefined,
+          buttonUrl: adminUrl || undefined,
+          logoText,
+        })
+        adminHtml = defaultAdminHtml
+      }
 
       await sendEmail({
         to: adminUser.email,
@@ -760,9 +783,28 @@ export async function notifyBackInStock(opts: {
     // Plain text fallback — same phrasing style as notifyNewOrder
     const text = `Bonjour,\n\nL'article que vous attendez est de nouveau disponible sur notre boutique !\n\n${title}\nSKU : ${opts.productSku}\n\nDécouvrez-le dès maintenant : ${productUrl}\n\nÀ bientôt !`
 
-    // HTML body — EXACT same structure as notifyNewOrder (confirmation de commande)
-    // Uses the same <div> "info card" with #f9fafb bg, #e5e7eb border, uppercase labels, etc.
-    const bodyHtml = `
+    // If the admin has defined a custom HTML template, use it (with variable substitution).
+    // Otherwise, fall back to the default HTML body below.
+    const template = config?.templateBackInStock || null
+
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      let processedTemplate = template
+      const vars: Record<string, string> = {
+        brand: escapeHtml(opts.productBrand),
+        title: escapeHtml(opts.productTitle || ''),
+        sku: escapeHtml(opts.productSku),
+        productUrl,
+        photoUrl: photoUrl || '',
+      }
+      for (const [key, value] of Object.entries(vars)) {
+        processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      html = migrateRelativeUrls(processedTemplate, siteUrl)
+    } else {
+      // Default HTML body — EXACT same structure as notifyNewOrder (confirmation de commande)
+      // Uses the same <div> "info card" with #f9fafb bg, #e5e7eb border, uppercase labels, etc.
+      const bodyHtml = `
 <p style="margin:0 0 12px 0;">L'article que vous convoitez est de nouveau disponible sur notre boutique. Ne tardez pas — il pourrait repartir très vite !</p>
 <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
 ${photoUrl
@@ -776,23 +818,25 @@ ${opts.productTitle ? `<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;t
 <p style="margin:0;font-family:monospace;font-weight:600;font-size:15px;">${escapeHtml(opts.productSku)}</p>
 </div>`
 
-    // Same wrapper, same blue brand color as notifyNewOrder (confirmation de commande)
-    const result = buildEmailTemplate({
-      title: 'De retour en stock !',
-      headerColor: '#007bff',
-      firstName: '',  // visitor didn't give us their name — buildEmailTemplate renders "Bonjour,"
-      bodyHtml,
-      siteUrl,
-      buttonText: "Voir l'article →",
-      buttonUrl: productUrl,
-      logoText,
-    })
+      // Same wrapper, same blue brand color as notifyNewOrder (confirmation de commande)
+      const result = buildEmailTemplate({
+        title: 'De retour en stock !',
+        headerColor: '#007bff',
+        firstName: '',  // visitor didn't give us their name — buildEmailTemplate renders "Bonjour,"
+        bodyHtml,
+        siteUrl,
+        buttonText: "Voir l'article →",
+        buttonUrl: productUrl,
+        logoText,
+      })
+      html = result.html
+    }
 
     const sent = await sendEmail({
       to: opts.email,
       subject,
       text,
-      html: result.html,
+      html,
     })
 
     return sent

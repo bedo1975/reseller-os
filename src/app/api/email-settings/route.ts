@@ -30,6 +30,7 @@ export async function PUT(req: NextRequest) {
       smtpHost, smtpPort, smtpUser, smtpPassword, smtpSecure,
       fromEmail, fromName,
       templateRegister, templateValidate, templatePasswordLost, templatePasswordChanged, templateOrder, templateOrderStatus,
+      templateAdminOrder, templateBackInStock,
     } = body
 
     const data: any = {}
@@ -46,6 +47,8 @@ export async function PUT(req: NextRequest) {
     if (typeof templatePasswordChanged === 'string') data.templatePasswordChanged = templatePasswordChanged || null
     if (typeof templateOrder === 'string') data.templateOrder = templateOrder || null
     if (typeof templateOrderStatus === 'string') data.templateOrderStatus = templateOrderStatus || null
+    if (typeof templateAdminOrder === 'string') data.templateAdminOrder = templateAdminOrder || null
+    if (typeof templateBackInStock === 'string') data.templateBackInStock = templateBackInStock || null
 
     const settings = await db.emailSettings.upsert({
       where: { userId: user.id },
