@@ -195,6 +195,9 @@ function buildEmailTemplate(opts: {
 }): { html: string; text: string } {
   const { title, headerColor, firstName, bodyHtml, siteUrl, buttonText, buttonUrl, logoText } = opts
 
+  // Handle empty firstName gracefully — produces "Bonjour," instead of "Bonjour ,"
+  const greeting = firstName && firstName.trim() ? `Bonjour ${firstName.trim()},` : 'Bonjour,'
+
   const html = `<!DOCTYPE html>
 <html><body style="font-family:system-ui,-apple-system,sans-serif;color:#1a1a1a;background:#f3f4f6;padding:20px;margin:0;">
 <table style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
@@ -202,7 +205,7 @@ function buildEmailTemplate(opts: {
 <h1 style="margin:0;font-size:20px;font-weight:600;">${title}</h1>
 </td></tr>
 <tr><td style="padding:24px;">
-<p style="margin:0 0 12px 0;">Bonjour ${firstName},</p>
+<p style="margin:0 0 12px 0;">${greeting}</p>
 ${bodyHtml}
 ${buttonText && buttonUrl ? `<a href="${buttonUrl}" style="display:inline-block;background:${headerColor};color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:600;font-size:14px;margin-top:12px;">${buttonText}</a>` : ''}
 <p style="margin-top:20px;font-size:12px;color:#9ca3af;">À bientôt sur ${logoText || 'notre boutique'} !</p>
@@ -755,31 +758,36 @@ export async function notifyBackInStock(opts: {
     const subject = `Bon retour ! « ${title} » est de nouveau en stock`
 
     // Plain text fallback
-    const text = `Bonjour,\n\nBon retour ! L'article que vous convoitez est de nouveau disponible sur notre boutique.\n\n${title}\n\nDécouvrez-le dès maintenant : ${productUrl}\n\nÀ bientôt !`
+    const text = `Bonjour,\n\nL'article que vous convoitez est de nouveau disponible sur notre boutique.\n\n${title}\n\nDécouvrez-le dès maintenant : ${productUrl}\n\nÀ bientôt !`
 
-    // HTML body — photo + product info + CTA button, in the same look-and-feel as the admin's other emails
+    // HTML body — same look-and-feel as the other boutique emails (notifyNewOrder, notifyOrderStatusChange…)
+    // Uses a table-based product card so it renders correctly in all email clients (Outlook included).
     const productCardHtml = `
-<div style="display:flex;align-items:center;gap:16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:12px 0;">
-  ${photoUrl
-    ? `<img src="${photoUrl}" alt="${opts.productBrand}" width="80" height="80" style="width:80px;height:80px;object-fit:cover;border-radius:6px;flex-shrink:0;background:#e5e7eb;" />`
-    : `<div style="width:80px;height:80px;border-radius:6px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;">📦</div>`
-  }
-  <div style="flex:1;min-width:0;">
-    <p style="margin:0 0 4px 0;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(opts.productBrand)}</p>
-    <p style="margin:0;font-size:15px;font-weight:600;color:#1a1a1a;">${escapeHtml(opts.productTitle || 'Article')}</p>
-    <p style="margin:6px 0 0 0;font-size:11px;color:#9ca3af;font-family:monospace;">SKU : ${escapeHtml(opts.productSku)}</p>
-  </div>
-</div>`
+<table role="presentation" style="width:100%;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;margin:12px 0;border-collapse:separate;border-spacing:0;">
+  <tr>
+    <td style="padding:12px;width:80px;vertical-align:middle;">
+      ${photoUrl
+        ? `<img src="${photoUrl}" alt="${escapeHtml(opts.productBrand)}" width="80" height="80" style="width:80px;height:80px;object-fit:cover;border-radius:6px;display:block;background:#e5e7eb;" />`
+        : `<div style="width:80px;height:80px;border-radius:6px;background:#e5e7eb;text-align:center;line-height:80px;font-size:28px;color:#9ca3af;">📦</div>`
+      }
+    </td>
+    <td style="padding:12px;vertical-align:middle;">
+      <p style="margin:0 0 4px 0;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(opts.productBrand)}</p>
+      <p style="margin:0 0 6px 0;font-size:15px;font-weight:600;color:#1a1a1a;">${escapeHtml(opts.productTitle || 'Article')}</p>
+      <p style="margin:0;font-size:11px;color:#9ca3af;font-family:monospace;">SKU : ${escapeHtml(opts.productSku)}</p>
+    </td>
+  </tr>
+</table>`
 
     const bodyHtml = `
-<p style="margin:0 0 12px 0;">Bon retour ! 👋</p>
 <p style="margin:0 0 12px 0;">L'article que vous convoitez est de nouveau disponible sur notre boutique. Ne tardez pas — il pourrait repartir très vite !</p>
 ${productCardHtml}`
 
+    // Same wrapper + same blue brand color as the other boutique emails (order confirmation, status change, etc.)
     const result = buildEmailTemplate({
-      title: '✅ De retour en stock !',
-      headerColor: '#10b981',  // emerald-500 — signals "available again"
-      firstName: '',  // we don't capture the visitor's name, leave empty
+      title: 'De retour en stock !',
+      headerColor: '#007bff',
+      firstName: '',  // visitor didn't give us their name — buildEmailTemplate will render "Bonjour,"
       bodyHtml,
       siteUrl,
       buttonText: "Voir l'article →",
