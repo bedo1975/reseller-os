@@ -40,6 +40,7 @@ interface Product {
   size?: string | null
   color?: string | null
   condition?: string | null
+  grade?: string | null
   price: number | null
   originalPrice?: number | null
   saleActive?: boolean
@@ -52,6 +53,13 @@ interface Product {
   createdAt: string
   isLot?: boolean
   lotItems?: { brand: string; title?: string | null; size?: string | null; color?: string | null; quantity: number; unitPrice: number; photo?: string | null }[]
+}
+
+// Grade → couleur + libellé (Grade A = vert, B = jaune, C = orange)
+const GRADE_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
+  A: { label: 'Grade A', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+  B: { label: 'Grade B', bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', dot: 'bg-yellow-400' },
+  C: { label: 'Grade C', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
 }
 
 export default function ProductPage({ params }: { params: Promise<{ sku: string }> }) {
@@ -267,6 +275,18 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
             {product.title || (CATEGORY_LABELS[product.category] || product.category)}
             {product.size && ` · Taille ${product.size}`}
           </h1>
+
+          {/* Badge Grade (cliquable vers la page explicative) */}
+          {product.grade && GRADE_CONFIG[product.grade] && (
+            <Link
+              href="/boutique/grade"
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${GRADE_CONFIG[product.grade].bg} ${GRADE_CONFIG[product.grade].text} ${GRADE_CONFIG[product.grade].border} hover:opacity-80 transition-opacity mb-4`}
+              title="En savoir plus sur nos grades"
+            >
+              <span className={`inline-block w-2 h-2 rounded-full ${GRADE_CONFIG[product.grade].dot}`} />
+              {GRADE_CONFIG[product.grade].label}
+            </Link>
+          )}
 
           {product.price != null && (
             <div className="mb-6">

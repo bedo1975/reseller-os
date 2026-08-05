@@ -39,6 +39,7 @@ export async function PUT(req: NextRequest) {
       trustPagePaymentTitle, trustPagePaymentContent,
       trustPageShippingTitle, trustPageShippingContent,
       trustPageReturnsTitle, trustPageReturnsContent,
+      gradePageTitle, gradePageContent,
       gaTagId,
       stripePublicKey, stripeSecretKey, stripeWebhookSecret,
       paypalClientId, paypalSecret, paypalWebhookId,
@@ -108,6 +109,8 @@ export async function PUT(req: NextRequest) {
     if (typeof trustPageShippingContent === 'string') data.trustPageShippingContent = trustPageShippingContent || null
     if (typeof trustPageReturnsTitle === 'string') data.trustPageReturnsTitle = trustPageReturnsTitle
     if (typeof trustPageReturnsContent === 'string') data.trustPageReturnsContent = trustPageReturnsContent || null
+    if (typeof gradePageTitle === 'string') data.gradePageTitle = gradePageTitle
+    if (typeof gradePageContent === 'string') data.gradePageContent = gradePageContent || null
     if (typeof gaTagId === 'string') data.gaTagId = gaTagId || null
     // Stripe
     if (typeof stripePublicKey === 'string') data.stripePublicKey = stripePublicKey || null

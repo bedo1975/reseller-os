@@ -59,12 +59,14 @@ interface StockItem {
   size: string | null
   color: string | null
   condition: string
+  grade?: string | null
   purchaseDate: string
   supplierId: string | null
   supplier: Supplier | null
   purchaseCost: number
   lotReference: string | null
   purchaseInvoiceNumber: string | null
+  supplierOrderNumber?: string | null
   purchasePaymentMethod: string | null
   warehouse: string | null
   rack: string | null
@@ -944,12 +946,12 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
   const defaultCat = boutiqueCats[0]?.slug || 'vetements'
   const defaultCond = conditions.find(c => c.isDefault)?.code || conditions[0]?.code || 'bon'
   const [form, setForm] = useState({
-    sku: '', title: '', brand: '', url: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond,
+    sku: '', title: '', brand: '', url: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond, grade: '',
     purchaseCost: '', purchaseDate: new Date().toISOString().split('T')[0],
     supplierId: '', lotReference: '', lotOrigin: '', lotCurrent: '',
     warehouse: '', rack: '', shelf: '', bin: '', weight: '', quantity: '1',
     description: '', suggestedPrice: '', salePrice: '', saleActive: false,
-    platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
+    platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', supplierOrderNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
     barcode: '',
   })
   // Multi-variant mode
@@ -964,12 +966,14 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         sku: item.sku, title: item.title || '', brand: item.brand, url: item.url || '', category: item.category,
         subcategory: (item as { subcategory?: string }).subcategory || '',
         size: item.size || '', color: item.color || '', condition: item.condition,
+        grade: (item as { grade?: string }).grade || '',
         purchaseCost: String(item.purchaseCost),
         purchaseDate: new Date(item.purchaseDate).toISOString().split('T')[0],
         supplierId: item.supplierId || '', lotReference: item.lotReference || '',
         lotOrigin: (item as { lotOrigin?: string }).lotOrigin || '',
         lotCurrent: (item as { lotCurrent?: string }).lotCurrent || '',
         purchaseInvoiceNumber: (item as { purchaseInvoiceNumber?: string }).purchaseInvoiceNumber || '',
+        supplierOrderNumber: (item as { supplierOrderNumber?: string }).supplierOrderNumber || '',
         purchasePaymentMethod: (item as { purchasePaymentMethod?: string }).purchasePaymentMethod || '',
         warehouse: item.warehouse || '', rack: item.rack || '', shelf: item.shelf || '', bin: item.bin || '',
         weight: (item as { weight?: number }).weight ? String(item.weight) : '',
@@ -986,12 +990,12 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
       try { setPhotos(JSON.parse(item.photos) || []) } catch { setPhotos([]) }
     } else if (open) {
       setForm({
-        sku: '', title: '', brand: '', url: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond,
+        sku: '', title: '', brand: '', url: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond, grade: '',
         purchaseCost: '', purchaseDate: new Date().toISOString().split('T')[0],
         supplierId: '', lotReference: '', lotOrigin: '', lotCurrent: '',
         warehouse: '', rack: '', shelf: '', bin: '', weight: '', quantity: '1',
         description: '', suggestedPrice: '', salePrice: '', saleActive: false,
-        platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
+        platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', supplierOrderNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
         barcode: prefillBarcode || '',
       })
       setPhotos([])
@@ -1405,6 +1409,34 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 </Select>
               </div>
               <div className="space-y-1.5">
+                <Label className="text-xs">Badge / Grade</Label>
+                <Select value={form.grade || '__none__'} onValueChange={v => setForm({ ...form, grade: v === '__none__' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder="Aucun badge" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Aucun badge</SelectItem>
+                    <SelectItem value="A">
+                      <span className="flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                        Grade A
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="B">
+                      <span className="flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 rounded-full bg-yellow-400" />
+                        Grade B
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="C">
+                      <span className="flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />
+                        Grade C
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">Affiché sur la fiche produit boutique (cliquable vers la page explicative).</p>
+              </div>
+              <div className="space-y-1.5">
                 <Label className="text-xs">Catégorie</Label>
                 <Select value={form.category} onValueChange={v => setForm({ ...form, category: v, subcategory: '' })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1594,6 +1626,11 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
               <div className="space-y-1.5">
                 <Label className="text-xs">N° facture fournisseur</Label>
                 <Input value={form.purchaseInvoiceNumber || ''} onChange={e => setForm({ ...form, purchaseInvoiceNumber: e.target.value })} placeholder="FAC-2026-001" className="font-mono text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">N° commande fournisseur (CMD)</Label>
+                <Input value={form.supplierOrderNumber || ''} onChange={e => setForm({ ...form, supplierOrderNumber: e.target.value })} placeholder="CMD-12345" className="font-mono text-sm" />
+                <p className="text-[10px] text-muted-foreground">Apparaît dans le Registre des achats (colonne « N° cmd four. »).</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Référence lot</Label>

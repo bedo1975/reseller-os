@@ -164,7 +164,7 @@ export async function GET(req: NextRequest) {
           stockItemId: item.id,  // needed for invoice upload/delete in the UI
           date: item.purchaseDate,
           invoiceNumber: item.purchaseInvoiceNumber || firstSale?.invoiceNumber || '—',
-          orderNumber: '—',
+          orderNumber: item.supplierOrderNumber || '—',
           invoicePath: item.invoicePath || null,
           invoiceName: item.invoiceName || null,
           designation: qty > 1 ? `${designationBase} (×${qty})` : designationBase,

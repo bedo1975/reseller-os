@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2, MailOpen, BellRing,
+  TicketPercent, Share2, MailOpen, BellRing, Award,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -851,6 +851,8 @@ interface BoutiqueSettingsData {
   trustPageShippingContent: string | null
   trustPageReturnsTitle: string
   trustPageReturnsContent: string | null
+  gradePageTitle: string
+  gradePageContent: string | null
   gaTagId: string | null
   seoTitle: string | null
   seoDescription: string | null
@@ -1546,6 +1548,34 @@ function AppearanceTab() {
               placeholder="<h2>Retours sous 14 jours</h2><p>Vous disposez de 14 jours pour retourner votre commande...</p>"
               className="text-sm font-mono"
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Page Grades (A / B / C — badge cliquable sur la fiche produit) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Award className="h-4 w-4" /> Page « Grades de qualité »</CardTitle>
+          <CardDescription className="text-xs">
+            URL : /boutique/grade · Affichée quand un visiteur clique sur un badge Grade A/B/C depuis une fiche produit.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Titre de la page</Label>
+            <Input value={form.gradePageTitle || ''} onChange={e => set('gradePageTitle', e.target.value)} placeholder="Nos grades de qualité" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Contenu (éditeur WYSIWYG — HTML généré automatiquement)</Label>
+            <HtmlEditor
+              value={form.gradePageContent || ''}
+              onChange={(html) => set('gradePageContent', html)}
+              placeholder="Expliquez ici la signification de chaque grade. Si vide, un contenu par défaut sera utilisé (Grade A vert = neuf, B jaune = très bon état, C orange = bon état)."
+              minHeight={300}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              La légende colorée (A vert / B jaune / C orange) est toujours affichée en haut de la page, automatiquement.
+            </p>
           </div>
         </CardContent>
       </Card>

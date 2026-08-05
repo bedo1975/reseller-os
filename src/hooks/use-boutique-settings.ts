@@ -61,6 +61,9 @@ export interface BoutiqueSettings {
   trustPageShippingContent: string | null
   trustPageReturnsTitle: string
   trustPageReturnsContent: string | null
+  // Page explicative "Grades"
+  gradePageTitle: string
+  gradePageContent: string | null
   gaTagId: string | null
   seoTitle: string | null
   seoDescription: string | null
@@ -143,6 +146,8 @@ const DEFAULTS: BoutiqueSettings = {
   trustPageShippingContent: null,
   trustPageReturnsTitle: 'Retours 14 jours',
   trustPageReturnsContent: null,
+  gradePageTitle: 'Nos grades de qualité',
+  gradePageContent: null,
   gaTagId: null,
   stripePublicKey: null,
   stripeSecretKey: null,

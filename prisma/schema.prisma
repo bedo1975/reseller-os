@@ -201,6 +201,7 @@ model StockItem {
   size          String?
   color         String?
   condition     String   // neuf | tres-bon | bon | correct
+  grade         String?  // Grade A | Grade B | Grade C (badge affiché sur la fiche produit boutique, cliquable vers /boutique/grade)
 
   // Achat
   purchaseDate  DateTime
@@ -208,6 +209,7 @@ model StockItem {
   supplier      Supplier? @relation(fields: [supplierId], references: [id])
   purchaseCost  Float
   purchaseInvoiceNumber String?  // n° de facture du fournisseur
+  supplierOrderNumber   String?  // n° de commande fournisseur (CMD-12345)
   purchasePaymentMethod String?  // espèces | carte_bancaire | virement | cheque | paypal
   lotReference  String?
   lotOrigin     String?  // lot d'origine (attribut configurable)
@@ -636,6 +638,9 @@ model BoutiqueSettings {
   trustPageShippingContent String? // HTML
   trustPageReturnsTitle    String  @default("Retours 14 jours")
   trustPageReturnsContent  String? // HTML
+  // Page explicative "Grades" (badge A/B/C cliquable sur la fiche produit boutique)
+  gradePageTitle           String  @default("Nos grades de qualité")
+  gradePageContent         String? // HTML — si null, contenu par défaut
   // Google Analytics — ID de mesure (ex: G-XXXXXXXXXX)
   gaTagId                  String?
   // SEO — titre et description personnalisables pour l'onglet navigateur

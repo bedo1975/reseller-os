@@ -48,9 +48,9 @@ export async function POST(req: NextRequest) {
     const user = await requireAuth()
     const body = await req.json()
     const {
-      sku, title, brand, url, category, subcategory, size, color, condition,
+      sku, title, brand, url, category, subcategory, size, color, condition, grade,
       purchaseCost, purchaseDate, supplierId, lotReference, lotOrigin, lotCurrent,
-      purchaseInvoiceNumber, purchasePaymentMethod,
+      purchaseInvoiceNumber, supplierOrderNumber, purchasePaymentMethod,
       warehouse, rack, shelf, bin, weight, quantity,
       description, suggestedPrice, salePrice, saleActive, photos, barcode, measurements,
       status, platform, salePlatform, platforms,
@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
         size: size || null,
         color: color || null,
         condition: condition || 'bon',
+        grade: grade || null,
         purchaseCost: parseFloat(purchaseCost) || 0,
         purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
         supplierId: supplierId || null,
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest) {
         lotOrigin: lotOrigin || null,
         lotCurrent: lotCurrent || null,
         purchaseInvoiceNumber: purchaseInvoiceNumber || null,
+        supplierOrderNumber: supplierOrderNumber || null,
         purchasePaymentMethod: purchasePaymentMethod || null,
         warehouse: warehouse || null,
         rack: rack || null,
