@@ -52,13 +52,22 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json(attr)
-  } catch (error) {
+  } catch (error: any) {
     console.error('POST /api/settings error:', error)
     if (error instanceof Error && error.message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Accès refusé (admin requis)' }, { status: 403 })
     }
     if (error instanceof Error && error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+    // Prisma P2002 = unique constraint violation on @@unique([type, code])
+    // → user is trying to add a duplicate code for the same attribute type (e.g. size "M" twice).
+    if (error?.code === 'P2002') {
+      const target = Array.isArray(error.meta?.target) ? error.meta.target.join(', ') : 'type, code'
+      return NextResponse.json(
+        { error: `Ce code existe déjà pour ce type d'attribut (contrainte: ${target}). Choisissez un code différent.`, code: 'DUPLICATE_CODE' },
+        { status: 409 },
+      )
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
@@ -101,13 +110,21 @@ export async function PATCH(req: NextRequest) {
     })
 
     return NextResponse.json(attr)
-  } catch (error) {
+  } catch (error: any) {
     console.error('PATCH /api/settings error:', error)
     if (error instanceof Error && error.message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Accès refusé (admin requis)' }, { status: 403 })
     }
     if (error instanceof Error && error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+    // Prisma P2002 = unique constraint violation (e.g. renamed code to one that already exists)
+    if (error?.code === 'P2002') {
+      const target = Array.isArray(error.meta?.target) ? error.meta.target.join(', ') : 'type, code'
+      return NextResponse.json(
+        { error: `Ce code existe déjà pour ce type d'attribut (contrainte: ${target}). Choisissez un code différent.`, code: 'DUPLICATE_CODE' },
+        { status: 409 },
+      )
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }

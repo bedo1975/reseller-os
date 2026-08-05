@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { usePermissions } from '@/hooks/use-permissions'
 import { useSettings, type AttributeType } from '@/hooks/use-settings'
@@ -776,6 +776,21 @@ function AttributeForm({ open, onOpenChange, attribute, tab, onSaved }: {
   const { attributes: allAttrs } = useSettings()
   const categories = allAttrs.filter(a => a.type === 'category')
 
+  // Pre-validate the code field: detect duplicates BEFORE submitting
+  // (the API enforces @@unique([type, code]) server-side, but a pre-check gives
+  // instant feedback and a clear message instead of a generic 500 error)
+  const codeConflict = useMemo(() => {
+    if (!form.code.trim()) return null
+    // For "create" mode: any existing attribute with the same type+code is a conflict.
+    // For "edit" mode: same, but excluding the attribute being edited.
+    const conflict = allAttrs.find(a =>
+      a.type === tab.type &&
+      a.code.toLowerCase() === form.code.trim().toLowerCase() &&
+      a.id !== attribute?.id
+    )
+    return conflict || null
+  }, [form.code, allAttrs, tab.type, attribute])
+
   // Sync form when attribute changes
   if (open && attribute && form.value === '' && form.code === '' && form.value !== attribute.value) {
     setForm({
@@ -800,6 +815,10 @@ function AttributeForm({ open, onOpenChange, attribute, tab, onSaved }: {
   const submit = async () => {
     if (!form.value || !form.code) {
       toast.error('Code et libellé requis')
+      return
+    }
+    if (codeConflict) {
+      toast.error(`Le code "${form.code.trim()}" existe déjà pour ${tab.label.toLowerCase()}. Choisissez-en un autre.`)
       return
     }
     setSaving(true)
@@ -857,11 +876,20 @@ function AttributeForm({ open, onOpenChange, attribute, tab, onSaved }: {
               value={form.code}
               onChange={e => setForm({ ...form, code: e.target.value })}
               placeholder={tab.codePlaceholder}
-              className="font-mono text-sm"
+              className={cn(
+                'font-mono text-sm',
+                codeConflict && 'border-red-500 focus-visible:ring-red-500',
+              )}
             />
-            <p className="text-[11px] text-muted-foreground">
-              Utilisé en base de données. Évitez les espaces et accents.
-            </p>
+            {codeConflict ? (
+              <p className="text-[11px] text-red-600 font-medium">
+                ⚠ Ce code est déjà utilisé par « {codeConflict.value} ». Choisissez-en un autre.
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                Utilisé en base de données. Évitez les espaces et accents.
+              </p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Libellé affiché *</Label>
@@ -961,7 +989,7 @@ function AttributeForm({ open, onOpenChange, attribute, tab, onSaved }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleClose(false)}>Annuler</Button>
-          <Button onClick={submit} disabled={saving}>
+          <Button onClick={submit} disabled={saving || !!codeConflict}>
             {saving ? 'Enregistrement...' : (attribute ? 'Modifier' : 'Ajouter')}
           </Button>
         </DialogFooter>

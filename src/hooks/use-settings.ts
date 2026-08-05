@@ -14,6 +14,9 @@ export interface Attribute {
   parentCode?: string | null  // pour sous-catégories: code de la catégorie parente
   sortOrder: number
   isDefault: boolean
+  // Plateformes de vente uniquement
+  fixedFees?: number
+  percentFees?: number
 }
 
 // Valeurs par défaut (fallback si l'API ne répond pas)
