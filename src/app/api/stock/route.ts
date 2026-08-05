@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     const user = await requireAuth()
     const body = await req.json()
     const {
-      sku, title, brand, category, subcategory, size, color, condition,
+      sku, title, brand, url, category, subcategory, size, color, condition,
       purchaseCost, purchaseDate, supplierId, lotReference, lotOrigin, lotCurrent,
       purchaseInvoiceNumber, purchasePaymentMethod,
       warehouse, rack, shelf, bin, weight, quantity,
@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
         sku,
         title: title || null,
         brand,
+        url: url || null,
         category: category || 'vetements',
         subcategory: subcategory || null,
         size: size || null,

@@ -3940,3 +3940,37 @@ Task: 2 fixes — (1) replace inline Select article picker in sales form with mo
 - `npx next build --webpack`: ✓ Compiled successfully (114/114 static pages).
 - `bash scripts/make-zip.sh`: zip = 1286 KB, MD5: `e7d897e924c87c63703eb063f51a7104`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: statistics-pagination + review-delete
+Agent: main
+Task: Add pagination to Top villes, Top pages, Visiteurs récents, Avis clients + delete review functionality.
+
+## 1. Pagination (client-side)
+Added a reusable `usePagination<T>(items, pageSize)` hook + `PaginationControls` component:
+- **Top villes**: 10 per page
+- **Top pages**: 10 per page
+- **Visiteurs récents**: 15 per page
+- **Avis récents**: 5 per page
+
+Each section shows "X au total · Page Y/Z" + prev/next buttons when items exceed the page size. The numbering on Top pages is continuous (accounts for the page offset).
+
+## 2. Delete review
+New API: `DELETE /api/admin/reviews/[id]`
+- Soft-deletes a review (`active: false`) — the review disappears from public product pages and from the stats
+- Auth: any authenticated user (permission checked via UI)
+
+UI changes in the reviews section:
+- Each review is now a `<div>` (was `<a>`) with 2 action buttons on the right:
+  - **ExternalLink** → opens the product page in a new tab
+  - **Trash2** (red) → deletes the review (confirm dialog → API call → refetch)
+- After deletion, the stats data is refetched to update the list
+
+## 3. Other changes
+- Imported `Button`, `Trash2`, `ChevronLeft`, `ChevronRight`, `toast` from their respective packages
+- The reviews section no longer uses `<a>` for each review (was preventing click handling for delete) — now uses `<div>` with explicit link buttons
+
+## Build & zip
+- `npx next build --webpack`: ✓ Compiled successfully (114/114 static pages — +1 for /api/admin/reviews/[id] route).
+- `bash scripts/make-zip.sh`: zip = 1298 KB, MD5: `f7684fd9857342fa3319fd868d761dff`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.

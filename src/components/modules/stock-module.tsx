@@ -36,6 +36,7 @@ import { photoUrl } from '@/lib/photo-url'
 import { useConfirm } from '@/components/shared/confirm-provider'
 import { BarcodeScannerModal, QuickQuantityModal } from '@/components/stock/barcode-scanner'
 import { usePermissions } from '@/hooks/use-permissions'
+import { HtmlEditor } from '@/components/ui/html-editor'
 
 const PAGE_SIZE = 10
 
@@ -52,6 +53,7 @@ interface StockItem {
   photos: string
   title: string | null
   brand: string
+  url: string | null
   category: string
   size: string | null
   color: string | null
@@ -941,7 +943,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
   const defaultCat = boutiqueCats[0]?.slug || 'vetements'
   const defaultCond = conditions.find(c => c.isDefault)?.code || conditions[0]?.code || 'bon'
   const [form, setForm] = useState({
-    sku: '', title: '', brand: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond,
+    sku: '', title: '', brand: '', url: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond,
     purchaseCost: '', purchaseDate: new Date().toISOString().split('T')[0],
     supplierId: '', lotReference: '', lotOrigin: '', lotCurrent: '',
     warehouse: '', rack: '', shelf: '', bin: '', weight: '', quantity: '1',
@@ -958,7 +960,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
   useMemo(() => {
     if (item) {
       setForm({
-        sku: item.sku, title: item.title || '', brand: item.brand, category: item.category,
+        sku: item.sku, title: item.title || '', brand: item.brand, url: item.url || '', category: item.category,
         subcategory: (item as { subcategory?: string }).subcategory || '',
         size: item.size || '', color: item.color || '', condition: item.condition,
         purchaseCost: String(item.purchaseCost),
@@ -983,7 +985,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
       try { setPhotos(JSON.parse(item.photos) || []) } catch { setPhotos([]) }
     } else if (open) {
       setForm({
-        sku: '', title: '', brand: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond,
+        sku: '', title: '', brand: '', url: '', category: defaultCat, subcategory: '', size: '', color: '', condition: defaultCond,
         purchaseCost: '', purchaseDate: new Date().toISOString().split('T')[0],
         supplierId: '', lotReference: '', lotOrigin: '', lotCurrent: '',
         warehouse: '', rack: '', shelf: '', bin: '', weight: '', quantity: '1',
@@ -1389,6 +1391,10 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 )}
               </div>
               <div className="space-y-1.5">
+                <Label className="text-xs">URL de l'article</Label>
+                <Input type="url" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} placeholder="https://www.exemple.fr/produit" />
+              </div>
+              <div className="space-y-1.5">
                 <Label className="text-xs">État</Label>
                 <Select value={form.condition} onValueChange={v => setForm({ ...form, condition: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1763,12 +1769,11 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                     )}
                   </Button>
                 </div>
-                <Textarea
+                <HtmlEditor
                   value={form.description}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
+                  onChange={(html) => setForm({ ...form, description: html })}
                   placeholder="Description de l'article — cliquez sur « Générer avec l'IA » pour une description automatique optimisée…"
-                  rows={4}
-                  className="resize-y"
+                  minHeight={150}
                 />
                 {generating && (
                   <p className="text-[11px] text-emerald-600 flex items-center gap-1">
@@ -1958,6 +1963,14 @@ function StockDetail({ open, onOpenChange, item }: {
             <Detail label="Lot" value={item.lotReference || '—'} />
             <Detail label="Code-barres" value={item.barcode || '—'} icon={<Barcode className="h-3 w-3" />} />
             <Detail label="Fournisseur" value={item.supplier?.name || '—'} />
+            {item.url && (
+              <div className="col-span-2">
+                <span className="text-muted-foreground text-xs">URL de l'article</span>
+                <a href={item.url} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-600 hover:underline truncate">
+                  {item.url}
+                </a>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm pt-3 border-t">
             <Detail label="Coût d'achat" value={formatEUR(item.purchaseCost)} />
@@ -1968,7 +1981,7 @@ function StockDetail({ open, onOpenChange, item }: {
           {item.description && (
             <div className="text-sm bg-muted/40 p-3 rounded-lg">
               <p className="text-xs text-muted-foreground uppercase mb-1">Description</p>
-              <p>{item.description}</p>
+              <div dangerouslySetInnerHTML={{ __html: item.description }} />
             </div>
           )}
           {item.sales && item.sales.length > 0 && (

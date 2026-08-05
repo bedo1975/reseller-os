@@ -195,6 +195,7 @@ model StockItem {
   photos        String   // JSON array of URLs (serialized)
   title         String?  // titre / nom du produit (ex: "T-shirt Nike Sportswear")
   brand         String
+  url           String?  // URL de l'article (ex: lien vers le produit sur un autre site)
   category      String   // vetements | chaussures | accessoires | luxe | etc.
   subcategory   String?  // sous-catégorie (ex: "tshirts", "jeans", "vestes")
   size          String?
