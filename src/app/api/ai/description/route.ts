@@ -26,6 +26,14 @@ const DEPRECATED_MODELS: Record<string, string> = {
   'gemini-1.5-flash': 'gemini-2.0-flash',
   'gemini-1.5-pro': 'gemini-2.5-pro',
   'gemini-2.0-flash-exp': 'gemini-2.0-flash',
+  // Llama 4 models were deprecated/renamed by Groq/NVIDIA/Cerebras
+  'meta-llama/llama-4-scout-17b-16e-instruct': 'llama-3.3-70b-versatile',
+  'meta-llama/llama-4-maverick-17b-128e-instruct': 'llama-3.3-70b-versatile',
+  'llama-3.2-90b-vision-preview': 'llama-3.3-70b-versatile',
+  'meta-llama/llama-4-scout-17b-16e-instruct:free': 'meta-llama/llama-3.3-70b-instruct:free',
+  'meta/llama-4-scout-17b-16e-instruct': 'meta/llama-3.3-70b-instruct',
+  'meta/llama-4-maverick-17b-128e-instruct': 'meta/llama-3.3-70b-instruct',
+  'llama-4-scout-17b-16e-instruct': 'llama-3.3-70b-versatile',
 }
 
 async function generateWithOpenAICompat(baseUrl: string, apiKey: string, model: string, systemPrompt: string, userPrompt: string): Promise<string> {
@@ -49,10 +57,17 @@ async function generateWithOpenAICompat(baseUrl: string, apiKey: string, model: 
   })
   if (!res.ok) {
     const errText = await res.text()
+    let errMsg = ''
+    try {
+      const errJson = JSON.parse(errText)
+      errMsg = errJson?.error?.message || errJson?.message || errJson?.error || ''
+    } catch {
+      errMsg = errText.slice(0, 300)
+    }
     if (res.status === 401) throw new Error('Clé API invalide. Vérifiez votre clé dans Paramètres → IA.')
     if (res.status === 429) throw new Error('Quota dépassé. Attendez quelques instants.')
-    if (res.status === 404) throw new Error(`Modèle "${model}" introuvable. Essayez un autre modèle.`)
-    throw new Error(`API error (${res.status}): ${errText.slice(0, 200)}`)
+    if (res.status === 404) throw new Error(`Modèle "${model}" introuvable sur ce fournisseur. ${errMsg ? `Détail: ${errMsg}` : ''} Allez dans Paramètres → IA pour changer de modèle.`)
+    throw new Error(`Erreur API (${res.status}): ${errMsg || errText.slice(0, 200)}`)
   }
   const data = await res.json()
   const text = data?.choices?.[0]?.message?.content

@@ -3974,3 +3974,42 @@ UI changes in the reviews section:
 - `npx next build --webpack`: ✓ Compiled successfully (114/114 static pages — +1 for /api/admin/reviews/[id] route).
 - `bash scripts/make-zip.sh`: zip = 1298 KB, MD5: `f7684fd9857342fa3319fd868d761dff`.
 - Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
+
+---
+Task ID: stock-url-field + wysiwyg-description
+Agent: main
+Task: Add URL field to stock items (visible in detail view) + replace description Textarea with WYSIWYG HtmlEditor.
+
+## 1. URL field
+### Schema
+- Added `url String?` to StockItem model (after `brand`)
+- `bunx prisma db push` — DB in sync
+
+### API
+- POST `/api/stock`: accepts + stores `url`
+- PATCH `/api/stock/[id]`: added `'url'` to the allowed fields
+
+### Stock form
+- Added `url: ''` to form state (initial + edit prefill)
+- New field "URL de l'article" (`<Input type="url">`) in the Identification section, after Marque
+
+### Stock detail view
+- Added URL display (col-span-2) with clickable link (opens in new tab) — only shown when `item.url` is set
+
+## 2. WYSIWYG description editor
+### Stock form
+- Imported `HtmlEditor` from `@/components/ui/html-editor`
+- Replaced `<Textarea>` with `<HtmlEditor>` for the description field
+- `minHeight={150}` for comfortable editing
+- The IA generation button still works (sets `form.description` which the HtmlEditor picks up)
+
+### Stock detail view
+- Changed description rendering from `<p>{item.description}</p>` to `<div dangerouslySetInnerHTML={{ __html: item.description }} />`
+- This renders HTML descriptions properly (bold, lists, headings, etc.)
+- Plain text descriptions (from IA or old data) still render fine (HTML editor handles plain text)
+
+## Build & zip
+- `bunx prisma db push`: ✓ schema in sync.
+- `npx next build --webpack`: ✓ Compiled successfully (114/114 static pages).
+- `bash scripts/make-zip.sh`: zip = 1305 KB, MD5: `b5d57a40bf7c425536f6f064063e5f78`.
+- Copied to `public/`, `download/`, `.next/standalone/public/`, `.next/standalone/download/` — all 4 share the same MD5.
