@@ -66,10 +66,10 @@ export async function PATCH(
     // and on the boutique homepage (the category cards)
     try {
       revalidatePath('/sitemap.xml')
-      revalidatePath('/boutique')
+      revalidatePath('/')
       // Also revalidate the category page itself in case the label/emoji changed
-      revalidatePath(`/boutique/categorie/${slug}`)
-      revalidatePath('/boutique/categorie/[cat]', 'page')
+      revalidatePath(`/categorie/${slug}`)
+      revalidatePath('/categorie/[cat]', 'page')
     } catch (e) {
       console.error('[sitemap] revalidatePath failed:', e)
     }
@@ -102,9 +102,9 @@ export async function DELETE(
     // Invalidate sitemap + boutique homepage — the deleted category should disappear
     try {
       revalidatePath('/sitemap.xml')
-      revalidatePath('/boutique')
-      revalidatePath(`/boutique/categorie/${slug}`)
-      revalidatePath('/boutique/categorie/[cat]', 'page')
+      revalidatePath('/')
+      revalidatePath(`/categorie/${slug}`)
+      revalidatePath('/categorie/[cat]', 'page')
     } catch (e) {
       console.error('[sitemap] revalidatePath failed:', e)
     }

@@ -201,7 +201,7 @@ model StockItem {
   size          String?
   color         String?
   condition     String   // neuf | tres-bon | bon | correct
-  grade         String?  // Grade A | Grade B | Grade C (badge affiché sur la fiche produit boutique, cliquable vers /boutique/grade)
+  grade         String?  // Grade A | Grade B | Grade C (badge affiché sur la fiche produit boutique, cliquable vers //grade)
 
   // Achat
   purchaseDate  DateTime
@@ -803,7 +803,7 @@ model VisitorTracking {
 model PageView {
   id          String   @id @default(cuid())
   visitorId   String                // lien avec VisitorTracking
-  path        String                // chemin de la page (ex: /boutique, /boutique/produit/NK-001)
+  path        String                // chemin de la page (ex: /, //produit/NK-001)
   pageType    String   @default("other")  // home | product | category | checkout | other
   productSku  String?               // si pageType=product, le SKU du produit
   category    String?               // si pageType=category, la catégorie
@@ -840,7 +840,7 @@ model BoutiqueCategory {
   parentId        String?  // null = catégorie top-level, sinon slug du parent
   parent          BoutiqueCategory? @relation("CategoryTree", fields: [parentId], references: [slug], onDelete: SetNull)
   children        BoutiqueCategory[] @relation("CategoryTree")
-  backgroundImage String?  // path /uploads/boutique-categories/...
+  backgroundImage String?  // path /uploads/-categories/...
   bgColor         String?  // hex sans #, ex: "007bff" (couleur de fond si pas d'image)
   bgOpacity       Float    @default(0.5)  // 0.0 à 1.0 — opacité de l'image de fond
   emoji           String   @default("📦")

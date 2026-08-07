@@ -50,7 +50,7 @@ export default function LoginPage() {
         toast.error('Identifiants incorrects')
       } else if (res?.ok) {
         toast.success('Connexion réussie')
-        router.push('/')
+        router.push('/admin')
         router.refresh()
       } else {
         toast.error('Erreur de connexion')

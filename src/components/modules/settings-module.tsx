@@ -2900,7 +2900,7 @@ function BoutiqueGeneralTab() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Bouton CTA - lien</Label>
-              <Input value={form.heroCtaLink} onChange={e => set('heroCtaLink', e.target.value)} placeholder="#produits ou /boutique/categorie/..." />
+              <Input value={form.heroCtaLink} onChange={e => set('heroCtaLink', e.target.value)} placeholder="#produits ou //categorie/..." />
             </div>
           </div>
         </div>

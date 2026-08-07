@@ -100,7 +100,7 @@ export async function PATCH(
     if (wasVisible !== isVisibleNow) {
       try {
         revalidatePath('/sitemap.xml')
-        revalidatePath('/boutique')
+        revalidatePath('/')
       } catch (e) {
         console.error('[sitemap] revalidatePath failed:', e)
       }
@@ -221,7 +221,7 @@ export async function DELETE(
     if (wasVisible) {
       try {
         revalidatePath('/sitemap.xml')
-        revalidatePath('/boutique')
+        revalidatePath('/')
       } catch (e) {
         console.error('[sitemap] revalidatePath failed:', e)
       }

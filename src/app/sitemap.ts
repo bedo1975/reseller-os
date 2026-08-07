@@ -25,14 +25,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // ─── Static boutique pages ──────────────────────────────────────────────
   const staticPages = [
-    { url: '/boutique', priority: 1.0, changeFreq: 'daily' as const },
-    { url: '/boutique/contact', priority: 0.6, changeFreq: 'monthly' as const },
-    { url: '/boutique/cgv', priority: 0.3, changeFreq: 'yearly' as const },
-    { url: '/boutique/connexion', priority: 0.4, changeFreq: 'monthly' as const },
-    { url: '/boutique/panier', priority: 0.4, changeFreq: 'monthly' as const },
-    { url: '/boutique/paiement-securise', priority: 0.5, changeFreq: 'monthly' as const },
-    { url: '/boutique/livraison-rapide', priority: 0.5, changeFreq: 'monthly' as const },
-    { url: '/boutique/retours-14-jours', priority: 0.5, changeFreq: 'monthly' as const },
+    { url: '/', priority: 1.0, changeFreq: 'daily' as const },
+    { url: '/contact', priority: 0.6, changeFreq: 'monthly' as const },
+    { url: '/cgv', priority: 0.3, changeFreq: 'yearly' as const },
+    { url: '/connexion', priority: 0.4, changeFreq: 'monthly' as const },
+    { url: '/panier', priority: 0.4, changeFreq: 'monthly' as const },
+    { url: '/paiement-securise', priority: 0.5, changeFreq: 'monthly' as const },
+    { url: '/livraison-rapide', priority: 0.5, changeFreq: 'monthly' as const },
+    { url: '/retours-14-jours', priority: 0.5, changeFreq: 'monthly' as const },
   ]
 
   for (const p of staticPages) {
@@ -49,7 +49,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const categories = await getBoutiqueCategories()
     for (const cat of categories) {
       entries.push({
-        url: `${baseUrl}/boutique/categorie/${cat.slug}`,
+        url: `${baseUrl}/categorie/${cat.slug}`,
         lastModified: (cat as any).updatedAt || now,
         changeFrequency: 'weekly',
         priority: 0.7,
@@ -74,7 +74,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     for (const p of products) {
       entries.push({
-        url: `${baseUrl}/boutique/produit/${p.sku}`,
+        url: `${baseUrl}/produit/${p.sku}`,
         lastModified: p.updatedAt || now,
         changeFrequency: 'weekly',
         priority: 0.8,

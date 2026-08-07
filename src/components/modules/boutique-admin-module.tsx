@@ -887,16 +887,16 @@ function AppearanceTab() {
         const withDefaults = { ...data }
         if (!withDefaults.navMenuJson || withDefaults.navMenuJson === '[]') {
           withDefaults.navMenuJson = JSON.stringify([
-            { label: 'Vêtements', url: '/boutique/categorie/vetements', visible: true, order: 1 },
-            { label: 'Chaussures', url: '/boutique/categorie/chaussures', visible: true, order: 2 },
-            { label: 'Accessoires', url: '/boutique/categorie/accessoires', visible: true, order: 3 },
+            { label: 'Vêtements', url: '/categorie/vetements', visible: true, order: 1 },
+            { label: 'Chaussures', url: '/categorie/chaussures', visible: true, order: 2 },
+            { label: 'Accessoires', url: '/categorie/accessoires', visible: true, order: 3 },
           ])
         }
         if (!withDefaults.footerInfosLinksJson || withDefaults.footerInfosLinksJson === '[]') {
           withDefaults.footerInfosLinksJson = JSON.stringify([
-            { label: 'CGV', url: '/boutique/cgv', visible: true },
-            { label: 'Mon panier', url: '/boutique/panier', visible: true },
-            { label: 'Contact', url: '/boutique/contact', visible: true },
+            { label: 'CGV', url: '/cgv', visible: true },
+            { label: 'Mon panier', url: '/panier', visible: true },
+            { label: 'Contact', url: '/contact', visible: true },
             { label: 'Espace gestion', url: '/', visible: true },
           ])
         }
@@ -994,7 +994,7 @@ function AppearanceTab() {
                 )}
               </div>
               <div className="flex-1 space-y-2">
-                <Input value={form.logoImage || ''} onChange={e => set('logoImage', e.target.value)} placeholder="/api/uploads/boutique-logo/..." className="text-xs font-mono" />
+                <Input value={form.logoImage || ''} onChange={e => set('logoImage', e.target.value)} placeholder="/api/uploads/-logo/..." className="text-xs font-mono" />
                 <div className="flex gap-2">
                   <label className="cursor-pointer">
                     <input
@@ -1190,7 +1190,7 @@ function AppearanceTab() {
           <div className="space-y-1.5">
             <Label className="text-xs">Image de fond</Label>
             <div className="flex gap-2">
-              <Input value={form.heroImage || ''} onChange={e => set('heroImage', e.target.value)} placeholder="/api/uploads/boutique-hero/..." className="flex-1" />
+              <Input value={form.heroImage || ''} onChange={e => set('heroImage', e.target.value)} placeholder="/api/uploads/-hero/..." className="flex-1" />
               <label className="cursor-pointer shrink-0">
                 <input
                   type="file"
@@ -1340,7 +1340,7 @@ function AppearanceTab() {
           <LinkEditor
             value={form.navMenuJson || '[]'}
             onChange={(json) => set('navMenuJson', json)}
-            placeholder="/boutique/categorie/vetements"
+            placeholder="/categorie/vetements"
             showOrder
           />
           <p className="text-[11px] text-muted-foreground mt-2">Si vide, les catégories sont utilisées par défaut. Cliquez sur l'œil pour masquer/afficher un lien.</p>
@@ -1368,7 +1368,7 @@ function AppearanceTab() {
               )}
             </div>
             <div className="flex-1 space-y-2">
-              <Input value={form.logoImage || ''} onChange={e => set('logoImage', e.target.value)} placeholder="/api/uploads/boutique-logo/..." className="text-xs font-mono" />
+              <Input value={form.logoImage || ''} onChange={e => set('logoImage', e.target.value)} placeholder="/api/uploads/-logo/..." className="text-xs font-mono" />
               <div className="flex gap-2">
                 <label className="cursor-pointer">
                   <input
@@ -1438,7 +1438,7 @@ function AppearanceTab() {
             <LinkEditor
               value={form.footerBoutiqueLinksJson || '[]'}
               onChange={(json) => set('footerBoutiqueLinksJson', json)}
-              placeholder="/boutique"
+              placeholder="/"
               showOrder
             />
           </div>
@@ -1452,7 +1452,7 @@ function AppearanceTab() {
             <LinkEditor
               value={form.footerInfosLinksJson || '[]'}
               onChange={(json) => set('footerInfosLinksJson', json)}
-              placeholder="/boutique/cgv"
+              placeholder="/cgv"
               showOrder
             />
             <p className="text-[11px] text-muted-foreground">Si vide, liens par défaut (CGV, Mon panier, Contact, Espace gestion).</p>
@@ -1486,7 +1486,7 @@ function AppearanceTab() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4" /> Page « Paiement sécurisé »</CardTitle>
-          <CardDescription className="text-xs">Page dédiée accessible depuis les badges de confiance. URL : /boutique/paiement-securise</CardDescription>
+          <CardDescription className="text-xs">Page dédiée accessible depuis les badges de confiance. URL : //paiement-securise</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
@@ -1509,7 +1509,7 @@ function AppearanceTab() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2"><Truck className="h-4 w-4" /> Page « Livraison rapide »</CardTitle>
-          <CardDescription className="text-xs">URL : /boutique/livraison-rapide</CardDescription>
+          <CardDescription className="text-xs">URL : //livraison-rapide</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
@@ -1532,7 +1532,7 @@ function AppearanceTab() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2"><RefreshCw className="h-4 w-4" /> Page « Retours 14 jours »</CardTitle>
-          <CardDescription className="text-xs">URL : /boutique/retours-14-jours</CardDescription>
+          <CardDescription className="text-xs">URL : //retours-14-jours</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
@@ -1557,7 +1557,7 @@ function AppearanceTab() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2"><Award className="h-4 w-4" /> Page « Grades de qualité »</CardTitle>
           <CardDescription className="text-xs">
-            URL : /boutique/grade · Affichée quand un visiteur clique sur un badge Grade A/B/C depuis une fiche produit.
+            URL : //grade · Affichée quand un visiteur clique sur un badge Grade A/B/C depuis une fiche produit.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -1747,7 +1747,7 @@ function AppearanceTab() {
                 <Input
                   value={form.gdprPrivacyPolicyUrl || ''}
                   onChange={e => set('gdprPrivacyPolicyUrl', e.target.value)}
-                  placeholder="/boutique/mentions-legales"
+                  placeholder="/mentions-legales"
                 />
                 <p className="text-[11px] text-muted-foreground">Lien affiché dans la bannière. Par défaut : page Mentions légales.</p>
               </div>

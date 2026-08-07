@@ -42,7 +42,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const outOfStock = product.quantity != null && product.quantity <= 0
   return (
     <Link
-      href={`/boutique/produit/${product.sku}`}
+      href={`/produit/${product.sku}`}
       className={`group bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg hover:border-[#007bff] transition-all relative ${outOfStock ? 'opacity-75' : ''}`}
     >
       <div className="aspect-square bg-gray-50 relative overflow-hidden">

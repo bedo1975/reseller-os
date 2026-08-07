@@ -111,10 +111,10 @@ export async function POST(req: NextRequest) {
       if (/iPad|Tablet/i.test(userAgent)) device = 'tablet'
       else if (/Mobile|Android|iPhone/i.test(userAgent)) device = 'mobile'
 
-      if (/Edg\//i.test(userAgent)) browser = 'edge'
-      else if (/Chrome\//i.test(userAgent)) browser = 'chrome'
-      else if (/Firefox\//i.test(userAgent)) browser = 'firefox'
-      else if (/Safari\//i.test(userAgent)) browser = 'safari'
+      if (/Edg/i.test(userAgent)) browser = 'edge'
+      else if (/Chrome/i.test(userAgent)) browser = 'chrome'
+      else if (/Firefox/i.test(userAgent)) browser = 'firefox'
+      else if (/Safari/i.test(userAgent)) browser = 'safari'
 
       if (/Windows/i.test(userAgent)) os = 'windows'
       else if (/Mac OS/i.test(userAgent)) os = 'macos'

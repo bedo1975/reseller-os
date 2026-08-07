@@ -35,7 +35,7 @@ export async function GET() {
     const settings = await getBoutiqueSettings()
     const siteName = settings.logoText || 'Boutique'
     const origin = settings.shareSiteUrl || ''
-    const unsubscribeUrl = origin ? `${origin}/boutique/newsletter/unsubscribe` : ''
+    const unsubscribeUrl = origin ? `${origin}/newsletter/unsubscribe` : ''
 
     let totalSent = 0
 

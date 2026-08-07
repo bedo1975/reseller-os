@@ -4,6 +4,12 @@ import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 
 export const authOptions: NextAuthOptions = {
+  // Explicit secret from env — required for JWT signing.
+  // If NEXTAUTH_SECRET is missing, NextAuth throws a Configuration error.
+  secret: process.env.NEXTAUTH_SECRET,
+  // trustHost: bypass the host detection logic (required for NextAuth v4 on Vercel,
+  // reverse proxies, and some localhost setups).
+  trustHost: true,
   providers: [
     CredentialsProvider({
       name: 'credentials',

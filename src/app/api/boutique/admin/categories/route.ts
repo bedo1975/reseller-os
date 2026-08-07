@@ -71,9 +71,9 @@ export async function POST(req: NextRequest) {
     // Invalidate sitemap + boutique homepage — new/updated category should appear
     try {
       revalidatePath('/sitemap.xml')
-      revalidatePath('/boutique')
-      revalidatePath(`/boutique/categorie/${slug.trim()}`)
-      revalidatePath('/boutique/categorie/[cat]', 'page')
+      revalidatePath('/')
+      revalidatePath(`/categorie/${slug.trim()}`)
+      revalidatePath('/categorie/[cat]', 'page')
     } catch (e) {
       console.error('[sitemap] revalidatePath failed:', e)
     }

@@ -6,7 +6,7 @@ import { db } from '@/lib/db'
  * Public — validates an email using a token sent via email.
  *
  * This is the PRIMARY entry point — the email link points directly here.
- * After validation, redirects to /boutique/connexion with a status param:
+ * After validation, redirects to //connexion with a status param:
  *   - ?validated=1         → success
  *   - ?validation_error=1  → invalid/expired token
  *
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   if (!token) {
     console.log('[validate-account] No token provided')
-    return NextResponse.redirect(new URL('/boutique/connexion?validation_error=1', req.url))
+    return NextResponse.redirect(new URL('/connexion?validation_error=1', req.url))
   }
 
   try {
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 
     if (!client) {
       console.log('[validate-account] No client matches this token (already validated or invalid)')
-      return NextResponse.redirect(new URL('/boutique/connexion?validation_error=1', req.url))
+      return NextResponse.redirect(new URL('/connexion?validation_error=1', req.url))
     }
 
     // Update the client — set validated, clear the token
@@ -48,10 +48,10 @@ export async function GET(req: NextRequest) {
     })
 
     console.log('[validate-account] ✓ Account validated for:', client.email)
-    return NextResponse.redirect(new URL('/boutique/connexion?validated=1', req.url))
+    return NextResponse.redirect(new URL('/connexion?validated=1', req.url))
   } catch (error) {
     console.error('[validate-account] Error:', error)
-    return NextResponse.redirect(new URL('/boutique/connexion?validation_error=1', req.url))
+    return NextResponse.redirect(new URL('/connexion?validation_error=1', req.url))
   }
 }
 
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
  *
  * Body: { token: string }
  *
- * Kept for backward-compat with the /boutique/valider-compte page.
+ * Kept for backward-compat with the //valider-compte page.
  * The GET handler above is now the primary entry point.
  */
 export async function POST(req: NextRequest) {

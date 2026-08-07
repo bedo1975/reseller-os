@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     // Build reset URL
     const settings = await getBoutiqueSettings()
     const siteUrl = settings.shareSiteUrl || ''
-    const resetUrl = siteUrl ? `${siteUrl}/boutique/reinitialiser-mot-de-passe?token=${token}` : ''
+    const resetUrl = siteUrl ? `${siteUrl}/reinitialiser-mot-de-passe?token=${token}` : ''
 
     // Send email using the shared helper (respects admin custom template)
     await notifyPasswordResetRequest(cleanEmail, client.firstName, resetUrl)

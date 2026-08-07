@@ -15,7 +15,7 @@ export function TrackingScript() {
 
   useEffect(() => {
     // Only track boutique pages
-    if (!pathname.startsWith('/boutique')) return
+    if (!pathname.startsWith('/')) return
 
     // ── Get or create visitor ID ──
     let visitorId = localStorage.getItem('boutique_visitor_id')
@@ -31,15 +31,15 @@ export function TrackingScript() {
     let productSku: string | undefined
     let category: string | undefined
 
-    if (pathname === '/boutique') {
+    if (pathname === '/') {
       pageType = 'home'
-    } else if (pathname.startsWith('/boutique/produit/')) {
+    } else if (pathname.startsWith('/produit/')) {
       pageType = 'product'
-      productSku = decodeURIComponent(pathname.split('/boutique/produit/')[1]?.split('?')[0] || '')
-    } else if (pathname.startsWith('/boutique/categorie/')) {
+      productSku = decodeURIComponent(pathname.split('/produit/')[1]?.split('?')[0] || '')
+    } else if (pathname.startsWith('/categorie/')) {
       pageType = 'category'
-      category = decodeURIComponent(pathname.split('/boutique/categorie/')[1]?.split('?')[0] || '')
-    } else if (pathname.startsWith('/boutique/checkout')) {
+      category = decodeURIComponent(pathname.split('/categorie/')[1]?.split('?')[0] || '')
+    } else if (pathname.startsWith('/checkout')) {
       pageType = 'checkout'
     }
 

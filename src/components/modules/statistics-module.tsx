@@ -358,7 +358,7 @@ export function StatisticsModule() {
               {data.topProducts.map((p, i) => (
                 <a
                   key={p.sku}
-                  href={`/boutique/produit/${encodeURIComponent(p.sku)}`}
+                  href={`/produit/${encodeURIComponent(p.sku)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-3 p-2 border rounded-md hover:bg-muted/40 transition-colors"
@@ -461,7 +461,7 @@ export function StatisticsModule() {
                 {data.reviews.byProduct.map(p => (
                   <a
                     key={p.sku}
-                    href={`/boutique/produit/${encodeURIComponent(p.sku)}`}
+                    href={`/produit/${encodeURIComponent(p.sku)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-between text-sm py-1 border-b last:border-0 hover:bg-muted/30 px-2 rounded"
@@ -506,7 +506,7 @@ export function StatisticsModule() {
                     </div>
                     <div className="flex flex-col gap-1 shrink-0">
                       <a
-                        href={`/boutique/produit/${encodeURIComponent(r.productSku)}`}
+                        href={`/produit/${encodeURIComponent(r.productSku)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-muted-foreground hover:text-[#007bff]"

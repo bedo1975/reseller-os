@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
     if (item.status === 'PUBLIE' && item.suggestedPrice && item.suggestedPrice > 0) {
       try {
         revalidatePath('/sitemap.xml')
-        revalidatePath('/boutique')
+        revalidatePath('/')
       } catch (e) {
         console.error('[sitemap] revalidatePath failed:', e)
       }

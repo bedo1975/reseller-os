@@ -46,7 +46,7 @@ export async function POST(
     const settings = await getBoutiqueSettings()
     const siteName = settings.logoText || 'Boutique'
     const origin = settings.shareSiteUrl || ''
-    const unsubscribeUrl = origin ? `${origin}/boutique/newsletter/unsubscribe` : ''
+    const unsubscribeUrl = origin ? `${origin}/newsletter/unsubscribe` : ''
 
     // Build the full HTML email (wrap campaign content in a template)
     const fullHtml = `<!DOCTYPE html>

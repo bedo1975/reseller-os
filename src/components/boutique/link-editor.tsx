@@ -165,7 +165,7 @@ export function LinkEditor({ value, onChange, placeholder, showOrder }: LinkEdit
           <Input
             value={item.url}
             onChange={e => updateItem(index, 'url', e.target.value)}
-            placeholder={placeholder || "/boutique/categorie/..."}
+            placeholder={placeholder || "/categorie/..."}
             className="h-8 text-sm flex-1 min-w-[120px] font-mono text-xs"
           />
           <button

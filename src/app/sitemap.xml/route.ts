@@ -39,15 +39,15 @@ export async function GET() {
 
   // ─── Static boutique pages ──────────────────────────────────────────────
   const staticPages: Array<{ url: string; priority: number; changeFreq: string }> = [
-    { url: '/boutique', priority: 1.0, changeFreq: 'daily' },
-    { url: '/boutique/contact', priority: 0.6, changeFreq: 'monthly' },
-    { url: '/boutique/cgv', priority: 0.3, changeFreq: 'yearly' },
-    { url: '/boutique/mentions-legales', priority: 0.3, changeFreq: 'yearly' },
-    { url: '/boutique/connexion', priority: 0.4, changeFreq: 'monthly' },
-    { url: '/boutique/panier', priority: 0.4, changeFreq: 'monthly' },
-    { url: '/boutique/paiement-securise', priority: 0.5, changeFreq: 'monthly' },
-    { url: '/boutique/livraison-rapide', priority: 0.5, changeFreq: 'monthly' },
-    { url: '/boutique/retours-14-jours', priority: 0.5, changeFreq: 'monthly' },
+    { url: '/', priority: 1.0, changeFreq: 'daily' },
+    { url: '/contact', priority: 0.6, changeFreq: 'monthly' },
+    { url: '/cgv', priority: 0.3, changeFreq: 'yearly' },
+    { url: '/mentions-legales', priority: 0.3, changeFreq: 'yearly' },
+    { url: '/connexion', priority: 0.4, changeFreq: 'monthly' },
+    { url: '/panier', priority: 0.4, changeFreq: 'monthly' },
+    { url: '/paiement-securise', priority: 0.5, changeFreq: 'monthly' },
+    { url: '/livraison-rapide', priority: 0.5, changeFreq: 'monthly' },
+    { url: '/retours-14-jours', priority: 0.5, changeFreq: 'monthly' },
   ]
 
   for (const p of staticPages) {
@@ -66,7 +66,7 @@ export async function GET() {
     for (const cat of topCats) {
       const updatedAt = cat.updatedAt || now
       urls.push(`  <url>
-    <loc>${escapeXml(baseUrl + '/boutique/categorie/' + cat.slug)}</loc>
+    <loc>${escapeXml(baseUrl + '/categorie/' + cat.slug)}</loc>
     <lastmod>${updatedAt instanceof Date ? updatedAt.toISOString() : now.toISOString()}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -92,7 +92,7 @@ export async function GET() {
     for (const p of products) {
       const updatedAt = p.updatedAt || now
       urls.push(`  <url>
-    <loc>${escapeXml(baseUrl + '/boutique/produit/' + p.sku)}</loc>
+    <loc>${escapeXml(baseUrl + '/produit/' + p.sku)}</loc>
     <lastmod>${updatedAt instanceof Date ? updatedAt.toISOString() : now.toISOString()}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>

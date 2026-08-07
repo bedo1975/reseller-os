@@ -62,7 +62,7 @@ export function GdprBanner() {
     ]
   }
 
-  const policyUrl = settings.gdprPrivacyPolicyUrl || '/boutique/mentions-legales'
+  const policyUrl = settings.gdprPrivacyPolicyUrl || '/mentions-legales'
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[9999] p-3 sm:p-4">

@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
   // Determine base URL (for internal fetch)
   const url = new URL(req.url)
-  const baseUrl = `${url.protocol}//${url.host}`
+  const baseUrl = `${url.protocol}/${url.host}`
 
   try {
     const scanRes = await fetch(`${baseUrl}/api/vinted/scan`, {

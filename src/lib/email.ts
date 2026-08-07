@@ -50,21 +50,26 @@ function asHtml(text: string): string {
 
 /**
  * Backward-compat: convert any relative URLs in the template to absolute URLs.
- * Email clients cannot resolve relative URLs like "/boutique/connexion" — the
- * link simply does nothing when clicked. This catches old saved templates that
- * still contain relative paths and fixes them at send-time.
+ * Email clients cannot resolve relative URLs like "/connexion" — the link simply
+ * does nothing when clicked. This catches old saved templates that still contain
+ * relative paths and fixes them at send-time.
  *
- * Handles both single-quote and double-quote href attributes, and only touches
- * paths starting with "/boutique/" (the only public-facing routes used in emails).
+ * Handles both single-quote and double-quote href attributes, and touches any
+ * path starting with "/" (the boutique routes are now at the root, so any
+ * root-relative URL needs to be made absolute).
  */
 function migrateRelativeUrls(html: string, siteUrl: string): string {
   if (!siteUrl) return html
   // Remove trailing slash from siteUrl to avoid double-slashes
   const base = siteUrl.replace(/\/+$/, '')
-  // Match href="/boutique/..." or href='/boutique/...' (also href=/boutique/... without quotes)
+  // Match href="/..." or href='/...' (any root-relative path — was previously /boutique/ only,
+  // but since boutique routes are now at the root, we migrate any root-relative URL).
+  // Skip absolute URLs (http://, https://, //, mailto:, tel:, #).
   return html
-    .replace(/(href\s*=\s*)(["']?)\/boutique\//gi, `$1$2${base}/boutique/`)
-    .replace(/(href\s*=\s*)(["']?)\/boutique$/gi, `$1$2${base}/boutique`)
+    .replace(/(href\s*=\s*)(["'])(\/(?!\/)[^"']*)["']/gi, (match, prefix, quote, path) => {
+      return `${prefix}${quote}${base}${path}${quote}`
+    })
+    .replace(/(href\s*=\s*)(["'])\/["']/gi, `$1$2${base}/$2`)
 }
 
 export interface SendEmailParams {
@@ -226,14 +231,14 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
 
     // Use custom template if defined, otherwise use default
     const template = config?.templateOrder || null
-    const defaultText = `Bonjour ${clientFirstName},\n\nMerci pour votre commande !\n\nNuméro de commande : ${orderId}\nMontant total : ${total.toFixed(2)} €\n\nVous pouvez suivre votre commande dans votre espace client.\n${siteUrl ? siteUrl + '/boutique/compte/commandes' : ''}\n\nÀ bientôt !`
+    const defaultText = `Bonjour ${clientFirstName},\n\nMerci pour votre commande !\n\nNuméro de commande : ${orderId}\nMontant total : ${total.toFixed(2)} €\n\nVous pouvez suivre votre commande dans votre espace client.\n${siteUrl ? siteUrl + '/compte/commandes' : ''}\n\nÀ bientôt !`
     const text = applyTemplate(template, defaultText, { firstName: clientFirstName, orderId, total: total.toFixed(2) + ' €' })
 
     // If template is HTML, use it directly with variables replaced; otherwise use our standard HTML template
     let html: string
     if (template && /<[a-z][\s\S]*>/i.test(template)) {
       // Template is HTML — replace variables {firstName}, {orderId}, {total}, {ordersUrl} etc.
-      const ordersUrl = siteUrl ? `${siteUrl}/boutique/compte/commandes` : ''
+      const ordersUrl = siteUrl ? `${siteUrl}/compte/commandes` : ''
       let processedTemplate = template
       const vars: Record<string, string> = {
         firstName: clientFirstName,
@@ -264,7 +269,7 @@ export async function notifyNewOrder(clientEmail: string, clientFirstName: strin
         bodyHtml,
         siteUrl,
         buttonText: siteUrl ? 'Suivre ma commande →' : undefined,
-        buttonUrl: siteUrl ? `${siteUrl}/boutique/compte/commandes` : undefined,
+        buttonUrl: siteUrl ? `${siteUrl}/compte/commandes` : undefined,
         logoText,
       })
       html = result.html
@@ -395,7 +400,7 @@ export async function notifyOrderStatusChange(
         </div>`
     }
 
-    const defaultText = `Bonjour ${clientFirstName},\n\nLe statut de votre commande ${orderId} a été mis à jour : ${statusLabel}\n\n${siteUrl ? 'Suivez votre commande : ' + siteUrl + '/boutique/compte/commandes' : ''}${trackingText}`
+    const defaultText = `Bonjour ${clientFirstName},\n\nLe statut de votre commande ${orderId} a été mis à jour : ${statusLabel}\n\n${siteUrl ? 'Suivez votre commande : ' + siteUrl + '/compte/commandes' : ''}${trackingText}`
     const text = applyTemplate(
       template,
       defaultText,
@@ -406,7 +411,7 @@ export async function notifyOrderStatusChange(
     let html: string
     if (template && /<[a-z][\s\S]*>/i.test(template)) {
       // Template is HTML — replace variables {firstName}, {orderId}, {status}, {ordersUrl}
-      const ordersUrl = siteUrl ? `${siteUrl}/boutique/compte/commandes` : ''
+      const ordersUrl = siteUrl ? `${siteUrl}/compte/commandes` : ''
       let processedTemplate = template
       const vars: Record<string, string> = {
         firstName: clientFirstName,
@@ -437,7 +442,7 @@ ${trackingHtml}`
         bodyHtml,
         siteUrl,
         buttonText: siteUrl ? 'Suivre ma commande →' : undefined,
-        buttonUrl: siteUrl ? `${siteUrl}/boutique/compte/commandes` : undefined,
+        buttonUrl: siteUrl ? `${siteUrl}/compte/commandes` : undefined,
         logoText: bs.logoText || 'Boutique',
       })
       html = result.html
@@ -462,9 +467,9 @@ export async function notifyClientRegistration(clientEmail: string, clientFirstN
     const bs = await getBoutiqueSettings()
     const siteUrl = bs.shareSiteUrl || ''
     const logoText = bs.logoText || 'Boutique'
-    const loginUrl = siteUrl ? `${siteUrl}/boutique/connexion` : ''
+    const loginUrl = siteUrl ? `${siteUrl}/connexion` : ''
 
-    const defaultText = `Bienvenue ${clientFirstName} !\n\nVotre compte a été créé avec succès.\n\nVous pouvez maintenant passer commande, suivre vos commandes et nous contacter via la messagerie.\n${siteUrl ? 'Accédez à votre compte : ' + siteUrl + '/boutique/compte' : ''}\n\nÀ bientôt !`
+    const defaultText = `Bienvenue ${clientFirstName} !\n\nVotre compte a été créé avec succès.\n\nVous pouvez maintenant passer commande, suivre vos commandes et nous contacter via la messagerie.\n${siteUrl ? 'Accédez à votre compte : ' + siteUrl + '/compte' : ''}\n\nÀ bientôt !`
     const text = applyTemplate(template, defaultText, { firstName: clientFirstName })
 
     let html: string
@@ -604,7 +609,7 @@ export async function notifyPasswordChanged(
     const bs = await getBoutiqueSettings()
     const siteUrl = bs.shareSiteUrl || ''
     const logoText = bs.logoText || 'Boutique'
-    const loginUrl = siteUrl ? `${siteUrl}/boutique/connexion` : ''
+    const loginUrl = siteUrl ? `${siteUrl}/connexion` : ''
 
     const template = config?.templatePasswordChanged || null
     const defaultText = `Bonjour ${clientFirstName},\n\nVotre mot de passe a été modifié avec succès.\n\nVous pouvez maintenant vous connecter avec votre nouveau mot de passe.\n${loginUrl}\n\nSi vous n'êtes pas à l'origine de ce changement, contactez-nous immédiatement.\n\nÀ bientôt !`
@@ -759,8 +764,8 @@ export async function notifyBackInStock(opts: {
 
     // Build absolute product URL (boutique product page)
     const productUrl = siteUrl
-      ? `${siteUrl.replace(/\/+$/, '')}/boutique/produit/${encodeURIComponent(opts.productSku)}`
-      : `/boutique/produit/${encodeURIComponent(opts.productSku)}`
+      ? `${siteUrl.replace(/\/+$/, '')}/produit/${encodeURIComponent(opts.productSku)}`
+      : `/produit/${encodeURIComponent(opts.productSku)}`
 
     // Build absolute photo URL (only if a snapshot was captured)
     let photoUrl: string | null = null

@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     // Build validation URL + send email
     // The link points to the GET /api/boutique/client/validate-account route
-    // which validates directly and redirects to /boutique/connexion?validated=1
+    // which validates directly and redirects to //connexion?validated=1
     const settings = await getBoutiqueSettings()
     const siteUrl = settings.shareSiteUrl || ''
     const validationUrl = siteUrl

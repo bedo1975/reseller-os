@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const productUrl = `${origin}/boutique/produit/${encodeURIComponent(sku)}`
+    const productUrl = `${origin}/produit/${encodeURIComponent(sku)}`
     const safeOrigin = origin || ''
 
     // Build absolute photo URL (photos stored as /uploads/... or already absolute URLs)

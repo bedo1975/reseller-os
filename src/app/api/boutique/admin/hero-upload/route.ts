@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
     fs.writeFileSync(filePath, buffer)
 
-    const publicPath = `/api/uploads/boutique-hero/${filename}`
+    const publicPath = `/api/uploads/-hero/${filename}`
     return NextResponse.json({ path: publicPath, filename })
   } catch (error) {
     console.error('POST /api/boutique/admin/hero-upload error:', error)
