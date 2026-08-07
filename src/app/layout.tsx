@@ -5,6 +5,7 @@ import { Toaster as SonnerToaster } from "sonner";
 import { SessionProviderWrapper } from "@/components/providers/session-provider";
 import { ConfirmProvider } from "@/components/shared/confirm-provider";
 import { ServiceWorkerRegister } from "@/components/shared/sw-register";
+import { LayoutShell } from "@/components/boutique/layout-shell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,7 +54,7 @@ export default function RootLayout({
       >
         <SessionProviderWrapper>
           <ConfirmProvider>
-            {children}
+            <LayoutShell>{children}</LayoutShell>
           </ConfirmProvider>
         </SessionProviderWrapper>
         <SonnerToaster position="top-right" richColors closeButton />
