@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Note: removed "output: 'standalone'" — it requires a special deployment
+  // setup (copying public/ and .next/static/ manually into .next/standalone/).
+  // For our PM2 + Caddy setup, the default build output works better with `next start`.
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,
