@@ -20,7 +20,7 @@ export async function PUT(req: NextRequest) {
     await requireAuth()
     const body = await req.json()
     const {
-      heroTitle, heroSubtitle, heroCtaLabel, heroCtaLink, heroImage,
+      heroEyebrow, heroTitle, heroSubtitle, heroCtaLabel, heroCtaLink, heroImage,
       topBarText, footerAbout, footerEmail, footerPhone,
       logoText, logoSubtitle, logoImage, primaryColor, primaryDarkColor,
       headerBgColor, topbarBgColor, footerBgColor,
@@ -53,6 +53,7 @@ export async function PUT(req: NextRequest) {
     } = body
 
     const data: any = {}
+    if (typeof heroEyebrow === 'string') data.heroEyebrow = heroEyebrow
     if (typeof heroTitle === 'string') data.heroTitle = heroTitle
     if (typeof heroSubtitle === 'string') data.heroSubtitle = heroSubtitle
     if (typeof heroCtaLabel === 'string') data.heroCtaLabel = heroCtaLabel

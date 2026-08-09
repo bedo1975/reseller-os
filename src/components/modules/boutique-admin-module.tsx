@@ -793,6 +793,7 @@ function MessagesTab() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface BoutiqueSettingsData {
+  heroEyebrow: string
   heroTitle: string
   heroSubtitle: string
   heroCtaLabel: string
@@ -1169,6 +1170,11 @@ function AppearanceTab() {
           <CardTitle className="text-base flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Hero (page d'accueil)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Petit label (au-dessus du titre)</Label>
+            <Input value={form.heroEyebrow} onChange={e => set('heroEyebrow', e.target.value)} placeholder="Seconde main premium (laisser vide pour masquer)" />
+            <p className="text-[10px] text-muted-foreground">Affiché en petit au-dessus du titre principal. Laisser vide pour ne pas l'afficher.</p>
+          </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Titre</Label>
             <Input value={form.heroTitle} onChange={e => set('heroTitle', e.target.value)} />

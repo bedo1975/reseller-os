@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 
 export interface BoutiqueSettings {
+  heroEyebrow: string
   heroTitle: string
   heroSubtitle: string
   heroCtaLabel: string
@@ -96,6 +97,7 @@ export interface BoutiqueSettings {
 }
 
 const DEFAULTS: BoutiqueSettings = {
+  heroEyebrow: 'Seconde main premium',
   heroTitle: 'La mode responsable, accessible à tous',
   heroSubtitle: 'Des vêtements et accessoires soigneusement sélectionnés, à prix justes. Donnez une seconde vie aux pièces que vous aimez.',
   heroCtaLabel: 'Découvrir la collection',

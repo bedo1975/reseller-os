@@ -548,6 +548,7 @@ model PhotoSession {
 model BoutiqueSettings {
   id              String   @id @default("default")
   // Hero
+  heroEyebrow     String   @default("Seconde main premium")  // petit label au-dessus du titre (ex: "Seconde main premium", "Mode responsable", etc.) — peut être vide pour masquer
   heroTitle       String   @default("La mode responsable, accessible à tous")
   heroSubtitle    String   @default("Des vêtements et accessoires soigneusement sélectionnés, à prix justes. Donnez une seconde vie aux pièces que vous aimez.")
   heroCtaLabel    String   @default("Découvrir la collection")

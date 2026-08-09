@@ -82,9 +82,11 @@ export default function BoutiqueHomePage() {
         )}
         <div className="max-w-7xl mx-auto px-4 py-20 relative">
           <div className="max-w-2xl">
-            <p className="text-blue-100 text-sm font-medium uppercase tracking-wider mb-3">
-              Seconde main premium
-            </p>
+            {settings.heroEyebrow && (
+              <p className="text-blue-100 text-sm font-medium uppercase tracking-wider mb-3">
+                {settings.heroEyebrow}
+              </p>
+            )}
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 leading-tight">
               {settings.heroTitle}
             </h1>
