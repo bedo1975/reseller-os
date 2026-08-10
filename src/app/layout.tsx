@@ -23,9 +23,13 @@ export const metadata: Metadata = {
   keywords: ["reseller", "Vinted", "Leboncoin", "eBay", "Vestiaire Collective", "revente", "stock"],
   authors: [{ name: "Reseller OS" }],
   manifest: "/manifest.json",
+  // Boutique icons — generated dynamically by /icon.svg (reads faviconLetter + faviconBgColor
+  // from BoutiqueSettings). The admin route overrides this in src/app/admin/layout.tsx
+  // with a static green "R" icon.
   icons: {
-    icon: "/icon-192.png",
-    apple: "/icon-192.png",
+    icon: "/icon.svg",
+    apple: "/icon-boutique-192.png",
+    shortcut: "/favicon-boutique.ico",
   },
   appleWebApp: {
     capable: true,

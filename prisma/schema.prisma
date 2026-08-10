@@ -563,6 +563,11 @@ model BoutiqueSettings {
   logoText        String   @default("DBoxPro")
   logoSubtitle    String   @default("Boutique")
   logoImage       String?  // optional uploaded logo (header + footer)
+  // Favicon dynamique (généré à la volée via /icon-boutique.png)
+  // Lettre affichée dans le favicon de la boutique. Si vide → utilise la 1ère lettre de logoText.
+  faviconLetter   String   @default("B")
+  // Couleur de fond du favicon (hex sans #, ex: "007bff"). Si vide → utilise primaryColor.
+  faviconBgColor  String?
   // Seuil livraison offerte
   freeShippingThreshold Float @default(50)
   freeShippingEnabled   Boolean @default(false) // Master switch: active/désactive la livraison offerte

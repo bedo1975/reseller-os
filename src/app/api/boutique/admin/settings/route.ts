@@ -22,7 +22,7 @@ export async function PUT(req: NextRequest) {
     const {
       heroEyebrow, heroTitle, heroSubtitle, heroCtaLabel, heroCtaLink, heroImage,
       topBarText, footerAbout, footerEmail, footerPhone,
-      logoText, logoSubtitle, logoImage, primaryColor, primaryDarkColor,
+      logoText, logoSubtitle, logoImage, faviconLetter, faviconBgColor, primaryColor, primaryDarkColor,
       headerBgColor, topbarBgColor, footerBgColor,
       freeShippingEnabled, freeShippingThreshold, boutiqueClosed, boutiqueClosedMessage, emailDesign,
       hoursJson, hoursVisible, cgvText, legalText,
@@ -66,6 +66,8 @@ export async function PUT(req: NextRequest) {
     if (typeof logoText === 'string') data.logoText = logoText
     if (typeof logoSubtitle === 'string') data.logoSubtitle = logoSubtitle
     if (logoImage !== undefined) data.logoImage = logoImage || null
+    if (typeof faviconLetter === 'string') data.faviconLetter = faviconLetter.slice(0, 1)
+    if (typeof faviconBgColor === 'string') data.faviconBgColor = faviconBgColor || null
     if (typeof primaryColor === 'string') data.primaryColor = primaryColor
     if (typeof primaryDarkColor === 'string') data.primaryDarkColor = primaryDarkColor
     if (typeof headerBgColor === 'string') data.headerBgColor = headerBgColor

@@ -806,6 +806,8 @@ interface BoutiqueSettingsData {
   logoText: string
   logoSubtitle: string
   logoImage: string | null
+  faviconLetter: string
+  faviconBgColor: string | null
   primaryColor: string
   primaryDarkColor: string
   headerBgColor: string
@@ -1042,6 +1044,59 @@ function AppearanceTab() {
               <Label className="text-xs">Sous-titre (sous le nom)</Label>
               <Input value={form.logoSubtitle || ''} onChange={e => set('logoSubtitle', e.target.value)} placeholder="Boutique" />
             </div>
+          </div>
+
+          {/* Favicon dynamique */}
+          <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-900 p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              {/* Aperçu live du favicon (32x32) */}
+              <div
+                className="w-8 h-8 rounded-md flex items-center justify-center text-white font-bold text-lg shrink-0"
+                style={{
+                  backgroundColor: '#' + (form.faviconBgColor || form.primaryColor || '007bff'),
+                }}
+              >
+                {(form.faviconLetter || form.logoText?.charAt(0) || 'B').toUpperCase()}
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Favicon (icône d'onglet navigateur)</p>
+                <p className="text-[11px] text-muted-foreground">Aperçu en direct — modifiez les champs ci-dessous.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Lettre affichée (1 caractère)</Label>
+                <Input
+                  value={form.faviconLetter || ''}
+                  onChange={e => set('faviconLetter', e.target.value.slice(0, 1))}
+                  placeholder="B (par défaut)"
+                  maxLength={1}
+                  className="font-mono uppercase"
+                />
+                <p className="text-[10px] text-muted-foreground">Si vide → première lettre du nom de la boutique.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Couleur de fond (hex sans #)</Label>
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="color"
+                    value={'#' + (form.faviconBgColor || form.primaryColor || '007bff')}
+                    onChange={e => set('faviconBgColor', e.target.value.slice(1))}
+                    className="w-12 h-9 p-1 cursor-pointer"
+                  />
+                  <Input
+                    value={form.faviconBgColor || ''}
+                    onChange={e => set('faviconBgColor', e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 8))}
+                    placeholder="007bff (si vide → couleur primaire)"
+                    className="font-mono text-xs flex-1"
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">Si vide → utilise la couleur primaire de la boutique.</p>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              💡 Le favicon peut mettre plusieurs heures à se mettre à jour dans le navigateur (cache). Pour forcer : ouvrez une navigation privée ou ajoutez <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">?v=2</code> à l'URL.
+            </p>
           </div>
         </CardContent>
       </Card>

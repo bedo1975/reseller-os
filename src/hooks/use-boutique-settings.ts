@@ -16,6 +16,8 @@ export interface BoutiqueSettings {
   logoText: string
   logoSubtitle: string
   logoImage: string | null
+  faviconLetter: string
+  faviconBgColor: string | null
   primaryColor: string
   primaryDarkColor: string
   headerBgColor: string
@@ -110,6 +112,8 @@ const DEFAULTS: BoutiqueSettings = {
   logoText: 'DBoxPro',
   logoSubtitle: 'Boutique',
   logoImage: null,
+  faviconLetter: 'B',
+  faviconBgColor: null,
   primaryColor: '007bff',
   primaryDarkColor: '0056b3',
   headerBgColor: 'ffffff',
