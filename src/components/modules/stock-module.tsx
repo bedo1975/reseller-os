@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Plus, Search, MapPin, Barcode, Edit, Trash2, Package, ChevronLeft, ChevronRight,
   Eye, AlertCircle, Camera, Upload, RefreshCw, Sparkles, ScanEye, QrCode, Link2, Download,
-  Tag, Euro, Layers, Loader2,
+  Tag, Euro, Layers, Loader2, Printer, Wand2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -1004,6 +1004,78 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
 
   const subcategories = getBoutiqueSubcategories(form.category)
 
+  // Génère un code-barres EAN-13 aléatoire unique (pour articles sans code-barres d'origine)
+  const [generatingBarcode, setGeneratingBarcode] = useState(false)
+  const generateBarcode = async () => {
+    setGeneratingBarcode(true)
+    try {
+      const res = await fetch('/api/stock/generate-barcode', { method: 'POST' })
+      if (!res.ok) throw new Error('Erreur génération')
+      const data = await res.json()
+      if (data.barcode) {
+        setForm({ ...form, barcode: data.barcode })
+        toast.success(`Code-barres généré : ${data.barcode}`)
+      }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setGeneratingBarcode(false)
+    }
+  }
+
+  // Ouvre une fenêtre d'impression avec le code-barres + infos produit
+  const printBarcode = () => {
+    if (!form.barcode) {
+      toast.error("Aucun code-barres à imprimer. Cliquez d'abord sur le bouton + pour en générer un.")
+      return
+    }
+    // Pour l'aperçu/impression, on a besoin de l'ID de l'article s'il existe déjà en base.
+    // En mode "création" (pas d'item), on génère juste le code-barres via l'API generate
+    // et on l'affiche directement. Pour l'édition, on a l'ID et on peut utiliser /api/stock/[id]/barcode.
+    if (item?.id) {
+      // Mode édition : utiliser l'API dédiée qui génère un vrai code-barres PNG
+      const printWin = window.open('', '_blank', 'width=400,height=500')
+      if (!printWin) {
+        toast.error('Autorisez les pop-ups pour imprimer')
+        return
+      }
+      const barcodeUrl = `/api/stock/${item.id}/barcode?t=${Date.now()}`
+      printWin.document.write(`
+        <!DOCTYPE html>
+        <html><head><title>Code-barres — ${form.sku || ''}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 20px; text-align: center; }
+          .label { max-width: 280px; margin: 0 auto; padding: 12px; border: 1px dashed #ccc; border-radius: 4px; }
+          .brand { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+          .title { font-size: 11px; color: #666; margin-bottom: 8px; line-height: 1.3; }
+          .sku { font-size: 10px; font-family: monospace; color: #999; margin-bottom: 8px; }
+          .barcode-img { max-width: 100%; height: auto; }
+          .footer { font-size: 9px; color: #999; margin-top: 8px; }
+          @media print { .no-print { display: none; } body { padding: 5mm; } }
+        </style></head>
+        <body>
+          <div class="label">
+            ${form.brand ? `<div class="brand">${escapeHtml(form.brand)}</div>` : ''}
+            ${form.title ? `<div class="title">${escapeHtml(form.title)}</div>` : ''}
+            ${form.sku ? `<div class="sku">SKU: ${escapeHtml(form.sku)}</div>` : ''}
+            <img src="${barcodeUrl}" alt="barcode" class="barcode-img" onload="window.focus(); window.print();" />
+            <div class="footer">${escapeHtml(form.barcode)}</div>
+          </div>
+          <div class="no-print" style="margin-top: 20px;">
+            <button onclick="window.print()" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Imprimer</button>
+          </div>
+        </body></html>
+      `)
+      printWin.document.close()
+    } else {
+      // Mode création : pas encore d'ID. On génère le code-barres en direct avec bwip
+      // via une approche simple — on affiche le code et l'utilisateur pourra imprimer
+      // après avoir sauvegardé l'article (ce qui donnera un ID).
+      toast.info("Sauvegardez d'abord l'article, puis vous pourrez imprimer le code-barres depuis la liste.")
+    }
+  }
+
   // Upload de photos
   const handleFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return
@@ -1370,13 +1442,43 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 <Label className="text-xs flex items-center gap-1">
                   <Barcode className="h-3 w-3" /> Code-barres
                 </Label>
-                <Input
-                  value={form.barcode}
-                  onChange={e => setForm({ ...form, barcode: e.target.value })}
-                  placeholder="3401234567890"
-                  className="font-mono text-sm"
-                  inputMode="numeric"
-                />
+                <div className="flex gap-1">
+                  <Input
+                    value={form.barcode}
+                    onChange={e => setForm({ ...form, barcode: e.target.value })}
+                    placeholder="3401234567890 (vide si aucun)"
+                    className="font-mono text-sm flex-1"
+                    inputMode="numeric"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 w-9 p-0 shrink-0"
+                    onClick={generateBarcode}
+                    disabled={generatingBarcode}
+                    title="Générer un code-barres aléatoire (EAN-13)"
+                  >
+                    {generatingBarcode
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Wand2 className="h-4 w-4" />
+                    }
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 w-9 p-0 shrink-0"
+                    onClick={printBarcode}
+                    disabled={!form.barcode}
+                    title="Imprimer le code-barres"
+                  >
+                    <Printer className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Pas de code-barres d'origine ? Cliquez sur <Wand2 className="inline h-3 w-3" /> pour en générer un, puis sur <Printer className="inline h-3 w-3" /> pour l'imprimer.
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Marque *</Label>
@@ -2506,4 +2608,15 @@ function LotForm({ stockItems, onOpenChange, onSaved }: {
       )}
     </Dialog>
   )
+}
+
+// Minimal HTML escaper for the printBarcode window content (protects against
+// user-controlled brand/title being injected as raw HTML in the print popup).
+function escapeHtml(s: string): string {
+  return (s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
