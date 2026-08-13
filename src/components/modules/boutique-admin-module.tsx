@@ -997,7 +997,7 @@ function AppearanceTab() {
                 )}
               </div>
               <div className="flex-1 space-y-2">
-                <Input value={form.logoImage || ''} onChange={e => set('logoImage', e.target.value)} placeholder="/api/uploads/-logo/..." className="text-xs font-mono" />
+                <Input value={form.logoImage || ''} onChange={e => set('logoImage', e.target.value)} placeholder="/api/uploads/boutique-logo/..." className="text-xs font-mono" />
                 <div className="flex gap-2">
                   <label className="cursor-pointer">
                     <input
@@ -1251,7 +1251,7 @@ function AppearanceTab() {
           <div className="space-y-1.5">
             <Label className="text-xs">Image de fond</Label>
             <div className="flex gap-2">
-              <Input value={form.heroImage || ''} onChange={e => set('heroImage', e.target.value)} placeholder="/api/uploads/-hero/..." className="flex-1" />
+              <Input value={form.heroImage || ''} onChange={e => set('heroImage', e.target.value)} placeholder="/api/uploads/boutique-hero/..." className="flex-1" />
               <label className="cursor-pointer shrink-0">
                 <input
                   type="file"
