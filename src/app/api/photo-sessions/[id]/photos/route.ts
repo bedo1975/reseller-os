@@ -4,8 +4,19 @@ import { db } from '@/lib/db'
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
+import sharp from 'sharp'
 
 const SESSIONS_DIR = path.join(process.cwd(), 'public', 'uploads', 'sessions')
+
+/**
+ * Photo compression config.
+ * - Resize to max 1200×1200 (preserves aspect ratio, no crop)
+ * - Convert to WebP (quality 82 — good balance between visual quality and file size)
+ * - Resulting files are typically 5-10× smaller than the original JPEGs from a phone camera.
+ */
+const MAX_WIDTH = 1200
+const MAX_HEIGHT = 1200
+const WEBP_QUALITY = 82
 
 export async function POST(
   req: NextRequest,
@@ -48,14 +59,30 @@ export async function POST(
         continue
       }
 
-      // Generate unique filename: timestamp-randomhash.ext
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      // Generate unique filename — always .webp now (we convert everything to WebP)
       const hash = crypto.randomBytes(8).toString('hex')
-      const filename = `${Date.now()}-${hash}.${ext}`
+      const filename = `${Date.now()}-${hash}.webp`
 
       const filePath = path.join(sessionDir, filename)
       const buffer = Buffer.from(await file.arrayBuffer())
-      fs.writeFileSync(filePath, buffer)
+
+      // Compress + convert to WebP using sharp.
+      // - resize with fit: 'inside' preserves aspect ratio without cropping
+      // - withoutEnlargement ensures we never upscale a small image
+      // - quality 82 is visually indistinguishable from the original for product photos
+      try {
+        await sharp(buffer)
+          .resize(MAX_WIDTH, MAX_HEIGHT, {
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .webp({ quality: WEBP_QUALITY })
+          .toFile(filePath)
+      } catch (sharpErr) {
+        console.error('Sharp compression failed, falling back to raw write:', sharpErr)
+        // Fallback: write the original file as-is (rare, only if sharp fails on an unusual format)
+        fs.writeFileSync(filePath, buffer)
+      }
 
       const photoObj = {
         id: crypto.randomBytes(8).toString('hex'),

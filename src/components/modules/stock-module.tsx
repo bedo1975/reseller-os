@@ -929,6 +929,11 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
   const { getSubcategories: getBoutiqueSubcategories, categories: boutiqueCats } = useBoutiqueCategories()
   const { getByType: getByTypeLocal } = useSettings()
   const brandAttributes = getByTypeLocal('brand')
+  // Track whether the user picked "+ Autre (saisie manuelle)" in the brand Select.
+  // When true, we render a plain Input instead of the Select. This is decoupled from
+  // the brand value itself so the Input doesn't disappear as soon as the user types
+  // something (which was the bug — brand === '' made the second Input disappear).
+  const [isCustomBrand, setIsCustomBrand] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [photos, setPhotos] = useState<string[]>([])
   const [dragActive, setDragActive] = useState(false)
@@ -1000,6 +1005,9 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
       })
       setPhotos([])
     }
+    // Reset the "custom brand" toggle whenever we open the form (for a new item,
+    // we always start with the Select, not the free-text Input).
+    setIsCustomBrand(false)
   }, [item, open, prefillBarcode])
 
   const subcategories = getBoutiqueSubcategories(form.category)
@@ -1482,19 +1490,53 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Marque *</Label>
-                {brandAttributes.length > 0 ? (
-                  <Select value={form.brand || '__custom__'} onValueChange={v => setForm({ ...form, brand: v === '__custom__' ? '' : v })}>
-                    <SelectTrigger><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
-                    <SelectContent>
-                      {brandAttributes.map(b => <SelectItem key={b.id} value={b.value}>{b.value}</SelectItem>)}
-                      <SelectItem value="__custom__">+ Autre (saisie manuelle)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {brandAttributes.length > 0 && !isCustomBrand ? (
+                  <>
+                    <Select
+                      value={form.brand && brandAttributes.some(b => b.value === form.brand) ? form.brand : '__custom__'}
+                      onValueChange={v => {
+                        if (v === '__custom__') {
+                          setIsCustomBrand(true)
+                          setForm({ ...form, brand: '' })
+                        } else {
+                          setForm({ ...form, brand: v })
+                        }
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
+                      <SelectContent>
+                        {brandAttributes.map(b => <SelectItem key={b.id} value={b.value}>{b.value}</SelectItem>)}
+                        <SelectItem value="__custom__">+ Autre (saisie manuelle)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {form.brand && !brandAttributes.some(b => b.value === form.brand) && (
+                      <p className="text-[10px] text-amber-600">Marque actuelle non listée — cliquez sur « + Autre » pour la modifier manuellement.</p>
+                    )}
+                  </>
                 ) : (
-                  <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="Ralph Lauren" />
-                )}
-                {form.brand === '' && brandAttributes.length > 0 && (
-                  <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="Saisir la marque…" className="mt-1" autoFocus />
+                  <div className="flex gap-1">
+                    <Input
+                      value={form.brand}
+                      onChange={e => setForm({ ...form, brand: e.target.value })}
+                      placeholder="Saisir la marque…"
+                      autoFocus
+                    />
+                    {brandAttributes.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 shrink-0"
+                        onClick={() => {
+                          setIsCustomBrand(false)
+                          setForm({ ...form, brand: '' })
+                        }}
+                        title="Revenir à la liste"
+                      >
+                        ← Liste
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
               <div className="space-y-1.5">

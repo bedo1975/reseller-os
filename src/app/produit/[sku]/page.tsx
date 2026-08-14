@@ -62,6 +62,13 @@ const GRADE_CONFIG: Record<string, { label: string; bg: string; text: string; bo
   C: { label: 'Grade C', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
 }
 
+// Detect if the description is HTML (contains tags) or plain text.
+// Plain text (e.g. "T-shirt en coton, lavable à 30°") is rendered with whitespace-pre-wrap.
+// HTML (e.g. "<p>T-shirt <strong>en coton</strong></p>") is rendered with dangerouslySetInnerHTML.
+function isDescriptionHtml(s: string): boolean {
+  return /<[a-z][\s\S]*>/i.test(s)
+}
+
 export default function ProductPage({ params }: { params: Promise<{ sku: string }> }) {
   const { sku } = use(params)
   const router = useRouter()
@@ -412,9 +419,16 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           {product.description && (
             <div className="mb-6">
               <h2 className="text-sm font-semibold text-gray-900 uppercase mb-2">Description</h2>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                {product.description}
-              </p>
+              {isDescriptionHtml(product.description) ? (
+                <div
+                  className="description-content text-sm text-gray-700 leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: product.description }}
+                />
+              ) : (
+                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {product.description}
+                </p>
+              )}
             </div>
           )}
 
