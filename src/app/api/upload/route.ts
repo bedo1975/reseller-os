@@ -3,9 +3,31 @@ import { requireAuth } from '@/lib/session'
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
+import sharp from 'sharp'
 
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'stock')
 
+/**
+ * Photo compression config (same as photo-sessions/[id]/photos/route.ts).
+ * - Resize to max 1200×1200 (preserves aspect ratio, no crop)
+ * - Convert to WebP (quality 82)
+ */
+const MAX_WIDTH = 1200
+const MAX_HEIGHT = 1200
+const WEBP_QUALITY = 82
+
+/**
+ * POST /api/upload
+ * Manual photo upload from the Stock form (handleFiles in stock-module.tsx).
+ * Accepts a multipart/form-data with one or more files (field name 'files' or 'file').
+ *
+ * Each image is:
+ *   - resized to max 1200×1200 (preserving aspect ratio)
+ *   - converted to WebP (quality 82)
+ *   - written to public/uploads/stock/stock-<timestamp>-<hash>.webp
+ *
+ * Returns: { urls: ['/uploads/stock/stock-xxx.webp', ...] }
+ */
 export async function POST(req: NextRequest) {
   try {
     await requireAuth()
@@ -15,12 +37,12 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData()
-    const files = formData.getAll('files')
+    let files = formData.getAll('files')
 
     if (files.length === 0) {
       const single = formData.get('file')
       if (single instanceof File) {
-        files.push(single)
+        files = [single]
       }
     }
 
@@ -36,12 +58,25 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Le fichier ${file.name} n'est pas une image` }, { status: 400 })
       }
 
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      // Always .webp now (we convert everything to WebP)
       const hash = crypto.randomBytes(8).toString('hex')
-      const filename = `stock-${Date.now()}-${hash}.${ext}`
+      const filename = `stock-${Date.now()}-${hash}.webp`
       const filePath = path.join(UPLOAD_DIR, filename)
       const buffer = Buffer.from(await file.arrayBuffer())
-      fs.writeFileSync(filePath, buffer)
+
+      // Compress + convert to WebP. Fallback to raw write if sharp fails.
+      try {
+        await sharp(buffer)
+          .resize(MAX_WIDTH, MAX_HEIGHT, {
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .webp({ quality: WEBP_QUALITY })
+          .toFile(filePath)
+      } catch (sharpErr) {
+        console.error('Sharp compression failed, falling back to raw write:', sharpErr)
+        fs.writeFileSync(filePath, buffer)
+      }
 
       urls.push(`/uploads/stock/${filename}`)
     }
@@ -56,6 +91,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/**
+ * DELETE /api/upload?path=/uploads/stock/xxx.webp
+ * Deletes a single uploaded file from disk.
+ */
 export async function DELETE(req: NextRequest) {
   try {
     await requireAuth()
@@ -83,10 +122,9 @@ export async function DELETE(req: NextRequest) {
 
     if (fs.existsSync(fullPath)) {
       fs.unlinkSync(fullPath)
-      return NextResponse.json({ ok: true })
     }
 
-    return NextResponse.json({ error: 'Fichier introuvable' }, { status: 404 })
+    return NextResponse.json({ ok: true })
   } catch (error) {
     console.error('DELETE /api/upload error:', error)
     if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {

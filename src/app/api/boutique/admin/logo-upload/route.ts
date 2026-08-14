@@ -3,8 +3,15 @@ import { requireAuth } from '@/lib/session'
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
+import sharp from 'sharp'
 
 const LOGO_DIR = path.join(process.cwd(), 'public', 'uploads', 'boutique-logo')
+
+// Logo compression: max 400×400 (logos are small), WebP quality 90 (higher than
+// photos because logos often have text that needs to stay crisp).
+const MAX_WIDTH = 400
+const MAX_HEIGHT = 400
+const WEBP_QUALITY = 90
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,12 +29,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Doit être une image' }, { status: 400 })
     }
 
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
     const hash = crypto.randomBytes(6).toString('hex')
-    const filename = `logo-${hash}.${ext}`
+    const filename = `logo-${hash}.webp`
     const filePath = path.join(LOGO_DIR, filename)
     const buffer = Buffer.from(await file.arrayBuffer())
-    fs.writeFileSync(filePath, buffer)
+
+    try {
+      await sharp(buffer)
+        .resize(MAX_WIDTH, MAX_HEIGHT, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: WEBP_QUALITY })
+        .toFile(filePath)
+    } catch (sharpErr) {
+      console.error('Sharp compression failed, falling back to raw write:', sharpErr)
+      fs.writeFileSync(filePath, buffer)
+    }
 
     const publicPath = `/api/uploads/boutique-logo/${filename}`
     return NextResponse.json({ path: publicPath, filename })

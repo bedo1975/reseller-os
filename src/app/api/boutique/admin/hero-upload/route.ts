@@ -3,8 +3,14 @@ import { requireAuth } from '@/lib/session'
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
+import sharp from 'sharp'
 
 const HERO_DIR = path.join(process.cwd(), 'public', 'uploads', 'boutique-hero')
+
+// Hero image compression: max 1920×1080 (full-width banner), WebP quality 82.
+const MAX_WIDTH = 1920
+const MAX_HEIGHT = 1080
+const WEBP_QUALITY = 82
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,12 +28,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Doit être une image' }, { status: 400 })
     }
 
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
     const hash = crypto.randomBytes(6).toString('hex')
-    const filename = `hero-${hash}.${ext}`
+    const filename = `hero-${hash}.webp`
     const filePath = path.join(HERO_DIR, filename)
     const buffer = Buffer.from(await file.arrayBuffer())
-    fs.writeFileSync(filePath, buffer)
+
+    try {
+      await sharp(buffer)
+        .resize(MAX_WIDTH, MAX_HEIGHT, {
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: WEBP_QUALITY })
+        .toFile(filePath)
+    } catch (sharpErr) {
+      console.error('Sharp compression failed, falling back to raw write:', sharpErr)
+      fs.writeFileSync(filePath, buffer)
+    }
 
     const publicPath = `/api/uploads/boutique-hero/${filename}`
     return NextResponse.json({ path: publicPath, filename })
