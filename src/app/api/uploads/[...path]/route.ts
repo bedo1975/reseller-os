@@ -60,12 +60,24 @@ export async function GET(
     // instead of downloading. For other types, let the browser decide.
     const isInline = ext === '.pdf' || ext.startsWith('.jp') || ext === '.png' || ext === '.webp' || ext === '.gif' || ext === '.svg' || ext === '.avif'
 
+    // Cache strategy:
+    // - Files in /uploads/stock/ and /uploads/sessions/ are product photos that may be
+    //   replaced (re-uploaded with the same logical meaning but different hash filename).
+    //   We use a short max-age + must-revalidate so the browser always re-checks with the
+    //   server (gets a 304 if unchanged, fresh download if the URL changed).
+    // - Other files (logos, hero images, etc.) are immutable because the filename changes
+    //   on every re-upload, so the URL itself acts as a cache key.
+    const isProductPhoto = filePath.includes('/uploads/stock/') || filePath.includes('/uploads/sessions/')
+    const cacheControl = isProductPhoto
+      ? 'public, max-age=3600, must-revalidate'  // 1h, must revalidate
+      : 'public, max-age=86400, immutable'        // 1 day, immutable (filename-based cache busting)
+
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         'Content-Type': contentType,
         'Content-Length': buffer.length.toString(),
-        'Cache-Control': 'public, max-age=86400, immutable', // 1 day cache
+        'Cache-Control': cacheControl,
         ...(isInline ? { 'Content-Disposition': 'inline' } : {}),
       },
     })
