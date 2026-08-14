@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   Camera, Plus, Trash2, Loader2, Image as ImageIcon, X, Check, Link2,
-  ChevronLeft, Upload, FileImage, Calendar, Tag,
+  ChevronLeft, Upload, FileImage, Calendar, Tag, Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +46,7 @@ export function PhotoSessionModule() {
   const [newNotes, setNewNotes] = useState('')
   const [creating, setCreating] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchSessions = useCallback(async () => {
@@ -163,6 +164,41 @@ export function PhotoSessionModule() {
     }
   }
 
+  const handleExportSession = async () => {
+    if (!selectedSession) return
+    if (selectedSession.photos.length === 0) {
+      toast.error('Aucune photo à exporter')
+      return
+    }
+    setExporting(true)
+    try {
+      // Fetch the ZIP as a blob (binary data) so we can trigger a browser download.
+      const res = await fetch(`/api/photo-sessions/${selectedSession.id}/export`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Erreur export')
+      }
+      // Convert response to blob and trigger download
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      // Extract filename from Content-Disposition header, fallback to a generated name
+      const disposition = res.headers.get('Content-Disposition') || ''
+      const match = disposition.match(/filename="([^"]+)"/)
+      a.download = match ? match[1] : `session-${selectedSession.id}.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast.success(`${selectedSession.photos.length} photo(s) exportée(s)`)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur réseau')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // Detail view (single session)
   if (selectedSession) {
     return (
@@ -193,6 +229,15 @@ export function PhotoSessionModule() {
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               Ajouter photos
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExportSession}
+              disabled={exporting || selectedSession.photos.length === 0}
+              title="Télécharger toutes les photos en ZIP"
+            >
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Exporter
             </Button>
             <Button
               variant="destructive"

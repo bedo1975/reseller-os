@@ -43,11 +43,19 @@ export async function applyWatermark(imageBuffer: Buffer): Promise<Buffer> {
     // This keeps the watermark readable on small images without being huge on large ones.
     const fontSize = Math.max(16, Math.min(64, Math.round(width * 0.04)))
 
-    // Padding from edges (configurable in admin, in pixels).
-    // The admin sets these as offsets from the right and bottom edges.
-    // We clamp to safe values (5-500px) to avoid the text being off-image.
-    const offsetX = Math.max(5, Math.min(500, settings.watermarkOffsetX ?? 20))
-    const offsetY = Math.max(5, Math.min(500, settings.watermarkOffsetY ?? 20))
+    // Padding from edges — INTERPRETED AS A PERCENTAGE of image dimensions.
+    // The admin stores a number (e.g. 20), which we interpret as "20 pixels on a 1200px image"
+    // = ~1.67%. So for an image of size W, the actual pixel offset is (value/1200) * W.
+    // This way, the watermark is positioned at the SAME RELATIVE SPOT on every image,
+    // regardless of whether it's 502×502, 1200×1200, or 1920×1080.
+    //
+    // Without this proportional scaling, an offset of 220px would be ~18% of a 1200px image
+    // but ~44% of a 502px image — making the watermark appear in very different places.
+    const REFERENCE_SIZE = 1200  // reference size for the offset interpretation
+    const offsetScaleX = width / REFERENCE_SIZE
+    const offsetScaleY = height / REFERENCE_SIZE
+    const offsetX = Math.round(Math.max(5, Math.min(500, settings.watermarkOffsetX ?? 20)) * offsetScaleX)
+    const offsetY = Math.round(Math.max(5, Math.min(500, settings.watermarkOffsetY ?? 20)) * offsetScaleY)
 
     // Escape XML special chars in the text (the logoText could contain & < > etc.)
     const escapedText = text
@@ -60,12 +68,12 @@ export async function applyWatermark(imageBuffer: Buffer): Promise<Buffer> {
     // Build the SVG overlay.
     // - The SVG canvas matches the image dimensions (so x/y coords are absolute pixels).
     // - text-anchor: end positions the text so its right edge is at (width - offsetX).
-    // - The y coordinate is the baseline; subtract fontSize to account for descenders
+    // - The y coordinate is the baseline; subtract a small amount to account for descenders
     //   and ensure the text bottom is at (height - offsetY).
     // - A subtle dark drop shadow behind the white text ensures readability on any background.
     // - opacity 0.7 = visible but not overwhelming.
     const textX = width - offsetX
-    const textY = height - offsetY - Math.round(fontSize * 0.2)  // small baseline adjustment
+    const textY = height - offsetY - Math.round(fontSize * 0.2)
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <defs>
