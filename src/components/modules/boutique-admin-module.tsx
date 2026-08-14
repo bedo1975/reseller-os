@@ -1171,56 +1171,56 @@ function AppearanceTab() {
               </div>
             )}
 
-            {/* Réglages de positionnement (offsets) */}
+            {/* Réglages de positionnement (offsets) — interprétés proportionnellement */}
             {form.watermarkEnabled && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Offset horizontal (depuis le bord droit)</Label>
+                  <Label className="text-xs">Offset horizontal (% du bord droit)</Label>
                   <div className="flex items-center gap-2">
                     <input
                       type="range"
-                      min="5"
-                      max="200"
+                      min="1"
+                      max="50"
                       step="1"
-                      value={form.watermarkOffsetX ?? 20}
-                      onChange={e => set('watermarkOffsetX', parseInt(e.target.value))}
+                      value={Math.round(((form.watermarkOffsetX ?? 20) / 1200) * 100)}
+                      onChange={e => set('watermarkOffsetX', Math.round((parseInt(e.target.value) / 100) * 1200))}
                       className="flex-1 cursor-pointer"
                     />
                     <Input
                       type="number"
-                      min="5"
-                      max="500"
-                      value={form.watermarkOffsetX ?? 20}
-                      onChange={e => set('watermarkOffsetX', Math.max(5, Math.min(500, parseInt(e.target.value) || 20)))}
-                      className="w-20 text-xs font-mono"
+                      min="1"
+                      max="50"
+                      value={Math.round(((form.watermarkOffsetX ?? 20) / 1200) * 100)}
+                      onChange={e => set('watermarkOffsetX', Math.max(5, Math.min(600, Math.round((Math.max(1, Math.min(50, parseInt(e.target.value) || 1)) / 100) * 1200))))}
+                      className="w-16 text-xs font-mono"
                     />
-                    <span className="text-xs text-muted-foreground">px</span>
+                    <span className="text-xs text-muted-foreground">%</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">Plus élevé = plus vers la gauche.</p>
+                  <p className="text-[10px] text-muted-foreground">Pourcentage depuis le bord droit. Plus élevé = plus vers la gauche.</p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Offset vertical (depuis le bord bas)</Label>
+                  <Label className="text-xs">Offset vertical (% du bord bas)</Label>
                   <div className="flex items-center gap-2">
                     <input
                       type="range"
-                      min="5"
-                      max="200"
+                      min="1"
+                      max="50"
                       step="1"
-                      value={form.watermarkOffsetY ?? 20}
-                      onChange={e => set('watermarkOffsetY', parseInt(e.target.value))}
+                      value={Math.round(((form.watermarkOffsetY ?? 20) / 1200) * 100)}
+                      onChange={e => set('watermarkOffsetY', Math.round((parseInt(e.target.value) / 100) * 1200))}
                       className="flex-1 cursor-pointer"
                     />
                     <Input
                       type="number"
-                      min="5"
-                      max="500"
-                      value={form.watermarkOffsetY ?? 20}
-                      onChange={e => set('watermarkOffsetY', Math.max(5, Math.min(500, parseInt(e.target.value) || 20)))}
-                      className="w-20 text-xs font-mono"
+                      min="1"
+                      max="50"
+                      value={Math.round(((form.watermarkOffsetY ?? 20) / 1200) * 100)}
+                      onChange={e => set('watermarkOffsetY', Math.max(5, Math.min(600, Math.round((Math.max(1, Math.min(50, parseInt(e.target.value) || 1)) / 100) * 1200))))}
+                      className="w-16 text-xs font-mono"
                     />
-                    <span className="text-xs text-muted-foreground">px</span>
+                    <span className="text-xs text-muted-foreground">%</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">Plus élevé = plus vers le haut.</p>
+                  <p className="text-[10px] text-muted-foreground">Pourcentage depuis le bord bas. Plus élevé = plus vers le haut.</p>
                 </div>
               </div>
             )}
