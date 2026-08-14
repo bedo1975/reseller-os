@@ -568,6 +568,10 @@ model BoutiqueSettings {
   faviconLetter   String   @default("B")
   // Couleur de fond du favicon (hex sans #, ex: "007bff"). Si vide → utilise primaryColor.
   faviconBgColor  String?
+  // Filigrane (watermark) sur les photos produits.
+  // Si true, le texte du logo (logoText) est ajouté en bas à droite des photos
+  // lors de l'upload (Stock form + shooting photo). Désactivé par défaut.
+  watermarkEnabled Boolean @default(false)
   // Seuil livraison offerte
   freeShippingThreshold Float @default(50)
   freeShippingEnabled   Boolean @default(false) // Master switch: active/désactive la livraison offerte

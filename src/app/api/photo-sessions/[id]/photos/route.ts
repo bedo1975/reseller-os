@@ -5,6 +5,7 @@ import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import sharp from 'sharp'
+import { applyWatermark } from '@/lib/watermark'
 
 const SESSIONS_DIR = path.join(process.cwd(), 'public', 'uploads', 'sessions')
 
@@ -71,13 +72,20 @@ export async function POST(
       // - withoutEnlargement ensures we never upscale a small image
       // - quality 82 is visually indistinguishable from the original for product photos
       try {
-        await sharp(buffer)
+        // Step 1: resize + convert to WebP (produces a Buffer).
+        const compressed = await sharp(buffer)
           .resize(MAX_WIDTH, MAX_HEIGHT, {
             fit: 'inside',
             withoutEnlargement: true,
           })
           .webp({ quality: WEBP_QUALITY })
-          .toFile(filePath)
+          .toBuffer()
+
+        // Step 2: apply watermark (if enabled in admin).
+        const watermarked = await applyWatermark(compressed)
+
+        // Step 3: write to disk.
+        fs.writeFileSync(filePath, watermarked)
       } catch (sharpErr) {
         console.error('Sharp compression failed, falling back to raw write:', sharpErr)
         // Fallback: write the original file as-is (rare, only if sharp fails on an unusual format)

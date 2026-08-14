@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2, MailOpen, BellRing, Award,
+  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -808,6 +808,7 @@ interface BoutiqueSettingsData {
   logoImage: string | null
   faviconLetter: string
   faviconBgColor: string | null
+  watermarkEnabled: boolean
   primaryColor: string
   primaryDarkColor: string
   headerBgColor: string
@@ -1096,6 +1097,46 @@ function AppearanceTab() {
             </div>
             <p className="text-[11px] text-muted-foreground">
               💡 Le favicon peut mettre plusieurs heures à se mettre à jour dans le navigateur (cache). Pour forcer : ouvrez une navigation privée ou ajoutez <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">?v=2</code> à l'URL.
+            </p>
+          </div>
+
+          {/* Filigrane (watermark) sur les photos produits */}
+          <div className="rounded-lg border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900 p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <Stamp className="h-4 w-4" />
+                  Filigrane (watermark) sur les photos
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Ajoute le texte du logo <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">{form.logoText || 'DBoxPro'}</code> en bas à droite de chaque photo produit lors de l'upload (formulaire Stock + shooting photo).
+                </p>
+              </div>
+              <Switch
+                checked={form.watermarkEnabled}
+                onCheckedChange={v => set('watermarkEnabled', v)}
+              />
+            </div>
+            {/* Aperçu */}
+            <div className="bg-white dark:bg-card rounded-md border p-3 flex items-center justify-center">
+              <div
+                className="relative w-full max-w-[200px] aspect-square bg-gradient-to-br from-gray-200 to-gray-400 rounded"
+                style={{
+                  backgroundImage: 'linear-gradient(45deg, #d1d5db 25%, transparent 25%), linear-gradient(-45deg, #d1d5db 25%, transparent 25%)',
+                  backgroundSize: '20px 20px',
+                  backgroundPosition: '0 0, 0 10px',
+                }}
+              >
+                <span
+                  className="absolute bottom-2 right-2 text-white font-bold text-xs"
+                  style={{ textShadow: '0 1px 3px rgba(0,0,0,0.7)', opacity: 0.75 }}
+                >
+                  {form.logoText || 'DBoxPro'}
+                </span>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              ⚠️ Le filigrane est appliqué uniquement sur les <strong>nouvelles</strong> photos uploadées après activation. Les photos existantes ne sont pas modifiées. Le texte affiché est celui du champ « Nom de la boutique » ci-dessus.
             </p>
           </div>
         </CardContent>

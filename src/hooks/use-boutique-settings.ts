@@ -18,6 +18,7 @@ export interface BoutiqueSettings {
   logoImage: string | null
   faviconLetter: string
   faviconBgColor: string | null
+  watermarkEnabled: boolean
   primaryColor: string
   primaryDarkColor: string
   headerBgColor: string
@@ -114,6 +115,7 @@ const DEFAULTS: BoutiqueSettings = {
   logoImage: null,
   faviconLetter: 'B',
   faviconBgColor: null,
+  watermarkEnabled: false,
   primaryColor: '007bff',
   primaryDarkColor: '0056b3',
   headerBgColor: 'ffffff',
