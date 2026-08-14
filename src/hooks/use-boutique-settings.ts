@@ -19,6 +19,8 @@ export interface BoutiqueSettings {
   faviconLetter: string
   faviconBgColor: string | null
   watermarkEnabled: boolean
+  watermarkOffsetX: number
+  watermarkOffsetY: number
   primaryColor: string
   primaryDarkColor: string
   headerBgColor: string
@@ -116,6 +118,8 @@ const DEFAULTS: BoutiqueSettings = {
   faviconLetter: 'B',
   faviconBgColor: null,
   watermarkEnabled: false,
+  watermarkOffsetX: 20,
+  watermarkOffsetY: 20,
   primaryColor: '007bff',
   primaryDarkColor: '0056b3',
   headerBgColor: 'ffffff',

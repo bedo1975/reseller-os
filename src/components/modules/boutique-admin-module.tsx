@@ -809,6 +809,8 @@ interface BoutiqueSettingsData {
   faviconLetter: string
   faviconBgColor: string | null
   watermarkEnabled: boolean
+  watermarkOffsetX: number
+  watermarkOffsetY: number
   primaryColor: string
   primaryDarkColor: string
   headerBgColor: string
@@ -1109,7 +1111,7 @@ function AppearanceTab() {
                   Filigrane (watermark) sur les photos
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Ajoute le texte du logo <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">{form.logoText || 'DBoxPro'}</code> en bas à droite de chaque photo produit lors de l'upload (formulaire Stock + shooting photo).
+                  Ajoute le texte du logo <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">{form.logoText || 'DBoxPro'}</code> sur chaque photo produit lors de l'upload (formulaire Stock + shooting photo).
                 </p>
               </div>
               <Switch
@@ -1117,26 +1119,113 @@ function AppearanceTab() {
                 onCheckedChange={v => set('watermarkEnabled', v)}
               />
             </div>
-            {/* Aperçu */}
-            <div className="bg-white dark:bg-card rounded-md border p-3 flex items-center justify-center">
-              <div
-                className="relative w-full max-w-[200px] aspect-square bg-gradient-to-br from-gray-200 to-gray-400 rounded"
-                style={{
-                  backgroundImage: 'linear-gradient(45deg, #d1d5db 25%, transparent 25%), linear-gradient(-45deg, #d1d5db 25%, transparent 25%)',
-                  backgroundSize: '20px 20px',
-                  backgroundPosition: '0 0, 0 10px',
-                }}
-              >
-                <span
-                  className="absolute bottom-2 right-2 text-white font-bold text-xs"
-                  style={{ textShadow: '0 1px 3px rgba(0,0,0,0.7)', opacity: 0.75 }}
-                >
-                  {form.logoText || 'DBoxPro'}
-                </span>
+
+            {/* Aperçu réaliste : simule l'affichage fiche produit (aspect-square + object-cover) */}
+            {form.watermarkEnabled && (
+              <div className="bg-white dark:bg-card rounded-md border p-3 space-y-2">
+                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                  <Eye className="h-3 w-3" /> Aperçu (tel qu'affiché sur la fiche produit — image cropée en carré)
+                </p>
+                <div className="flex justify-center">
+                  <div className="relative w-full max-w-[280px] aspect-square bg-gradient-to-br from-gray-300 via-gray-400 to-gray-500 rounded-md overflow-hidden">
+                    {/* Pattern pour simuler une photo réelle */}
+                    <div
+                      className="absolute inset-0 opacity-30"
+                      style={{
+                        backgroundImage: 'linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.1) 25%, transparent 25%)',
+                        backgroundSize: '30px 30px',
+                        backgroundPosition: '0 0, 0 15px',
+                      }}
+                    />
+                    {/* Watermark text — positioned according to offsetX/Y, scaled proportionally */}
+                    {/* Aperçu à 280px, l'image réelle fait ~1200px, donc on divise les offsets par ~4.3 */}
+                    {(() => {
+                      const previewSize = 280
+                      const realSize = 1200
+                      const scale = previewSize / realSize
+                      const fontSize = Math.max(16, Math.min(64, Math.round(realSize * 0.04))) * scale
+                      const offsetX = (form.watermarkOffsetX ?? 20) * scale
+                      const offsetY = (form.watermarkOffsetY ?? 20) * scale
+                      return (
+                        <span
+                          className="absolute font-bold text-white"
+                          style={{
+                            right: `${offsetX}px`,
+                            bottom: `${offsetY}px`,
+                            fontSize: `${fontSize}px`,
+                            opacity: 0.7,
+                            textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                          }}
+                        >
+                          {form.logoText || 'DBoxPro'}
+                        </span>
+                      )
+                    })()}
+                  </div>
+                </div>
+                <p className="text-[10px] text-center text-muted-foreground">
+                  L'aperçu montre comment le watermark sera positionné sur une image carrée affichée en <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">object-cover</code>.
+                </p>
               </div>
-            </div>
+            )}
+
+            {/* Réglages de positionnement (offsets) */}
+            {form.watermarkEnabled && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Offset horizontal (depuis le bord droit)</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min="5"
+                      max="200"
+                      step="1"
+                      value={form.watermarkOffsetX ?? 20}
+                      onChange={e => set('watermarkOffsetX', parseInt(e.target.value))}
+                      className="flex-1 cursor-pointer"
+                    />
+                    <Input
+                      type="number"
+                      min="5"
+                      max="500"
+                      value={form.watermarkOffsetX ?? 20}
+                      onChange={e => set('watermarkOffsetX', Math.max(5, Math.min(500, parseInt(e.target.value) || 20)))}
+                      className="w-20 text-xs font-mono"
+                    />
+                    <span className="text-xs text-muted-foreground">px</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Plus élevé = plus vers la gauche.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Offset vertical (depuis le bord bas)</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min="5"
+                      max="200"
+                      step="1"
+                      value={form.watermarkOffsetY ?? 20}
+                      onChange={e => set('watermarkOffsetY', parseInt(e.target.value))}
+                      className="flex-1 cursor-pointer"
+                    />
+                    <Input
+                      type="number"
+                      min="5"
+                      max="500"
+                      value={form.watermarkOffsetY ?? 20}
+                      onChange={e => set('watermarkOffsetY', Math.max(5, Math.min(500, parseInt(e.target.value) || 20)))}
+                      className="w-20 text-xs font-mono"
+                    />
+                    <span className="text-xs text-muted-foreground">px</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Plus élevé = plus vers le haut.</p>
+                </div>
+              </div>
+            )}
+
             <p className="text-[11px] text-muted-foreground">
-              ⚠️ Le filigrane est appliqué uniquement sur les <strong>nouvelles</strong> photos uploadées après activation. Les photos existantes ne sont pas modifiées. Le texte affiché est celui du champ « Nom de la boutique » ci-dessus.
+              ⚠️ Le filigrane est appliqué uniquement sur les <strong>nouvelles</strong> photos uploadées après activation. Les photos existantes ne sont pas modifiées. Ajuste les offsets puis réupload tes photos pour voir le résultat.
             </p>
           </div>
         </CardContent>

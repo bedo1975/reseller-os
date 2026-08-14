@@ -572,6 +572,12 @@ model BoutiqueSettings {
   // Si true, le texte du logo (logoText) est ajouté en bas à droite des photos
   // lors de l'upload (Stock form + shooting photo). Désactivé par défaut.
   watermarkEnabled Boolean @default(false)
+  // Position du filigrane en pixels depuis le bord droit (offset horizontal).
+  // Par défaut : 20px. Plus la valeur est élevée, plus le texte s'éloigne du bord droit.
+  watermarkOffsetX Int     @default(20)
+  // Position du filigrane en pixels depuis le bord bas (offset vertical).
+  // Par défaut : 20px. Plus la valeur est élevée, plus le texte s'éloigne du bord bas.
+  watermarkOffsetY Int     @default(20)
   // Seuil livraison offerte
   freeShippingThreshold Float @default(50)
   freeShippingEnabled   Boolean @default(false) // Master switch: active/désactive la livraison offerte
