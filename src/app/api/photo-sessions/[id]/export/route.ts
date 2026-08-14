@@ -3,7 +3,8 @@ import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 import fs from 'fs'
 import path from 'path'
-import archiver from 'archiver'
+import { ZipArchive } from 'archiver'
+import { PassThrough } from 'stream'
 
 /**
  * GET /api/photo-sessions/[id]/export
@@ -49,10 +50,9 @@ export async function GET(
 
     // Create the ZIP archive in memory (streamed to the response).
     // We use a PassThrough stream to avoid buffering the whole ZIP in memory.
-    const { PassThrough } = require('stream')
     const passthrough = new PassThrough()
 
-    const archive = archiver('zip', {
+    const archive = new ZipArchive({
       zlib: { level: 6 },  // compression level (0-9). 6 is a good balance.
     })
 
