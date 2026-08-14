@@ -578,6 +578,12 @@ model BoutiqueSettings {
   // Position du filigrane en pixels depuis le bord bas (offset vertical).
   // Par défaut : 20px. Plus la valeur est élevée, plus le texte s'éloigne du bord bas.
   watermarkOffsetY Int     @default(20)
+  // Mode de padding des images produits lors de l'upload :
+  // - "none" : pas de padding (comportement par défaut, image conservée telle quelle)
+  // - "square-white" : l'image est centrée sur un carré 1200×1200 avec fond blanc #FFFFFF
+  //   (utile car l'affichage boutique est en aspect-square + object-cover, donc les images
+  //   portrait/landscape se retrouvent cropées. Le padding garantit que toute l'image est visible).
+  imagePaddingMode  String  @default("none")  // none | square-white
   // Seuil livraison offerte
   freeShippingThreshold Float @default(50)
   freeShippingEnabled   Boolean @default(false) // Master switch: active/désactive la livraison offerte

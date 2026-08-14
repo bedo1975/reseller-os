@@ -22,7 +22,7 @@ export async function PUT(req: NextRequest) {
     const {
       heroEyebrow, heroTitle, heroSubtitle, heroCtaLabel, heroCtaLink, heroImage,
       topBarText, footerAbout, footerEmail, footerPhone,
-      logoText, logoSubtitle, logoImage, faviconLetter, faviconBgColor, watermarkEnabled, watermarkOffsetX, watermarkOffsetY, primaryColor, primaryDarkColor,
+      logoText, logoSubtitle, logoImage, faviconLetter, faviconBgColor, watermarkEnabled, watermarkOffsetX, watermarkOffsetY, imagePaddingMode, primaryColor, primaryDarkColor,
       headerBgColor, topbarBgColor, footerBgColor,
       freeShippingEnabled, freeShippingThreshold, boutiqueClosed, boutiqueClosedMessage, emailDesign,
       hoursJson, hoursVisible, cgvText, legalText,
@@ -71,6 +71,7 @@ export async function PUT(req: NextRequest) {
     if (typeof watermarkEnabled === 'boolean') data.watermarkEnabled = watermarkEnabled
     if (typeof watermarkOffsetX === 'number') data.watermarkOffsetX = Math.max(5, Math.min(500, watermarkOffsetX))
     if (typeof watermarkOffsetY === 'number') data.watermarkOffsetY = Math.max(5, Math.min(500, watermarkOffsetY))
+    if (typeof imagePaddingMode === 'string') data.imagePaddingMode = ['none', 'square-white'].includes(imagePaddingMode) ? imagePaddingMode : 'none'
     if (typeof primaryColor === 'string') data.primaryColor = primaryColor
     if (typeof primaryDarkColor === 'string') data.primaryDarkColor = primaryDarkColor
     if (typeof headerBgColor === 'string') data.headerBgColor = headerBgColor

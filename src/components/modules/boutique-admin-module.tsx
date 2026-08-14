@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp,
+  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -811,6 +811,7 @@ interface BoutiqueSettingsData {
   watermarkEnabled: boolean
   watermarkOffsetX: number
   watermarkOffsetY: number
+  imagePaddingMode: string  // 'none' | 'square-white'
   primaryColor: string
   primaryDarkColor: string
   headerBgColor: string
@@ -1226,6 +1227,79 @@ function AppearanceTab() {
 
             <p className="text-[11px] text-muted-foreground">
               ⚠️ Le filigrane est appliqué uniquement sur les <strong>nouvelles</strong> photos uploadées après activation. Les photos existantes ne sont pas modifiées. Ajuste les offsets puis réupload tes photos pour voir le résultat.
+            </p>
+          </div>
+
+          {/* Padding des images (centrer sur carré blanc) */}
+          <div className="rounded-lg border border-purple-200 bg-purple-50/50 dark:bg-purple-950/20 dark:border-purple-900 p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <Crop className="h-4 w-4" />
+                  Padding automatique (carré blanc)
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Centre l'image sur un carré avec fond blanc lors de l'upload. Évite que les photos portrait/landscape soient cropées par l'affichage carré de la boutique.
+                </p>
+              </div>
+            </div>
+            <Select
+              value={form.imagePaddingMode || 'none'}
+              onValueChange={v => set('imagePaddingMode', v)}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Aucun (conserver l'image d'origine)</SelectItem>
+                <SelectItem value="square-white">Carré blanc 1200×1200</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Aperçu comparatif */}
+            {form.imagePaddingMode === 'square-white' && (
+              <div className="bg-white dark:bg-card rounded-md border p-3 space-y-2">
+                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                  <Eye className="h-3 w-3" /> Aperçu (image portrait 900×1200 → carré 1200×1200)
+                </p>
+                <div className="flex justify-center gap-4">
+                  {/* Avant padding */}
+                  <div className="text-center">
+                    <div className="relative w-[100px] h-[100px] bg-gradient-to-br from-gray-300 to-gray-500 rounded-md overflow-hidden mx-auto">
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          backgroundImage: 'linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.1) 25%, transparent 25%)',
+                          backgroundSize: '15px 15px',
+                          backgroundPosition: '0 0, 0 8px',
+                        }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">Avant (900×1200)</p>
+                  </div>
+                  {/* Flèche */}
+                  <div className="flex items-center text-muted-foreground text-xl">→</div>
+                  {/* Après padding */}
+                  <div className="text-center">
+                    <div className="relative w-[100px] h-[100px] bg-white rounded-md overflow-hidden mx-auto border">
+                      {/* Image portrait centrée avec marges blanches */}
+                      <div className="absolute left-0 right-0 top-0 bottom-0 flex items-center justify-center">
+                        <div
+                          className="w-[60%] h-full bg-gradient-to-br from-gray-300 to-gray-500"
+                          style={{
+                            backgroundImage: 'linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.1) 25%, transparent 25%)',
+                            backgroundSize: '15px 15px',
+                            backgroundPosition: '0 0, 0 8px',
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">Après (1200×1200)</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <p className="text-[11px] text-muted-foreground">
+              💡 Le padding est appliqué <strong>avant</strong> le filigrane. Si les deux sont activés, le filigrane se positionne sur le carré final.
             </p>
           </div>
         </CardContent>

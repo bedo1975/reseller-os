@@ -21,6 +21,7 @@ export interface BoutiqueSettings {
   watermarkEnabled: boolean
   watermarkOffsetX: number
   watermarkOffsetY: number
+  imagePaddingMode: string  // 'none' | 'square-white'
   primaryColor: string
   primaryDarkColor: string
   headerBgColor: string
@@ -120,6 +121,7 @@ const DEFAULTS: BoutiqueSettings = {
   watermarkEnabled: false,
   watermarkOffsetX: 20,
   watermarkOffsetY: 20,
+  imagePaddingMode: 'none',
   primaryColor: '007bff',
   primaryDarkColor: '0056b3',
   headerBgColor: 'ffffff',

@@ -5,6 +5,7 @@ import path from 'path'
 import crypto from 'crypto'
 import sharp from 'sharp'
 import { applyWatermark } from '@/lib/watermark'
+import { padToSquareIfNeeded } from '@/lib/image-padding'
 
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'stock')
 
@@ -76,12 +77,17 @@ export async function POST(req: NextRequest) {
           .webp({ quality: WEBP_QUALITY })
           .toBuffer()
 
-        // Step 2: apply watermark (if enabled in admin).
-        // The watermark is overlaid on the compressed image. If watermarking is
-        // disabled in admin, applyWatermark returns the buffer unchanged.
-        const watermarked = await applyWatermark(compressed)
+        // Step 2: pad to square if enabled in admin (default: disabled).
+        // The image is centered on a white square so that portrait/landscape photos
+        // don't get cropped by the boutique's aspect-square + object-cover display.
+        const padded = await padToSquareIfNeeded(compressed)
 
-        // Step 3: write the final buffer to disk.
+        // Step 3: apply watermark (if enabled in admin).
+        // The watermark is overlaid on the final image (after padding). If watermarking
+        // is disabled in admin, applyWatermark returns the buffer unchanged.
+        const watermarked = await applyWatermark(padded)
+
+        // Step 4: write the final buffer to disk.
         fs.writeFileSync(filePath, watermarked)
       } catch (sharpErr) {
         console.error('Sharp compression failed, falling back to raw write:', sharpErr)
