@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from 'recharts'
 import {
   Globe, Users, Eye, ShoppingCart, Star, TrendingUp, MapPin, Monitor, MousePointerClick,
-  FileText, Package, Award, ExternalLink, Trash2, ChevronLeft, ChevronRight,
+  FileText, Package, Award, ExternalLink, Trash2, ChevronLeft, ChevronRight, Filter, X,
 } from 'lucide-react'
 import { formatEUR } from '@/lib/constants'
 import { toast } from 'sonner'
@@ -122,15 +122,52 @@ export function StatisticsModule() {
   const [data, setData] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState('30d')
+  const [countryFilter, setCountryFilter] = useState<string>('')
+  const [cityFilter, setCityFilter] = useState<string>('')
+  // Available filter options (countries + cities) loaded from /api/admin/stats/locations
+  const [availableCountries, setAvailableCountries] = useState<{ country: string; count: number }[]>([])
+  const [availableCities, setAvailableCities] = useState<{ city: string; country: string; count: number }[]>([])
 
+  // Fetch main stats data whenever period, country, or city changes
   useEffect(() => {
     setLoading(true)
-    fetch(`/api/admin/stats?period=${period}`)
+    const params = new URLSearchParams({ period })
+    if (countryFilter) params.set('country', countryFilter)
+    if (cityFilter) params.set('city', cityFilter)
+    fetch(`/api/admin/stats?${params.toString()}`)
       .then(r => r.json())
       .then(d => setData(d))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [period])
+  }, [period, countryFilter, cityFilter])
+
+  // Fetch available countries + cities for the filter dropdowns.
+  // Re-fetch when period changes (different periods expose different visitors).
+  // When a country is selected, fetch cities for that country only.
+  useEffect(() => {
+    const params = new URLSearchParams({ period })
+    if (countryFilter) params.set('country', countryFilter)
+    fetch(`/api/admin/stats/locations?${params.toString()}`)
+      .then(r => r.json())
+      .then(d => {
+        setAvailableCountries(d.countries || [])
+        setAvailableCities(d.cities || [])
+      })
+      .catch(() => {
+        setAvailableCountries([])
+        setAvailableCities([])
+      })
+  }, [period, countryFilter])
+
+  // When the country filter changes, reset the city filter (cities are country-specific)
+  const handleCountryChange = (v: string) => {
+    setCountryFilter(v === '__all__' ? '' : v)
+    setCityFilter('')  // reset city when country changes
+  }
+
+  const handleCityChange = (v: string) => {
+    setCityFilter(v === '__all__' ? '' : v)
+  }
 
   // Pagination for each section
   const citiesPag = usePagination(data?.visitorsByCity || [], 10)
@@ -178,13 +215,78 @@ export function StatisticsModule() {
             Visiteurs, pages vues, provenances, avis et ventes
           </p>
         </div>
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {PERIODS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap gap-2 items-end">
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PERIODS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select
+            value={countryFilter || '__all__'}
+            onValueChange={handleCountryChange}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Tous pays" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">🌍 Tous pays</SelectItem>
+              {availableCountries.map(c => (
+                <SelectItem key={c.country} value={c.country}>
+                  {c.country} ({c.count})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={cityFilter || '__all__'}
+            onValueChange={handleCityChange}
+            disabled={!countryFilter && availableCities.length === 0}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Toutes villes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">🏙️ Toutes villes</SelectItem>
+              {availableCities.map(c => (
+                <SelectItem key={`${c.city}|${c.country}`} value={c.city}>
+                  {c.city} ({c.count})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {/* Reset filters button */}
+          {(countryFilter || cityFilter) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setCountryFilter(''); setCityFilter('') }}
+              title="Réinitialiser les filtres"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Active filters banner */}
+      {(countryFilter || cityFilter) && (
+        <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md px-3 py-2">
+          <Filter className="h-3.5 w-3.5" />
+          <span>Filtre actif :</span>
+          {countryFilter && (
+            <Badge variant="outline" className="bg-amber-100 dark:bg-amber-900/50 border-amber-300 text-amber-800 dark:text-amber-200">
+              🌍 {countryFilter}
+            </Badge>
+          )}
+          {cityFilter && (
+            <Badge variant="outline" className="bg-amber-100 dark:bg-amber-900/50 border-amber-300 text-amber-800 dark:text-amber-200">
+              🏙️ {cityFilter}
+            </Badge>
+          )}
+          <span className="text-muted-foreground">— Les stats ci-dessous ne concernent que ces visiteurs.</span>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

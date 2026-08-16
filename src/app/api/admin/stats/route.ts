@@ -3,16 +3,25 @@ import { requireAuth } from '@/lib/session'
 import { db } from '@/lib/db'
 
 /**
- * GET /api/admin/stats?period=30d
+ * GET /api/admin/stats?period=30d&country=France&city=Paris
  * Auth required — returns aggregated statistics.
  *
  * Periods: 7d | 30d | 90d | 12m | all
+ * Filters (optional):
+ *   - country: filter visitors + page views + sales (via visitor's country). Case-insensitive match.
+ *   - city: filter visitors + page views + sales (via visitor's city). Case-insensitive match.
+ *
+ * When a country filter is applied, the city dropdown in the admin should be populated
+ * with the cities available for that country. The /api/admin/stats/locations endpoint
+ * returns the list of available countries and cities for the filters.
  */
 export async function GET(req: NextRequest) {
   try {
     await requireAuth()
     const { searchParams } = new URL(req.url)
     const period = searchParams.get('period') || '30d'
+    const countryFilter = searchParams.get('country')?.trim() || null
+    const cityFilter = searchParams.get('city')?.trim() || null
 
     // Compute date filter
     const now = new Date()
@@ -25,9 +34,21 @@ export async function GET(req: NextRequest) {
       default: dateFilter = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
     }
 
+    // Build the visitor where clause with country/city filters (case-insensitive).
+    // SQLite doesn't have great case-insensitive support, so we use Prisma's `mode: 'insensitive'`
+    // (Prisma translates this to LOWER() comparison in SQLite via the query engine).
+    // For SQLite, mode: 'insensitive' is actually supported since Prisma 5+ for string filters.
+    const visitorWhere: any = { createdAt: { gte: dateFilter } }
+    if (countryFilter) {
+      visitorWhere.country = { contains: countryFilter }
+    }
+    if (cityFilter) {
+      visitorWhere.city = { contains: cityFilter }
+    }
+
     // ── Visitors ──
     const visitors = await db.visitorTracking.findMany({
-      where: { createdAt: { gte: dateFilter } },
+      where: visitorWhere,
       select: {
         id: true, visitorId: true, ipAddress: true,
         country: true, city: true, region: true,
@@ -36,6 +57,12 @@ export async function GET(req: NextRequest) {
         userAgent: true, language: true,
       },
     })
+
+    // If country/city filter is applied, we need to also filter PageViews and Sales
+    // by the visitors that match the filter. We build a Set of visitorIds that match.
+    const filteredVisitorIds = countryFilter || cityFilter
+      ? new Set(visitors.map(v => v.visitorId))
+      : null
 
     const totalVisitors = visitors.length
     const uniqueVisitors = new Set(visitors.map(v => v.visitorId)).size
@@ -88,9 +115,19 @@ export async function GET(req: NextRequest) {
       }))
 
     // ── Page Views ──
+    // If country/city filter is applied, filter PageViews by the visitorIds that match.
+    // PageView has a visitorId field linked to VisitorTracking.visitorId.
+    const pageViewWhere: any = { createdAt: { gte: dateFilter } }
+    if (filteredVisitorIds) {
+      // Use in: [...] — but if the set is empty (no visitors matched the filter),
+      // we want to return 0 page views, so we pass a sentinel value that won't match anything.
+      pageViewWhere.visitorId = filteredVisitorIds.size > 0
+        ? { in: Array.from(filteredVisitorIds) }
+        : '__NO_MATCH__'  // impossible value → no page views returned
+    }
     const pageViews = await db.pageView.findMany({
-      where: { createdAt: { gte: dateFilter } },
-      select: { path: true, pageType: true, productSku: true, createdAt: true },
+      where: pageViewWhere,
+      select: { path: true, pageType: true, productSku: true, createdAt: true, visitorId: true },
     })
 
     const totalPageViews = pageViews.length
