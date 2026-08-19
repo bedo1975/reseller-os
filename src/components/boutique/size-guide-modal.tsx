@@ -109,16 +109,25 @@ export function SizeGuideModal({ open, onOpenChange }: {
                     <tbody>
                       {activeGuide.rows.map((row, ri) => (
                         <tr key={ri} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                          <td className="px-3 py-2 align-middle">
-                            {ri === 0 && activeGuide.image ? (
-                              <img
-                                src={activeGuide.image}
-                                alt="Guide"
-                                className="w-16 h-24 object-contain rounded"
+                          {/* Image column: only render on first row, with rowspan to merge vertically */}
+                          {ri === 0 && (
+                            <td
+                              className="px-3 py-2 align-middle text-center border-r border-gray-100"
+                              rowSpan={activeGuide.rows.length}
+                              style={{ width: '80px', verticalAlign: 'middle' }}
+                            >
+                              {activeGuide.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                              />
-                            ) : null}
-                          </td>
+                                <img
+                                  src={activeGuide.image}
+                                  alt="Guide des tailles"
+                                  className="w-16 h-24 object-contain rounded mx-auto"
+                                />
+                              ) : (
+                                <span className="text-gray-300 text-xs">Pas d'image</span>
+                              )}
+                            </td>
+                          )}
                           {row.map((cell, ci) => (
                             <td key={ci} className="px-3 py-2 text-gray-700 whitespace-nowrap">
                               {cell}
