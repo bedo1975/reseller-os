@@ -345,7 +345,8 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
   const categories = boutiqueCats.map(c => ({ id: c.slug, code: c.slug, value: c.label }))
   const getSubcats = (parentCode: string | null | undefined) => {
     const subs = getBoutiqueSubcategories(parentCode)
-    return subs.map(s => ({ id: s.code, code: s.code, value: s.value, parentCode: s.parentCode }))
+    // BoutiqueCategoryItem has { slug, label, parentId } — map to { id, code, value, parentCode }
+    return subs.map(s => ({ id: s.slug, code: s.slug, value: s.label, parentCode: s.parentId }))
   }
   const [saving, setSaving] = useState(false)
   const [creatingArticleIdx, setCreatingArticleIdx] = useState<number | null>(null)

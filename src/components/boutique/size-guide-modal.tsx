@@ -112,16 +112,17 @@ export function SizeGuideModal({ open, onOpenChange }: {
                           {/* Image column: only render on first row, with rowspan to merge vertically */}
                           {ri === 0 && (
                             <td
-                              className="px-3 py-2 align-middle text-center border-r border-gray-100"
+                              className="px-2 py-2 text-center border-r border-gray-100 bg-white"
                               rowSpan={activeGuide.rows.length}
-                              style={{ width: '80px', verticalAlign: 'middle' }}
+                              style={{ width: '90px', verticalAlign: 'top' }}
                             >
                               {activeGuide.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
                                   src={activeGuide.image}
                                   alt="Guide des tailles"
-                                  className="w-16 h-24 object-contain rounded mx-auto"
+                                  className="rounded mx-auto block"
+                                  style={{ maxWidth: '80px', height: 'auto' }}
                                 />
                               ) : (
                                 <span className="text-gray-300 text-xs">Pas d'image</span>
