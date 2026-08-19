@@ -777,6 +777,29 @@ model StockAlert {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// GUIDE DES TAILLES — Tableaux configurables (Hommes / Femmes / Enfants)
+// ═══════════════════════════════════════════════════════════════════════
+model SizeGuide {
+  id        String   @id @default(cuid())
+  // Type de guide: "men" (hommes), "women" (femmes), "kids" (enfants)
+  type      String   @unique
+  // Titre affiché (ex: "Guide des tailles Hommes")
+  title     String   @default("Guide des tailles")
+  // Image (URL) — affichée dans la 1ère colonne, fusionnée verticalement sur toutes les lignes
+  image     String?
+  // En-têtes des 5 colonnes de données (la 1ère colonne est toujours l'image fusionnée)
+  // JSON: ["Taille FR", "Taille US", "Tour de poitrine", "Tour de taille", "Tour de hanches"]
+  headers   String   @default("[]")
+  // 7 lignes de données, chaque ligne contient 5 valeurs
+  // JSON: [["XS","XS","84","66","90"], ["S","S","88","70","94"], ...]
+  rows      String   @default("[]")
+  // Image d'upload (optionnelle) — alternative à "image" pour upload depuis l'admin
+  imagePath String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // AVIS PRODUITS — Notes et commentaires des clients
 // ═══════════════════════════════════════════════════════════════════════
 model ProductReview {

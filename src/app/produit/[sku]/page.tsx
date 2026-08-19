@@ -12,10 +12,11 @@ import { Input } from '@/components/ui/input'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
-import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2, BellRing, Loader2 } from 'lucide-react'
+import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2, BellRing, Loader2, Ruler } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShareModal } from '@/components/boutique/share-modal'
 import { ReviewsSection } from '@/components/boutique/reviews-section'
+import { SizeGuideModal } from '@/components/boutique/size-guide-modal'
 
 const CONDITION_LABELS: Record<string, string> = {
   'neuf': 'Neuf avec étiquette',
@@ -82,6 +83,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
   const [alertEmail, setAlertEmail] = useState('')
   const [alertSubmitting, setAlertSubmitting] = useState(false)
   const [alertDone, setAlertDone] = useState(false)
+  const [sizeGuideOpen, setSizeGuideOpen] = useState(false)
 
   const product = data?.product
   const variants = data?.variants || []
@@ -332,9 +334,20 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
               </div>
             )}
             {product.size && (
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm items-center">
                 <span className="text-gray-500">Taille</span>
-                <span className="font-medium text-gray-900">{product.size}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-900">{product.size}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSizeGuideOpen(true)}
+                    className="text-[#007bff] hover:text-[#0056b3] text-xs underline underline-offset-2 flex items-center gap-1"
+                    title="Voir le guide des tailles"
+                  >
+                    <Ruler className="h-3 w-3" />
+                    Guide des tailles
+                  </button>
+                </div>
               </div>
             )}
             <div className="flex justify-between text-sm">
@@ -582,6 +595,11 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
             shareCollectEmails: settings.shareCollectEmails !== false,
           }}
         />
+      )}
+
+      {/* Size guide modal */}
+      {product && (
+        <SizeGuideModal open={sizeGuideOpen} onOpenChange={setSizeGuideOpen} />
       )}
 
       {/* Back-in-stock alert modal */}

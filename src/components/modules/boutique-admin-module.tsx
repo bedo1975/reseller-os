@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop,
+  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils'
 import { usePermissions } from '@/hooks/use-permissions'
 import { formatEUR, formatDate } from '@/lib/constants'
 
-type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter' | 'stock-alerts'
+type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter' | 'stock-alerts' | 'size-guide'
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'orders', label: 'Commandes', icon: Package },
@@ -43,6 +43,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'share', label: 'Partage', icon: Share2 },
   { id: 'newsletter', label: 'Newsletter', icon: MailOpen },
   { id: 'stock-alerts', label: 'Alertes stock', icon: BellRing },
+  { id: 'size-guide', label: 'Guide tailles', icon: Ruler },
 ]
 
 export function BoutiqueAdminModule() {
@@ -98,6 +99,7 @@ export function BoutiqueAdminModule() {
       {tab === 'share' && <ShareTab />}
       {tab === 'newsletter' && <NewsletterTab />}
       {tab === 'stock-alerts' && <StockAlertsTab />}
+      {tab === 'size-guide' && <SizeGuideTab />}
     </div>
   )
 }
@@ -5123,6 +5125,289 @@ function StockAlertsTab() {
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET — GUIDE DES TAILLES (3 tableaux: Hommes / Femmes / Enfants)
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface SizeGuideData {
+  id: string
+  type: string  // men | women | kids
+  title: string
+  image: string | null
+  imagePath: string | null
+  headers: string[]  // 5 column headers
+  rows: string[][]   // up to 7 rows × 5 values
+}
+
+const SIZE_GUIDE_TYPES = [
+  { type: 'men', label: 'Hommes', icon: '👨' },
+  { type: 'women', label: 'Femmes', icon: '👩' },
+  { type: 'kids', label: 'Enfants', icon: '👶' },
+]
+
+function SizeGuideTab() {
+  const [guides, setGuides] = useState<SizeGuideData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [activeType, setActiveType] = useState<string>('men')
+  const [uploadingImage, setUploadingImage] = useState(false)
+
+  const fetchGuides = useCallback(() => {
+    setLoading(true)
+    fetch('/api/boutique/admin/size-guide')
+      .then(r => r.json())
+      .then(data => {
+        setGuides(data.guides || [])
+      })
+      .catch(() => toast.error('Erreur lors du chargement'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { fetchGuides() }, [fetchGuides])
+
+  const activeGuide = guides.find(g => g.type === activeType)
+
+  const updateGuide = (updated: Partial<SizeGuideData>) => {
+    setGuides(prev => prev.map(g => g.type === activeType ? { ...g, ...updated } : g))
+  }
+
+  const updateHeader = (index: number, value: string) => {
+    if (!activeGuide) return
+    const headers = [...activeGuide.headers]
+    headers[index] = value
+    updateGuide({ headers })
+  }
+
+  const updateCell = (rowIndex: number, colIndex: number, value: string) => {
+    if (!activeGuide) return
+    const rows = activeGuide.rows.map((row, ri) =>
+      ri === rowIndex ? row.map((cell, ci) => ci === colIndex ? value : cell) : row
+    )
+    updateGuide({ rows })
+  }
+
+  const save = async () => {
+    if (!activeGuide) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/boutique/admin/size-guide', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: activeGuide.type,
+          title: activeGuide.title,
+          image: activeGuide.image,
+          imagePath: activeGuide.imagePath,
+          headers: activeGuide.headers,
+          rows: activeGuide.rows,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Erreur')
+      }
+      toast.success('Guide des tailles sauvegardé')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur réseau')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleImageUpload = async (file: File) => {
+    setUploadingImage(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/boutique/admin/size-guide/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) throw new Error('Erreur upload')
+      const data = await res.json()
+      updateGuide({ imagePath: data.path })
+      toast.success('Image uploadée')
+    } catch {
+      toast.error('Erreur lors de l\'upload')
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  if (loading) {
+    return <Skeleton className="h-96" />
+  }
+
+  // Ensure the active guide has 5 headers and up to 7 rows × 5 cells
+  const headers = activeGuide?.headers || Array(5).fill('')
+  const rows = activeGuide?.rows || Array(7).fill(null).map(() => Array(5).fill(''))
+  // Pad rows to 7 if fewer
+  const paddedRows = [...rows]
+  while (paddedRows.length < 7) paddedRows.push(Array(5).fill(''))
+  const image = activeGuide?.imagePath || activeGuide?.image || null
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200">
+        <Ruler className="h-4 w-4 inline mr-1" />
+        <strong>Guide des tailles :</strong> configurable pour chaque catégorie (Hommes, Femmes, Enfants). Chaque tableau contient une image (1ère colonne, fusionnée verticalement) + 5 colonnes × 7 lignes de données.
+        Le guide est accessible depuis la fiche produit via un lien « Guide des tailles ».
+      </div>
+
+      {/* Tabs: Hommes / Femmes / Enfants */}
+      <div className="flex gap-2 flex-wrap">
+        {SIZE_GUIDE_TYPES.map(t => {
+          const active = activeType === t.type
+          return (
+            <button
+              key={t.type}
+              onClick={() => setActiveType(t.type)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all',
+                active
+                  ? 'border-foreground/30 bg-card shadow-sm text-foreground'
+                  : 'border-border/60 hover:border-foreground/20 bg-card/50 text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <span className="text-lg">{t.icon}</span>
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {activeGuide && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              {SIZE_GUIDE_TYPES.find(t => t.type === activeType)?.icon} {SIZE_GUIDE_TYPES.find(t => t.type === activeType)?.label}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Configurez le titre, l'image et les données du tableau.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Titre */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Titre du tableau</Label>
+              <Input
+                value={activeGuide.title}
+                onChange={e => updateGuide({ title: e.target.value })}
+                placeholder="Guide des tailles — Hommes"
+              />
+            </div>
+
+            {/* Image */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Image (1ère colonne, fusionnée verticalement)</Label>
+              <div className="flex items-center gap-3">
+                {image ? (
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={image} alt="Guide" className="w-16 h-24 object-cover rounded-md border" />
+                    <button
+                      onClick={() => updateGuide({ imagePath: null, image: null })}
+                      className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-700"
+                      title="Supprimer l'image"
+                    >×</button>
+                  </div>
+                ) : (
+                  <div className="w-16 h-24 bg-muted rounded-md border flex items-center justify-center text-muted-foreground">
+                    <ImageIcon className="h-6 w-6" />
+                  </div>
+                )}
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => {
+                      const f = e.target.files?.[0]
+                      if (f) handleImageUpload(f)
+                    }}
+                  />
+                  <Button variant="outline" size="sm" asChild disabled={uploadingImage}>
+                    <span>
+                      {uploadingImage ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
+                      {image ? 'Changer' : 'Uploader'}
+                    </span>
+                  </Button>
+                </label>
+                <Input
+                  value={activeGuide.image || ''}
+                  onChange={e => updateGuide({ image: e.target.value })}
+                  placeholder="ou URL de l'image"
+                  className="flex-1 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            {/* En-têtes des colonnes */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">En-têtes des 5 colonnes</Label>
+              <div className="grid grid-cols-5 gap-1">
+                {headers.map((h, i) => (
+                  <Input
+                    key={i}
+                    value={h}
+                    onChange={e => updateHeader(i, e.target.value)}
+                    placeholder={`Col ${i + 1}`}
+                    className="text-xs"
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Tableau éditable */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Données (7 lignes × 5 colonnes)</Label>
+              <div className="overflow-x-auto border rounded-md">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-medium text-muted-foreground" style={{ width: '60px' }}>Image</th>
+                      {headers.map((h, i) => (
+                        <th key={i} className="px-2 py-1.5 text-left font-medium text-muted-foreground">{h || `Col ${i + 1}`}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paddedRows.map((row, ri) => (
+                      <tr key={ri} className="border-t">
+                        <td className="px-2 py-1 text-center text-muted-foreground">
+                          {ri === 0 ? (image ? '🖼️' : '—') : ''}
+                        </td>
+                        {row.map((cell, ci) => (
+                          <td key={ci} className="px-1 py-0.5">
+                            <input
+                              type="text"
+                              value={cell}
+                              onChange={e => updateCell(ri, ci, e.target.value)}
+                              className="w-full px-2 py-1 text-xs border-0 bg-transparent focus:bg-muted/50 rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Save button */}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button onClick={save} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   )
