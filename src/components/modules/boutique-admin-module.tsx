@@ -2934,13 +2934,11 @@ function CategoriesTab() {
 
   // Filter sortedCats to only show items for the current page
   const visibleCats = useMemo(() => {
+    // Only show top-level categories as Cards.
+    // Sub-categories are displayed as compact clickable links inside their parent's Card.
     return sortedCats.filter(c => {
-      // Top-level: must be in the current page's parent slugs
       if (!c.parentId) return paginatedTopSlugs.includes(c.slug)
-      // Subcategory: show only if its parent is on the current page AND not collapsed
-      if (!paginatedTopSlugs.includes(c.parentId)) return false
-      if (collapsedParents.has(c.parentId)) return false
-      return true
+      return false  // sub-cats are shown inline in the parent card, not as separate cards
     })
   }, [sortedCats, paginatedTopSlugs, collapsedParents])
 
@@ -3218,7 +3216,7 @@ function CategoriesTab() {
                       <div className="flex items-center justify-center w-full h-full text-2xl opacity-50">{c.emoji}</div>
                     )}
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="font-semibold flex items-center gap-2">
                       {c.emoji} {c.label}
                       {c.parentId && (
@@ -3232,7 +3230,7 @@ function CategoriesTab() {
                         </Badge>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+                    <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5 flex-wrap">
                       <code className="bg-muted px-1.5 py-0.5 rounded font-mono">{c.slug}</code>
                       {c.bgColor && (
                         <span className="inline-flex items-center gap-1">
@@ -3243,8 +3241,25 @@ function CategoriesTab() {
                       <span>· opacity {Math.round((c.bgOpacity ?? 0.5) * 100)}%</span>
                       <span>· ordre {c.order}</span>
                     </div>
+                    {/* Sub-categories as compact clickable links (only for parents, when expanded) */}
+                    {isParent && !isCollapsed && (
+                      <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-dashed">
+                        {cats.filter(cc => cc.parentId === c.slug).map(sub => (
+                          <button
+                            key={sub.slug}
+                            onClick={() => startEdit(sub)}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-border/60 bg-card/50 hover:border-[#007bff] hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                            title={`Modifier "${sub.label}"`}
+                          >
+                            <span className="opacity-60">{sub.emoji}</span>
+                            <span className="font-medium">{sub.label}</span>
+                            <Edit className="h-3 w-3 opacity-40" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 shrink-0">
                     <Button size="sm" variant="outline" onClick={() => startEdit(c)}>
                       <Edit className="h-3.5 w-3.5 mr-1" /> Modifier
                     </Button>

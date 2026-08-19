@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useFetch } from '@/hooks/use-fetch'
 import { useSettings } from '@/hooks/use-settings'
+import { useBoutiqueCategories } from '@/hooks/use-boutique-categories'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -336,10 +337,16 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
   const { data: suppliers } = useFetch<Supplier[]>('/api/suppliers')
   const { data: stockItems } = useFetch<StockItemLite[]>('/api/stock')
   const { getByType, getSubcategories } = useSettings()
+  const { getSubcategories: getBoutiqueSubcategories, categories: boutiqueCats } = useBoutiqueCategories()
   const sizes = getByType('size')
   const colors = getByType('color')
   const conditions = getByType('condition')
-  const categories = getByType('category')
+  // Use boutique categories (from Boutique Admin → Catégories) instead of the old Attribute-based ones
+  const categories = boutiqueCats.map(c => ({ id: c.slug, code: c.slug, value: c.label }))
+  const getSubcats = (parentCode: string | null | undefined) => {
+    const subs = getBoutiqueSubcategories(parentCode)
+    return subs.map(s => ({ id: s.code, code: s.code, value: s.value, parentCode: s.parentCode }))
+  }
   const [saving, setSaving] = useState(false)
   const [creatingArticleIdx, setCreatingArticleIdx] = useState<number | null>(null)
   const [pickerIdx, setPickerIdx] = useState<number | null>(null)  // which item line is picking a product
@@ -706,7 +713,7 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
           onOpenChange={(o) => { if (!o) setPickerIdx(null) }}
           stockItems={stockItems || []}
           categories={categories}
-          getSubcategories={getSubcategories}
+          getSubcategories={getSubcats}
           onPick={(stockItemId) => {
             selectStockItem(pickerIdx, stockItemId)
             setPickerIdx(null)
