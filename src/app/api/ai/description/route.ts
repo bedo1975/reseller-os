@@ -57,6 +57,9 @@ async function generateWithOpenAICompat(baseUrl: string, apiKey: string, model: 
       ],
       temperature: 0.7,
       max_tokens: 400,
+      // Groq's GPT-OSS models return reasoning + content. We want the content only.
+      // Some providers ignore this field, so it's safe to always send it.
+      ...(baseUrl.includes('groq') ? { reasoning_format: 'parsed' } : {}),
     }),
   })
   if (!res.ok) {
@@ -74,8 +77,16 @@ async function generateWithOpenAICompat(baseUrl: string, apiKey: string, model: 
     throw new Error(`Erreur API (${res.status}): ${errMsg || errText.slice(0, 200)}`)
   }
   const data = await res.json()
+  // Try standard OpenAI format first, then fallback to alternative fields
   const text = data?.choices?.[0]?.message?.content
-  if (!text) throw new Error('Réponse vide')
+    || data?.choices?.[0]?.message?.reasoning
+    || data?.choices?.[0]?.text
+    || data?.output
+    || data?.output_text
+  if (!text) {
+    console.error('[ai/description] Empty response from API:', JSON.stringify(data).slice(0, 500))
+    throw new Error('Réponse vide — le modèle n\'a rien généré. Essayez un autre modèle dans Paramètres → IA.')
+  }
   return text.trim()
 }
 
