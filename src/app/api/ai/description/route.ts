@@ -34,6 +34,9 @@ const DEPRECATED_MODELS: Record<string, string> = {
   'meta/llama-4-scout-17b-16e-instruct': 'meta/llama-3.3-70b-instruct',
   'meta/llama-4-maverick-17b-128e-instruct': 'meta/llama-3.3-70b-instruct',
   'llama-4-scout-17b-16e-instruct': 'llama-3.3-70b-versatile',
+  // Groq deprecated llama-3.1-8b-instant → use llama-3.3-70b-versatile instead
+  'llama-3.1-8b-instant': 'llama-3.3-70b-versatile',
+  'llama-3.1-70b-versatile': 'llama-3.3-70b-versatile',
 }
 
 async function generateWithOpenAICompat(baseUrl: string, apiKey: string, model: string, systemPrompt: string, userPrompt: string): Promise<string> {

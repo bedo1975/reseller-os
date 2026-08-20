@@ -100,11 +100,23 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    // Group by title + brand — only show one product per group (prefer in-stock)
-    const groupKey = (p: any) => `${p.title || ''}||${p.brand || ''}`
+    // Group variants — only group items that share a common SKU prefix (real variants
+    // created via the multi-variant form). Two unrelated items with the same title + brand
+    // are NOT grouped (they're separate products).
+    // Example: "RL-POLO-00125-M" and "RL-POLO-00125-L" share base "RL-POLO-00125" → grouped.
+    //          "RL-POLO-00125" and "RL-POLO-00126" have different bases → NOT grouped.
+    const getBaseSku = (sku: string): string => {
+      const parts = sku.split('-')
+      // Check if the last segment is a short variant suffix (1-3 alphanumeric chars)
+      if (parts.length > 2 && /^[A-Z0-9]{1,3}$/.test(parts[parts.length - 1])) {
+        return parts.slice(0, -1).join('-')
+      }
+      return sku  // no variant suffix → unique product
+    }
+
     const groups = new Map<string, any[]>()
     for (const p of allProducts) {
-      const key = groupKey(p)
+      const key = getBaseSku(p.sku)
       if (!groups.has(key)) groups.set(key, [])
       groups.get(key)!.push(p)
     }

@@ -156,7 +156,15 @@ export async function POST(req: NextRequest) {
 
     if (!base64Image) throw new Error('Impossible de lire l\'image')
 
-    const model = config.model || providerConfig.defaultModel
+    // Handle deprecated models (same mapping as /api/ai/description)
+    let model = config.model || providerConfig.defaultModel
+    const DEPRECATED: Record<string, string> = {
+      'llama-3.1-8b-instant': 'llama-3.3-70b-versatile',
+      'llama-3.1-70b-versatile': 'llama-3.3-70b-versatile',
+      'gemini-1.5-flash': 'gemini-2.0-flash',
+      'gemini-2.0-flash-exp': 'gemini-2.0-flash',
+    }
+    if (DEPRECATED[model]) model = DEPRECATED[model]
 
     let result
     if (providerConfig.type === 'zai') {
