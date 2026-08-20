@@ -159,8 +159,9 @@ export async function POST(req: NextRequest) {
     // Handle deprecated models (same mapping as /api/ai/description)
     let model = config.model || providerConfig.defaultModel
     const DEPRECATED: Record<string, string> = {
-      'llama-3.1-8b-instant': 'llama-3.3-70b-versatile',
-      'llama-3.1-70b-versatile': 'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant': 'openai/gpt-oss-20b',
+      'llama-3.1-70b-versatile': 'openai/gpt-oss-120b',
+      'llama-3.3-70b-versatile': 'openai/gpt-oss-120b',
       'gemini-1.5-flash': 'gemini-2.0-flash',
       'gemini-2.0-flash-exp': 'gemini-2.0-flash',
     }

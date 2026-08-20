@@ -1604,7 +1604,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                   </Select>
                 </div>
               ) : null}
-              {/* Multi-variant toggle (only for new items) */}
+              {/* Multi-variant toggle (only for new items — existing items can't add variants) */}
               {!item && (
                 <div className="md:col-span-2 flex items-center gap-2 pt-1">
                   <button
@@ -1621,6 +1621,10 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                     Article multi-variantes (tailles/couleurs)
                   </button>
                 </div>
+              )}
+              {/* Show existing variants in read-only mode when editing */}
+              {item && (
+                <VariantSiblings sku={item.sku} />
               )}
               {/* Single size/color (when not multi-variant) */}
               {!multiVariant && (
@@ -2661,4 +2665,58 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// VariantSiblings — shows existing variants of a stock item (read-only)
+// in the edit form. Used to visualize which sizes/colors share the same
+// base SKU without allowing modification (variants must be created/edited
+// from the stock list, not from the edit form).
+// ───────────────────────────────────────────────────────────────────────
+function VariantSiblings({ sku }: { sku: string }) {
+  const { data } = useFetch<StockItem[]>(`/api/stock?search=${encodeURIComponent(getBaseSku(sku))}`)
+  const siblings = (data || [])
+    .filter(s => s.sku !== sku && s.sku.startsWith(getBaseSku(sku) + '-'))
+    .sort((a, b) => (a.size || '').localeCompare(b.size || ''))
+
+  if (siblings.length === 0) return null
+
+  return (
+    <div className="md:col-span-2 mt-2">
+      <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <Layers className="h-3.5 w-3.5 text-blue-600" />
+          <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+            Variantes ({siblings.length} autre{siblings.length > 1 ? 's' : ''})
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {siblings.map(s => (
+            <div
+              key={s.id}
+              className="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border border-blue-200 dark:border-blue-800 bg-white dark:bg-card"
+            >
+              {s.size && <span className="font-medium">T{s.size}</span>}
+              {s.color && <span className="text-muted-foreground">· {s.color}</span>}
+              <span className={`text-[10px] ${s.status === 'VENDU' ? 'text-red-500' : s.quantity > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {s.status === 'VENDU' ? 'Vendu' : s.quantity > 0 ? `${s.quantity} en stock` : 'Rupture'}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-2">
+          Ces variantes partagent le même SKU de base. Pour modifier une variante, ouvrez-la individuellement depuis la liste.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// Extract the base SKU (without the variant suffix) for searching siblings
+function getBaseSku(sku: string): string {
+  const parts = sku.split('-')
+  if (parts.length > 2 && /^[A-Z0-9]{1,3}$/.test(parts[parts.length - 1])) {
+    return parts.slice(0, -1).join('-')
+  }
+  return sku
 }

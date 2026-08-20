@@ -27,16 +27,17 @@ const DEPRECATED_MODELS: Record<string, string> = {
   'gemini-1.5-pro': 'gemini-2.5-pro',
   'gemini-2.0-flash-exp': 'gemini-2.0-flash',
   // Llama 4 models were deprecated/renamed by Groq/NVIDIA/Cerebras
-  'meta-llama/llama-4-scout-17b-16e-instruct': 'llama-3.3-70b-versatile',
-  'meta-llama/llama-4-maverick-17b-128e-instruct': 'llama-3.3-70b-versatile',
-  'llama-3.2-90b-vision-preview': 'llama-3.3-70b-versatile',
+  'meta-llama/llama-4-scout-17b-16e-instruct': 'openai/gpt-oss-120b',
+  'meta-llama/llama-4-maverick-17b-128e-instruct': 'openai/gpt-oss-120b',
+  'llama-3.2-90b-vision-preview': 'openai/gpt-oss-120b',
   'meta-llama/llama-4-scout-17b-16e-instruct:free': 'meta-llama/llama-3.3-70b-instruct:free',
   'meta/llama-4-scout-17b-16e-instruct': 'meta/llama-3.3-70b-instruct',
   'meta/llama-4-maverick-17b-128e-instruct': 'meta/llama-3.3-70b-instruct',
-  'llama-4-scout-17b-16e-instruct': 'llama-3.3-70b-versatile',
-  // Groq deprecated llama-3.1-8b-instant → use llama-3.3-70b-versatile instead
-  'llama-3.1-8b-instant': 'llama-3.3-70b-versatile',
-  'llama-3.1-70b-versatile': 'llama-3.3-70b-versatile',
+  'llama-4-scout-17b-16e-instruct': 'openai/gpt-oss-120b',
+  // Groq deprecated all Llama 3.x models → mapped to new GPT-OSS models
+  'llama-3.1-8b-instant': 'openai/gpt-oss-20b',
+  'llama-3.1-70b-versatile': 'openai/gpt-oss-120b',
+  'llama-3.3-70b-versatile': 'openai/gpt-oss-120b',
 }
 
 async function generateWithOpenAICompat(baseUrl: string, apiKey: string, model: string, systemPrompt: string, userPrompt: string): Promise<string> {

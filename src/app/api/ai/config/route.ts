@@ -7,9 +7,9 @@ import { requireAuth } from '@/lib/session'
 export const AI_PROVIDERS = {
   groq: {
     label: 'Groq',
-    description: 'Gratuit, ultra-rapide — Llama 3.3 (recommandé)',
-    defaultModel: 'llama-3.3-70b-versatile',
-    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama-3.1-70b-versatile'],
+    description: 'Gratuit, ultra-rapide — GPT-OSS / Qwen (recommandé)',
+    defaultModel: 'openai/gpt-oss-120b',
+    models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.6-27b', 'groq/compound'],
     apiKeyUrl: 'https://console.groq.com/keys',
     free: true,
     type: 'openai_compat',
