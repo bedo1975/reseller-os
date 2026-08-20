@@ -89,16 +89,25 @@ export function StockModule() {
   const { data: items, loading, refresh } = useFetch<StockItem[]>('/api/stock')
   const { data: suppliers } = useFetch<Supplier[]>('/api/suppliers')
   const { getByType, getLabel } = useSettings()
+  const { categories: boutiqueCats, getSubcategories: getBoutiqueSubcategories } = useBoutiqueCategories()
   const { can } = usePermissions()
 
-  const categories = getByType('category')
-  const conditions = getByType('condition')
+  // Use boutique categories (from Boutique Admin → Catégories) for the filter dropdown
+  const categories = boutiqueCats.map(c => ({ id: c.slug, code: c.slug, value: c.label }))
+  // Brands come from Settings → Tailles/Marques (Attribute type='brand')
   const brandAttributes = getByType('brand')
+  // Build brands list: combine configured brand attributes + brands found in stock items
+  // (so we don't miss brands that were typed manually)
+  const configuredBrands = brandAttributes.map(b => b.value)
+  const stockBrands = items ? Array.from(new Set(items.map(i => i.brand))) : []
+  const allBrands = Array.from(new Set([...configuredBrands, ...stockBrands])).sort()
+  const conditions = getByType('condition')
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [brandFilter, setBrandFilter] = useState<string>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [subcategoryFilter, setSubcategoryFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
   const [showForm, setShowForm] = useState(false)
   const [showPurchaseForm, setShowPurchaseForm] = useState(false)
@@ -156,10 +165,14 @@ export function StockModule() {
     refresh()
   }
 
-  const brands = useMemo(() => {
-    if (!items) return []
-    return Array.from(new Set(items.map(i => i.brand))).sort()
-  }, [items])
+  const brands = allBrands
+
+  // Get subcategories for the selected category (from Boutique Admin → Catégories)
+  const availableSubcats = useMemo(() => {
+    if (categoryFilter === 'all') return []
+    const subs = getBoutiqueSubcategories(categoryFilter)
+    return subs.map(s => ({ code: s.slug, value: s.label }))
+  }, [categoryFilter, getBoutiqueSubcategories])
 
   const filtered = useMemo(() => {
     if (!items) return []
@@ -167,6 +180,7 @@ export function StockModule() {
       if (statusFilter !== 'all' && i.status !== statusFilter) return false
       if (brandFilter !== 'all' && i.brand !== brandFilter) return false
       if (categoryFilter !== 'all' && i.category !== categoryFilter) return false
+      if (subcategoryFilter !== 'all' && (i as { subcategory?: string }).subcategory !== subcategoryFilter) return false
       if (search) {
         const q = search.toLowerCase()
         return (
@@ -179,10 +193,10 @@ export function StockModule() {
       }
       return true
     })
-  }, [items, search, statusFilter, brandFilter, categoryFilter])
+  }, [items, search, statusFilter, brandFilter, categoryFilter, subcategoryFilter])
 
   // Quand les filtres changent, on reset la page via la clé de filtre
-  const filterKey = `${search}|${statusFilter}|${brandFilter}|${categoryFilter}`
+  const filterKey = `${search}|${statusFilter}|${brandFilter}|${categoryFilter}|${subcategoryFilter}`
   const [lastFilterKey, setLastFilterKey] = useState(filterKey)
   if (filterKey !== lastFilterKey) {
     setLastFilterKey(filterKey)
@@ -488,7 +502,7 @@ export function StockModule() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setSubcategoryFilter('all') }}>
                 <SelectTrigger className="w-full lg:w-[140px]">
                   <SelectValue placeholder="Catégorie" />
                 </SelectTrigger>
@@ -499,6 +513,19 @@ export function StockModule() {
                   ))}
                 </SelectContent>
               </Select>
+              {availableSubcats.length > 0 && (
+                <Select value={subcategoryFilter} onValueChange={setSubcategoryFilter}>
+                  <SelectTrigger className="w-full lg:w-[140px]">
+                    <SelectValue placeholder="Sous-cat." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toutes sous-cat.</SelectItem>
+                    {availableSubcats.map(s => (
+                      <SelectItem key={s.code} value={s.code}>{s.value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div className="flex gap-2 flex-wrap">
               {can('stock', 'create') && (
