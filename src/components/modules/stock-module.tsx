@@ -2019,7 +2019,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                           {session.photos.slice(0, 4).map((p, i) => (
                             <img
                               key={p.id}
-                              src={p.path}
+                              src={photoUrl(p.path)}
                               alt=""
                               className="w-12 h-12 rounded-md object-cover border-2 border-background"
                               style={{ zIndex: 4 - i }}

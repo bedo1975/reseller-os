@@ -9,27 +9,10 @@ import { padToSquareIfNeeded } from '@/lib/image-padding'
 
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'stock')
 
-/**
- * Photo compression config (same as photo-sessions/[id]/photos/route.ts).
- * - Resize to max 1200×1200 (preserves aspect ratio, no crop)
- * - Convert to WebP (quality 82)
- */
 const MAX_WIDTH = 1200
 const MAX_HEIGHT = 1200
 const WEBP_QUALITY = 82
 
-/**
- * POST /api/upload
- * Manual photo upload from the Stock form (handleFiles in stock-module.tsx).
- * Accepts a multipart/form-data with one or more files (field name 'files' or 'file').
- *
- * Each image is:
- *   - resized to max 1200×1200 (preserving aspect ratio)
- *   - converted to WebP (quality 82)
- *   - written to public/uploads/stock/stock-<timestamp>-<hash>.webp
- *
- * Returns: { urls: ['/uploads/stock/stock-xxx.webp', ...] }
- */
 export async function POST(req: NextRequest) {
   try {
     await requireAuth()
@@ -60,34 +43,19 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Le fichier ${file.name} n'est pas une image` }, { status: 400 })
       }
 
-      // Always .webp now (we convert everything to WebP)
       const hash = crypto.randomBytes(8).toString('hex')
       const filename = `stock-${Date.now()}-${hash}.webp`
       const filePath = path.join(UPLOAD_DIR, filename)
       const buffer = Buffer.from(await file.arrayBuffer())
 
-      // Compress + convert to WebP. Fallback to raw write if sharp fails.
       try {
-        // Step 1: resize + convert to WebP (produces a Buffer, not a file).
         const compressed = await sharp(buffer)
-          .resize(MAX_WIDTH, MAX_HEIGHT, {
-            fit: 'inside',
-            withoutEnlargement: true,
-          })
+          .resize(MAX_WIDTH, MAX_HEIGHT, { fit: 'inside', withoutEnlargement: true })
           .webp({ quality: WEBP_QUALITY })
           .toBuffer()
 
-        // Step 2: pad to square if enabled in admin (default: disabled).
-        // The image is centered on a white square so that portrait/landscape photos
-        // don't get cropped by the boutique's aspect-square + object-cover display.
         const padded = await padToSquareIfNeeded(compressed)
-
-        // Step 3: apply watermark (if enabled in admin).
-        // The watermark is overlaid on the final image (after padding). If watermarking
-        // is disabled in admin, applyWatermark returns the buffer unchanged.
         const watermarked = await applyWatermark(padded)
-
-        // Step 4: write the final buffer to disk.
         fs.writeFileSync(filePath, watermarked)
       } catch (sharpErr) {
         console.error('Sharp compression failed, falling back to raw write:', sharpErr)
@@ -107,10 +75,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/**
- * DELETE /api/upload?path=/uploads/stock/xxx.webp
- * Deletes a single uploaded file from disk.
- */
 export async function DELETE(req: NextRequest) {
   try {
     await requireAuth()
@@ -122,14 +86,12 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Chemin manquant' }, { status: 400 })
     }
 
-    // Security: only allow deleting files within uploads/
     if (!filePath.startsWith('/uploads/')) {
       return NextResponse.json({ error: 'Chemin non autorisé' }, { status: 403 })
     }
 
     const fullPath = path.join(process.cwd(), 'public', filePath)
 
-    // Security: ensure path is within uploads/
     const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
     const resolved = path.resolve(fullPath)
     if (!resolved.startsWith(uploadsDir + path.sep) && resolved !== uploadsDir) {

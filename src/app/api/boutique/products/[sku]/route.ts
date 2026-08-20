@@ -85,31 +85,42 @@ export async function GET(
       })(),
     }
 
-    // Fetch variants: other published items with the same title + brand (but different SKU)
+    // Fetch variants: other published items with the same title + brand (but different SKU).
+    // We use SKU prefix matching to detect real variants (items created together via the
+    // multi-variant form share a common SKU prefix like "RL-POLO-00125-"). This avoids
+    // false positives where two unrelated items happen to have the same title + brand.
     let variants: any[] = []
     if (item.title) {
-      const siblingItems = await db.stockItem.findMany({
-        where: {
-          title: item.title,
-          brand: item.brand,
-          status: 'PUBLIE',
-          sku: { not: item.sku },
-          suggestedPrice: { gt: 0 },
-        },
-        select: {
-          sku: true,
-          size: true,
-          color: true,
-          quantity: true,
-        },
-      })
-      variants = siblingItems.map(s => ({
-        sku: s.sku,
-        size: s.size,
-        color: s.color,
-        quantity: s.quantity ?? 1,
-        inStock: (s.quantity ?? 1) > 0,
-      }))
+      // Extract the base SKU (everything before the last "-" segment, if it looks like a variant suffix).
+      // Example: "RL-POLO-00125-M" → base "RL-POLO-00125", variant "M"
+      // Example: "RL-POLO-00125" → no base (single item, no variants)
+      const skuParts = item.sku.split('-')
+      const hasVariantSuffix = skuParts.length > 2 && /^[A-Z0-9]{1,3}$/.test(skuParts[skuParts.length - 1])
+
+      if (hasVariantSuffix) {
+        const baseSku = skuParts.slice(0, -1).join('-')
+        const siblingItems = await db.stockItem.findMany({
+          where: {
+            sku: { startsWith: baseSku + '-', not: item.sku },
+            status: 'PUBLIE',
+            suggestedPrice: { gt: 0 },
+          },
+          select: {
+            sku: true,
+            size: true,
+            color: true,
+            quantity: true,
+          },
+          orderBy: { size: 'asc' },
+        })
+        variants = siblingItems.map(s => ({
+          sku: s.sku,
+          size: s.size,
+          color: s.color,
+          quantity: s.quantity ?? 1,
+          inStock: (s.quantity ?? 1) > 0,
+        }))
+      }
     }
 
     return NextResponse.json({ product, variants })
