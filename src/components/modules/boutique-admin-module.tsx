@@ -5482,15 +5482,18 @@ function PriceCalculatorTab() {
   }
 
   // Live preview with a sample purchase cost of 5€
+  // Formule exacte : prix_vente = (coût_achat + marge + frais_fixes) / (1 - taxe% - frais_bancaires%)
   const sampleCost = 5
-  const sampleBase = sampleCost + config.bankFeeFixed           // achat + frais fixes
-  const sampleTax = sampleBase * (config.taxRate / 100)         // imposition sur le coût base
-  const sampleTotal = sampleBase + sampleTax                    // coût total
-  const sampleMargin = sampleTotal * (config.minMargin / 100)  // marge sur coût total
-  const sampleMin = sampleTotal + sampleMargin                 // prix mini avant frais variables
-  const sampleBankPct = sampleMin * (config.bankFeePercent / 100) // frais bancaires %
-  const sampleFinalPrice = sampleMin + sampleBankPct            // prix final
-  const sampleRounded = Math.ceil(sampleFinalPrice) - 0.01      // psychological pricing
+  const sampleMargin = sampleCost * (config.minMargin / 100)  // marge en € (calculée sur le prix d'achat)
+  const sampleNumerator = sampleCost + sampleMargin + config.bankFeeFixed
+  const sampleDenominator = 1 - (config.taxRate / 100) - (config.bankFeePercent / 100)
+  const sampleFinalPrice = sampleNumerator / sampleDenominator
+  const sampleRounded = Math.ceil(sampleFinalPrice) - 0.01
+
+  // Vérification inverse : si on déduit tout du prix de vente, on retombe sur le prix d'achat
+  const sampleTaxDeducted = sampleRounded * (config.taxRate / 100)
+  const sampleBankPctDeducted = sampleRounded * (config.bankFeePercent / 100)
+  const sampleRemaining = sampleRounded - sampleTaxDeducted - sampleBankPctDeducted - config.bankFeeFixed - sampleMargin
 
   if (loading) return <Skeleton className="h-64" />
 
@@ -5505,7 +5508,7 @@ function PriceCalculatorTab() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2"><Calculator className="h-4 w-4" /> Paramètres de calcul</CardTitle>
           <CardDescription className="text-xs">
-            Formule : <code className="bg-muted px-1.5 py-0.5 rounded">(achat + frais_fixes) × (1 + TVA%) × (1 + marge%) × (1 + frais_bancaires%)</code> → arrondi au X.99€
+            Formule : <code className="bg-muted px-1.5 py-0.5 rounded">prix_vente = (coût_achat + marge + frais_fixes) / (1 - taxe% - frais_bancaires%)</code> → arrondi au X.99€
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -5584,32 +5587,20 @@ function PriceCalculatorTab() {
                 <span className="font-mono">{sampleCost.toFixed(2)} €</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-muted-foreground">+ Marge ({config.minMargin}% du prix d'achat)</span>
+                <span className="font-mono">+ {sampleMargin.toFixed(2)} €</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-muted-foreground">+ Frais bancaires fixes</span>
                 <span className="font-mono">+ {config.bankFeeFixed.toFixed(2)} €</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">= Coût de base</span>
-                <span className="font-mono font-semibold">{sampleBase.toFixed(2)} €</span>
+                <span className="text-muted-foreground">= Numérateur</span>
+                <span className="font-mono font-semibold">{sampleNumerator.toFixed(2)} €</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">+ Imposition ({config.taxRate}%)</span>
-                <span className="font-mono">+ {sampleTax.toFixed(2)} €</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">= Coût total</span>
-                <span className="font-mono font-semibold">{sampleTotal.toFixed(2)} €</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">+ Marge ({config.minMargin}%)</span>
-                <span className="font-mono">+ {sampleMargin.toFixed(2)} €</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">= Prix mini</span>
-                <span className="font-mono">{sampleMin.toFixed(2)} €</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">+ Frais bancaires variables ({config.bankFeePercent}%)</span>
-                <span className="font-mono">+ {sampleBankPct.toFixed(2)} €</span>
+                <span className="text-muted-foreground">÷ (1 - {config.taxRate}% - {config.bankFeePercent}%)</span>
+                <span className="font-mono">÷ {sampleDenominator.toFixed(4)}</span>
               </div>
               <div className="flex justify-between pt-2 border-t">
                 <span className="font-semibold">Prix calculé</span>
@@ -5618,6 +5609,37 @@ function PriceCalculatorTab() {
               <div className="flex justify-between">
                 <span className="font-semibold">Prix arrondi (X.99)</span>
                 <span className="font-mono font-bold text-lg text-emerald-600">{sampleRounded.toFixed(2)} €</span>
+              </div>
+            </div>
+
+            {/* Vérification inverse */}
+            <div className="mt-3 pt-3 border-t border-dashed">
+              <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Vérification inverse</p>
+              <div className="text-sm space-y-0.5 text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>Prix de vente</span>
+                  <span className="font-mono">{sampleRounded.toFixed(2)} €</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>- URSSAF/Taxe ({config.taxRate}%)</span>
+                  <span className="font-mono text-red-500">- {sampleTaxDeducted.toFixed(2)} €</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>- Frais bancaires ({config.bankFeePercent}%)</span>
+                  <span className="font-mono text-red-500">- {sampleBankPctDeducted.toFixed(2)} €</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>- Frais bancaires fixes</span>
+                  <span className="font-mono text-red-500">- {config.bankFeeFixed.toFixed(2)} €</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>- Marge</span>
+                  <span className="font-mono text-red-500">- {sampleMargin.toFixed(2)} €</span>
+                </div>
+                <div className="flex justify-between pt-1 border-t">
+                  <span className="font-semibold text-foreground">= Prix d'achat (retrouvé)</span>
+                  <span className="font-mono font-bold text-blue-600">{sampleRemaining.toFixed(2)} €</span>
+                </div>
               </div>
             </div>
           </div>

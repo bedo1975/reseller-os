@@ -1902,20 +1902,16 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                         const res = await fetch('/api/boutique/admin/price-calculator')
                         if (!res.ok) throw new Error('Erreur')
                         const cfg = await res.json()
-                        // Formule correcte :
-                        // 1. coût_base = prix_achat + frais_bancaires_fixes
-                        // 2. coût_total = coût_base × (1 + taux_imposition / 100)
-                        // 3. prix_mini = coût_total × (1 + marge / 100)
-                        // 4. prix_final = prix_mini × (1 + frais_bancaires_percent / 100)
-                        // 5. prix_arrondi = Math.ceil(prix_final) - 0.01 (psychological pricing)
-                        const costBase = cost + (cfg.bankFeeFixed || 0)
-                        const costTotal = costBase * (1 + (cfg.taxRate || 0) / 100)
-                        const priceMin = costTotal * (1 + (cfg.minMargin || 0) / 100)
-                        const priceFinal = priceMin * (1 + (cfg.bankFeePercent || 0) / 100)
+                        // Formule exacte : prix_vente = (coût_achat + marge + frais_fixes) / (1 - taxe% - frais_bancaires%)
+                        // La marge est un montant en € (pas un %) calculé sur le prix d'achat
+                        const marginAmount = cost * (cfg.minMargin / 100)
+                        const numerator = cost + marginAmount + (cfg.bankFeeFixed || 0)
+                        const denominator = 1 - (cfg.taxRate || 0) / 100 - (cfg.bankFeePercent || 0) / 100
+                        const priceFinal = numerator / denominator
                         const rounded = Math.ceil(priceFinal) - 0.01
                         setForm({ ...form, suggestedPrice: rounded.toFixed(2) })
                         toast.success(`Prix généré : ${rounded.toFixed(2)} €`, {
-                          description: `Achat ${cost.toFixed(2)}€ + frais ${cfg.bankFeeFixed}€ + TVA ${cfg.taxRate}% + marge ${cfg.minMargin}% + frais ${cfg.bankFeePercent}%`,
+                          description: `Achat ${cost.toFixed(2)}€ + marge ${marginAmount.toFixed(2)}€ + ${cfg.bankFeeFixed}€ / (1 - ${cfg.taxRate}% - ${cfg.bankFeePercent}%)`,
                         })
                       } catch {
                         toast.error('Erreur lors du calcul du prix')
