@@ -777,6 +777,23 @@ model StockAlert {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// GÉNÉRATEUR DE PRIX — Paramètres de calcul automatique du prix de vente
+// ═══════════════════════════════════════════════════════════════════════
+model PriceCalculator {
+  id              String   @id @default("default")
+  // Taux d'imposition en % (ex: 20 = 20% de TVA ajoutée au prix d'achat)
+  taxRate         Float    @default(20)
+  // Frais bancaires fixes en € (ex: 0.50€ par transaction Stripe)
+  bankFeeFixed    Float    @default(0)
+  // Frais bancaires variables en % (ex: 1.4% du prix de vente)
+  bankFeePercent  Float    @default(0)
+  // Marge minimum en % (ex: 30% = le prix de vente doit être au moins prix d'achat + 30%)
+  minMargin       Float    @default(30)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // GUIDE DES TAILLES — Tableaux configurables (Hommes / Femmes / Enfants)
 // ═══════════════════════════════════════════════════════════════════════
 model SizeGuide {

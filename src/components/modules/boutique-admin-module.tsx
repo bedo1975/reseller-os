@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler,
+  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler, Calculator,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils'
 import { usePermissions } from '@/hooks/use-permissions'
 import { formatEUR, formatDate } from '@/lib/constants'
 
-type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter' | 'stock-alerts' | 'size-guide'
+type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter' | 'stock-alerts' | 'size-guide' | 'price-calculator'
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'orders', label: 'Commandes', icon: Package },
@@ -44,6 +44,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'newsletter', label: 'Newsletter', icon: MailOpen },
   { id: 'stock-alerts', label: 'Alertes stock', icon: BellRing },
   { id: 'size-guide', label: 'Guide tailles', icon: Ruler },
+  { id: 'price-calculator', label: 'Prix auto', icon: Calculator },
 ]
 
 export function BoutiqueAdminModule() {
@@ -100,6 +101,7 @@ export function BoutiqueAdminModule() {
       {tab === 'newsletter' && <NewsletterTab />}
       {tab === 'stock-alerts' && <StockAlertsTab />}
       {tab === 'size-guide' && <SizeGuideTab />}
+      {tab === 'price-calculator' && <PriceCalculatorTab />}
     </div>
   )
 }
@@ -5424,6 +5426,191 @@ function SizeGuideTab() {
           </CardContent>
         </Card>
       )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET — GÉNÉRATEUR DE PRIX (calcul automatique du prix de vente)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function PriceCalculatorTab() {
+  const [config, setConfig] = useState({
+    taxRate: 20,
+    bankFeeFixed: 0,
+    bankFeePercent: 0,
+    minMargin: 30,
+  })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  const fetchConfig = useCallback(() => {
+    setLoading(true)
+    fetch('/api/boutique/admin/price-calculator')
+      .then(r => r.json())
+      .then(data => {
+        if (data && !data.error) {
+          setConfig({
+            taxRate: data.taxRate ?? 20,
+            bankFeeFixed: data.bankFeeFixed ?? 0,
+            bankFeePercent: data.bankFeePercent ?? 0,
+            minMargin: data.minMargin ?? 30,
+          })
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { fetchConfig() }, [fetchConfig])
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/boutique/admin/price-calculator', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      })
+      if (!res.ok) { toast.error('Erreur'); return }
+      toast.success('Configuration sauvegardée')
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Live preview with a sample purchase cost of 10€
+  const sampleCost = 10
+  const sampleTax = sampleCost * (config.taxRate / 100)
+  const sampleAfterTax = sampleCost + sampleTax
+  const sampleMinPrice = sampleAfterTax * (1 + config.minMargin / 100)
+  const sampleBankFees = config.bankFeeFixed + (sampleMinPrice * config.bankFeePercent / 100)
+  const sampleFinalPrice = sampleMinPrice + sampleBankFees
+
+  if (loading) return <Skeleton className="h-64" />
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-3 text-xs text-blue-800 dark:text-blue-200">
+        <Calculator className="h-4 w-4 inline mr-1" />
+        <strong>Générateur de prix :</strong> configurez les paramètres de calcul. Dans le formulaire Stock, un bouton « Générer un prix » calculera automatiquement le prix conseillé à partir du prix d'achat.
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Calculator className="h-4 w-4" /> Paramètres de calcul</CardTitle>
+          <CardDescription className="text-xs">
+            Formule : <code className="bg-muted px-1.5 py-0.5 rounded">prix_achat + (prix_achat × taux_imposition%) + frais_bancaires_fixes + (prix × frais_bancaires_%) + marge_minimum%</code>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Taux d'imposition (%)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={config.taxRate}
+                  onChange={e => setConfig({ ...config, taxRate: parseFloat(e.target.value) || 0 })}
+                  className="font-mono"
+                />
+                <span className="text-sm text-muted-foreground">%</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">TVA ou taxe ajoutée au prix d'achat (ex: 20% = TVA française standard).</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Frais bancaires fixes (€)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={config.bankFeeFixed}
+                  onChange={e => setConfig({ ...config, bankFeeFixed: parseFloat(e.target.value) || 0 })}
+                  className="font-mono"
+                />
+                <span className="text-sm text-muted-foreground">€</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Frais fixes par transaction (ex: 0.50€ Stripe).</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Frais bancaires variables (%)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={config.bankFeePercent}
+                  onChange={e => setConfig({ ...config, bankFeePercent: parseFloat(e.target.value) || 0 })}
+                  className="font-mono"
+                />
+                <span className="text-sm text-muted-foreground">%</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Pourcentage du prix de vente (ex: 1.4% Stripe).</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Marge minimum (%)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="500"
+                  value={config.minMargin}
+                  onChange={e => setConfig({ ...config, minMargin: parseFloat(e.target.value) || 0 })}
+                  className="font-mono"
+                />
+                <span className="text-sm text-muted-foreground">%</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Marge minimale sur le coût total (ex: 30% = prix ≥ coût × 1.30).</p>
+            </div>
+          </div>
+
+          {/* Aperçu du calcul */}
+          <div className="rounded-lg border border-muted-foreground/20 bg-muted/30 p-4 space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase">Aperçu (prix d'achat = 10€)</p>
+            <div className="text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Prix d'achat</span>
+                <span className="font-mono">{sampleCost.toFixed(2)} €</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">+ Imposition ({config.taxRate}%)</span>
+                <span className="font-mono">+ {sampleTax.toFixed(2)} €</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">= Coût après imposition</span>
+                <span className="font-mono font-semibold">{sampleAfterTax.toFixed(2)} €</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">+ Marge minimum ({config.minMargin}%)</span>
+                <span className="font-mono">+ {(sampleAfterTax * config.minMargin / 100).toFixed(2)} €</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">+ Frais bancaires ({config.bankFeeFixed}€ + {config.bankFeePercent}%)</span>
+                <span className="font-mono">+ {sampleBankFees.toFixed(2)} €</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t">
+                <span className="font-semibold">Prix de vente conseillé</span>
+                <span className="font-mono font-bold text-lg text-emerald-600">{sampleFinalPrice.toFixed(2)} €</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={save} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+              {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

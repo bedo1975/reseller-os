@@ -1885,7 +1885,44 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Prix conseillé (€)</Label>
-                <Input type="number" step="0.01" value={form.suggestedPrice} onChange={e => setForm({ ...form, suggestedPrice: e.target.value })} placeholder="29.99" />
+                <div className="flex gap-1">
+                  <Input type="number" step="0.01" value={form.suggestedPrice} onChange={e => setForm({ ...form, suggestedPrice: e.target.value })} placeholder="29.99" className="flex-1" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 w-9 p-0 shrink-0"
+                    onClick={async () => {
+                      const cost = parseFloat(form.purchaseCost)
+                      if (!cost || cost <= 0) {
+                        toast.error('Renseignez d\'abord un prix d\'achat')
+                        return
+                      }
+                      try {
+                        const res = await fetch('/api/boutique/admin/price-calculator')
+                        if (!res.ok) throw new Error('Erreur')
+                        const cfg = await res.json()
+                        const taxAmount = cost * (cfg.taxRate / 100)
+                        const costAfterTax = cost + taxAmount
+                        const minPrice = costAfterTax * (1 + cfg.minMargin / 100)
+                        const bankFees = cfg.bankFeeFixed + (minPrice * cfg.bankFeePercent / 100)
+                        const finalPrice = minPrice + bankFees
+                        // Round up to nearest 0.99 (psychological pricing)
+                        const rounded = Math.ceil(finalPrice) - 0.01
+                        setForm({ ...form, suggestedPrice: rounded.toFixed(2) })
+                        toast.success(`Prix généré : ${rounded.toFixed(2)} €`, {
+                          description: `Achat ${cost.toFixed(2)}€ + TVA ${cfg.taxRate}% + marge ${cfg.minMargin}% + frais bancaires`,
+                        })
+                      } catch {
+                        toast.error('Erreur lors du calcul du prix')
+                      }
+                    }}
+                    title="Générer un prix automatiquement"
+                  >
+                    <Calculator className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Cliquez sur <Calculator className="inline h-3 w-3" /> pour calculer automatiquement à partir du prix d'achat.</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Prix promo (€) {form.saleActive && <span className="text-green-600 font-semibold">— Actif</span>}</Label>
@@ -2175,6 +2212,44 @@ function StockDetail({ open, onOpenChange, item }: {
             <Detail label="Couleur" value={item.color || '—'} />
             <Detail label="Lot" value={item.lotReference || '—'} />
             <Detail label="Code-barres" value={item.barcode || '—'} icon={<Barcode className="h-3 w-3" />} />
+            {item.barcode && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground text-xs">Imprimer code-barres</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 w-7 p-0"
+                  onClick={() => {
+                    const printWin = window.open('', '_blank', 'width=400,height=500')
+                    if (!printWin) { toast.error('Autorisez les pop-ups'); return }
+                    const barcodeUrl = `/api/stock/${item.id}/barcode?t=${Date.now()}`
+                    printWin.document.write(`
+                      <!DOCTYPE html><html><head><title>Code-barres — ${item.sku}</title>
+                      <style>body{font-family:system-ui,sans-serif;margin:20px;text-align:center}
+                      .label{max-width:280px;margin:0 auto;padding:12px;border:1px dashed #ccc;border-radius:4px}
+                      .brand{font-size:13px;font-weight:700;margin-bottom:4px}
+                      .sku{font-size:10px;font-family:monospace;color:#999;margin-bottom:8px}
+                      .barcode-img{max-width:100%;height:auto}
+                      .footer{font-size:9px;color:#999;margin-top:8px}
+                      @media print{.no-print{display:none}}
+                      </style></head><body>
+                      <div class="label">
+                      <div class="brand">${escapeHtml(item.brand)}</div>
+                      <div class="sku">SKU: ${escapeHtml(item.sku)}</div>
+                      <img src="${barcodeUrl}" alt="barcode" class="barcode-img" onload="window.focus();window.print()" />
+                      <div class="footer">${escapeHtml(item.barcode)}</div>
+                      </div>
+                      <div class="no-print" style="margin-top:20px">
+                      <button onclick="window.print()" style="padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer">Imprimer</button>
+                      </div></body></html>`)
+                    printWin.document.close()
+                  }}
+                  title="Imprimer le code-barres"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
             <Detail label="Fournisseur" value={item.supplier?.name || '—'} />
             {item.url && (
               <div className="col-span-2">
