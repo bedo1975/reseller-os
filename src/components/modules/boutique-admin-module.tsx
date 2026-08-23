@@ -5490,10 +5490,10 @@ function PriceCalculatorTab() {
   const sampleFinalPrice = sampleNumerator / sampleDenominator
   const sampleRounded = Math.ceil(sampleFinalPrice) - 0.01
 
-  // Vérification inverse : si on déduit tout du prix de vente, on retombe sur le prix d'achat
+  // Vérification inverse : bénéfice net = prix_vente - tous les coûts - prix d'achat
   const sampleTaxDeducted = sampleRounded * (config.taxRate / 100)
   const sampleBankPctDeducted = sampleRounded * (config.bankFeePercent / 100)
-  const sampleRemaining = sampleRounded - sampleTaxDeducted - sampleBankPctDeducted - config.bankFeeFixed - sampleMargin
+  const sampleNetProfit = sampleRounded - sampleTaxDeducted - sampleBankPctDeducted - config.bankFeeFixed - sampleCost
 
   if (loading) return <Skeleton className="h-64" />
 
@@ -5612,9 +5612,9 @@ function PriceCalculatorTab() {
               </div>
             </div>
 
-            {/* Vérification inverse */}
+            {/* Bénéfice net */}
             <div className="mt-3 pt-3 border-t border-dashed">
-              <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Vérification inverse</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Bénéfice net</p>
               <div className="text-sm space-y-0.5 text-muted-foreground">
                 <div className="flex justify-between">
                   <span>Prix de vente</span>
@@ -5633,13 +5633,16 @@ function PriceCalculatorTab() {
                   <span className="font-mono text-red-500">- {config.bankFeeFixed.toFixed(2)} €</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>- Marge</span>
-                  <span className="font-mono text-red-500">- {sampleMargin.toFixed(2)} €</span>
+                  <span>- Prix d'achat</span>
+                  <span className="font-mono text-red-500">- {sampleCost.toFixed(2)} €</span>
                 </div>
                 <div className="flex justify-between pt-1 border-t">
-                  <span className="font-semibold text-foreground">= Prix d'achat (retrouvé)</span>
-                  <span className="font-mono font-bold text-blue-600">{sampleRemaining.toFixed(2)} €</span>
+                  <span className="font-semibold text-foreground">= Bénéfice net</span>
+                  <span className="font-mono font-bold text-lg text-emerald-600">{sampleNetProfit.toFixed(2)} €</span>
                 </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Marge demandée : {sampleMargin.toFixed(2)}€ — le bénéfice réel est légèrement supérieur grâce à l'arrondi au X.99€
+                </p>
               </div>
             </div>
           </div>
