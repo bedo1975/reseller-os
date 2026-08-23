@@ -87,8 +87,14 @@ export function BarcodeScannerModal({ open, onOpenChange, onFound, onNotFound }:
       } else if (res.ok) {
         const data = await res.json()
         if (data.found && data.item) {
-          toast.success(`Article trouvé : ${data.item.brand}`)
-          onFoundRef.current(data.item)
+          if (data.items && data.items.length > 1) {
+            toast.success(`${data.items.length} variantes trouvées`)
+            // Pass the full response so the caller can access data.items
+            onFoundRef.current(data)
+          } else {
+            toast.success(`Article trouvé : ${data.item.brand}`)
+            onFoundRef.current(data)
+          }
         } else {
           onNotFoundRef.current(trimmed)
         }

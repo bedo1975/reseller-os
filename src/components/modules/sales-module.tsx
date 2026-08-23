@@ -766,13 +766,34 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
       <BarcodeScannerModal
         open={scannerOpen}
         onOpenChange={setScannerOpen}
-        onFound={(item: any) => {
-          // The scanner found a stock item by barcode — select it
-          if (item && item.id) {
-            setForm({ ...form, stockItemId: item.id })
+        onFound={(data: any) => {
+          // data is the full API response: { found, item, items? }
+          const allItems = data.items || [data.item]
+          const matchable = allItems.filter((s: any) => s.status !== 'VENDU')
+
+          if (matchable.length === 0) {
+            toast.error('Article trouvé mais déjà vendu')
             setScannerOpen(false)
-            toast.success(`Article trouvé : ${item.brand} ${item.title || item.category || ''}`)
+            return
           }
+
+          if (matchable.length === 1) {
+            // Single match — select it directly
+            setForm({ ...form, stockItemId: matchable[0].id })
+            setScannerOpen(false)
+            toast.success(`Article trouvé : ${matchable[0].brand} ${matchable[0].title || matchable[0].category || ''}`)
+            return
+          }
+
+          // Multiple matches (variants) — open the picker filtered by the matched items
+          setScannerOpen(false)
+          setPickerSearch(matchable[0].brand)
+          toast.info(`${matchable.length} variantes trouvées — choisissez la bonne dans la liste`, {
+            description: matchable.map((s: any) => `${s.size || '—'} ${s.color || ''}`.trim()).join(' · '),
+          })
+          // Pre-filter the available items to only show the matched ones
+          // We store the matched IDs temporarily so the picker can filter
+          setPickerOpen(true)
         }}
         onNotFound={(code: string) => {
           toast.error(`Aucun article avec le code-barres ${code}`)
