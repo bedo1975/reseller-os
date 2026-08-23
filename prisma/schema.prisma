@@ -116,6 +116,10 @@ model AIConfig {
   // Replicate API key for virtual try-on (IDM-VTON)
   // Separate from the main AI provider because Replicate is a different service.
   replicateApiKey String?
+  // FASHN.ai API key (alternative virtual try-on provider, 10 free credits)
+  fashnApiKey String?
+  // Which virtual try-on provider to use: "replicate" | "fashn"
+  vtonProvider String @default("replicate")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

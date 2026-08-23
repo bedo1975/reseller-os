@@ -6,20 +6,17 @@ import path from 'path'
 
 /**
  * POST /api/ai/virtual-tryon
- * Admin — performs a virtual try-on using Replicate's IDM-VTON model.
+ * Admin — performs a virtual try-on using either Replicate (IDM-VTON) or FASHN.ai.
  *
  * Body: { photoPath: "/uploads/sessions/xxx/yyy.webp", modelImage: "man_1" | "woman_1" | ... }
  *
- * The photoPath is the product photo (e.g. t-shirt on hanger).
- * The modelImage is a predefined mannequin/person reference image.
+ * The provider is determined by AIConfig.vtonProvider ("replicate" | "fashn").
  *
- * Returns: { outputUrl: "https://replicate.delivery/..." } — the URL of the generated image.
- * The caller can then download this image and replace the original photo.
+ * Returns: { outputUrl: "https://..." } — the URL of the generated image.
  */
 
-// Predefined model/person images hosted on a public URL.
-// These are simple, neutral background photos of people wearing plain clothes.
-// The IDM-VTON model will replace the person's clothing with the product garment.
+// Predefined model/person images hosted on Replicate's CDN (works for both providers
+// since they both accept URL inputs).
 const MODEL_IMAGES: Record<string, { url: string; label: string }> = {
   'man_1': {
     label: 'Homme — debout, face',
@@ -52,19 +49,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Modèle invalide' }, { status: 400 })
     }
 
-    // Get Replicate API key from AIConfig
+    // Get config
     let config = await db.aIConfig.findUnique({ where: { userId: user.id } })
     if (!config) {
       config = await db.aIConfig.create({ data: { userId: user.id, provider: 'zai' } })
     }
-    if (!config.replicateApiKey) {
+
+    const vtonProvider = config.vtonProvider || 'replicate'
+    const apiKey = vtonProvider === 'fashn' ? config.fashnApiKey : config.replicateApiKey
+
+    if (!apiKey) {
+      const providerName = vtonProvider === 'fashn' ? 'FASHN.ai' : 'Replicate'
       return NextResponse.json({
-        error: 'Clé API Replicate requise. Configurez-la dans Paramètres → IA → Essai virtuel.'
+        error: `Clé API ${providerName} requise. Configurez-la dans Paramètres → IA → Essai virtuel.`
       }, { status: 400 })
     }
 
     // Read the product photo from disk and convert to base64 data URI
-    // (Replicate accepts data URIs for inputs)
     const fullPath = path.join(process.cwd(), 'public', photoPath.replace(/^\//, ''))
     if (!fs.existsSync(fullPath)) {
       return NextResponse.json({ error: 'Photo introuvable sur le disque' }, { status: 404 })
@@ -77,68 +78,12 @@ export async function POST(req: NextRequest) {
 
     const modelConfig = MODEL_IMAGES[modelImage]
 
-    // Call Replicate API to create a prediction
-    // Using the model identifier format: owner/model:version_hash
-    // The version hash comes from replicate.com/cuuupid/idm-vton/versions
-    const createRes = await fetch('https://api.replicate.com/v1/predictions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${config.replicateApiKey}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'wait',  // Wait for the prediction to complete (up to 60s)
-      },
-      body: JSON.stringify({
-        version: 'cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4',
-        input: {
-          model_image: modelConfig.url,
-          garment_image: dataUri,
-        },
-      }),
-    })
-
-    if (!createRes.ok) {
-      const errText = await createRes.text()
-      let errMsg = ''
-      try {
-        const errJson = JSON.parse(errText)
-        errMsg = errJson?.detail || errJson?.error || errJson?.message || ''
-      } catch {
-        errMsg = errText.slice(0, 300)
-      }
-      console.error('[virtual-tryon] Replicate API error:', createRes.status, errMsg)
-      if (createRes.status === 401) {
-        return NextResponse.json({ error: 'Clé API Replicate invalide.' }, { status: 401 })
-      }
-      if (createRes.status === 402) {
-        return NextResponse.json({ error: 'Crédits Replicate insuffisants. Ajoutez des crédits sur replicate.com.' }, { status: 402 })
-      }
-      return NextResponse.json({ error: `Erreur Replicate: ${errMsg}` }, { status: 500 })
+    // Call the appropriate provider
+    if (vtonProvider === 'fashn') {
+      return await callFashn(apiKey, dataUri, modelConfig.url)
+    } else {
+      return await callReplicate(apiKey, dataUri, modelConfig.url)
     }
-
-    const prediction = await createRes.json()
-
-    // Check if prediction completed (with Prefer: wait, it should be done or have a status)
-    if (prediction.status === 'succeeded' && prediction.output) {
-      // output can be a string (URL) or array of strings
-      const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
-      return NextResponse.json({
-        outputUrl,
-        modelLabel: modelConfig.label,
-      })
-    }
-
-    if (prediction.status === 'failed') {
-      return NextResponse.json({ error: 'La transformation a échoué. Essayez une autre photo ou un autre modèle.' }, { status: 500 })
-    }
-
-    // If not immediately done (timeout after 60s with Prefer: wait), return the prediction ID
-    // so the client can poll for the result
-    return NextResponse.json({
-      predictionId: prediction.id,
-      status: prediction.status,
-      message: 'Transformation en cours. La photo sera prête dans quelques secondes.',
-    })
-
   } catch (error) {
     console.error('POST /api/ai/virtual-tryon error:', error)
     if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {
@@ -149,51 +94,172 @@ export async function POST(req: NextRequest) {
 }
 
 /**
+ * Call Replicate IDM-VTON
+ */
+async function callReplicate(apiKey: string, garmentImage: string, modelImage: string) {
+  const createRes = await fetch('https://api.replicate.com/v1/predictions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'wait',
+    },
+    body: JSON.stringify({
+      version: 'cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4',
+      input: {
+        model_image: modelImage,
+        garment_image: garmentImage,
+      },
+    }),
+  })
+
+  if (!createRes.ok) {
+    const errText = await createRes.text()
+    let errMsg = ''
+    try {
+      const errJson = JSON.parse(errText)
+      errMsg = errJson?.detail || errJson?.error || errJson?.message || ''
+    } catch {
+      errMsg = errText.slice(0, 300)
+    }
+    console.error('[virtual-tryon] Replicate API error:', createRes.status, errMsg)
+    if (createRes.status === 401) return NextResponse.json({ error: 'Clé API Replicate invalide.' }, { status: 401 })
+    if (createRes.status === 402) return NextResponse.json({ error: 'Crédits Replicate insuffisants.' }, { status: 402 })
+    return NextResponse.json({ error: `Erreur Replicate: ${errMsg}` }, { status: 500 })
+  }
+
+  const prediction = await createRes.json()
+
+  if (prediction.status === 'succeeded' && prediction.output) {
+    const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+    return NextResponse.json({ outputUrl })
+  }
+
+  if (prediction.status === 'failed') {
+    return NextResponse.json({ error: 'La transformation a échoué.' }, { status: 500 })
+  }
+
+  return NextResponse.json({
+    predictionId: prediction.id,
+    provider: 'replicate',
+    status: prediction.status,
+    message: 'Transformation en cours...',
+  })
+}
+
+/**
+ * Call FASHN.ai
+ * FASHN uses a similar API: POST /v1/run, then poll /v1/status/{id}
+ */
+async function callFashn(apiKey: string, garmentImage: string, modelImage: string) {
+  // Step 1: Create the prediction
+  const createRes = await fetch('https://api.fashn.ai/v1/run', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model_image: modelImage,
+      garment_image: garmentImage,
+    }),
+  })
+
+  if (!createRes.ok) {
+    const errText = await createRes.text()
+    let errMsg = ''
+    try {
+      const errJson = JSON.parse(errText)
+      errMsg = errJson?.error || errJson?.message || errJson?.detail || ''
+    } catch {
+      errMsg = errText.slice(0, 300)
+    }
+    console.error('[virtual-tryon] FASHN API error:', createRes.status, errMsg)
+    if (createRes.status === 401) return NextResponse.json({ error: 'Clé API FASHN invalide.' }, { status: 401 })
+    if (createRes.status === 402 || createRes.status === 429) return NextResponse.json({ error: 'Crédits FASHN insuffisants. 10 crédits gratuits à l\'inscription.' }, { status: 402 })
+    return NextResponse.json({ error: `Erreur FASHN: ${errMsg}` }, { status: 500 })
+  }
+
+  const prediction = await createRes.json()
+
+  // FASHN returns { id: "xxx", status: "starting" | "processing" | "completed" | "failed" }
+  if (prediction.status === 'completed' && prediction.output) {
+    const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+    return NextResponse.json({ outputUrl })
+  }
+
+  if (prediction.status === 'failed') {
+    return NextResponse.json({ error: 'La transformation a échoué.' }, { status: 500 })
+  }
+
+  // Need to poll for the result
+  return NextResponse.json({
+    predictionId: prediction.id,
+    provider: 'fashn',
+    status: prediction.status,
+    message: 'Transformation en cours...',
+  })
+}
+
+/**
  * GET /api/ai/virtual-tryon?id=xxx
- * Polls the status of a virtual try-on prediction (if it wasn't immediately done).
+ * Polls the status of a virtual try-on prediction.
+ * Also returns available models when called without id.
  */
 export async function GET(req: NextRequest) {
   try {
     const user = await requireAuth()
     const { searchParams } = new URL(req.url)
     const predictionId = searchParams.get('id')
+    const provider = searchParams.get('provider') || 'replicate'
 
     if (!predictionId) {
-      // Return list of available models
       return NextResponse.json({
         models: Object.entries(MODEL_IMAGES).map(([key, val]) => ({
-          key,
-          label: val.label,
+          key, label: val.label,
         }))
       })
     }
 
-    // Poll Replicate for the prediction status
     let config = await db.aIConfig.findUnique({ where: { userId: user.id } })
-    if (!config?.replicateApiKey) {
-      return NextResponse.json({ error: 'Clé API Replicate requise' }, { status: 400 })
+    if (!config) return NextResponse.json({ error: 'Config introuvable' }, { status: 404 })
+
+    const apiKey = provider === 'fashn' ? config.fashnApiKey : config.replicateApiKey
+    if (!apiKey) return NextResponse.json({ error: 'Clé API requise' }, { status: 400 })
+
+    if (provider === 'fashn') {
+      // Poll FASHN status
+      const res = await fetch(`https://api.fashn.ai/v1/status/${predictionId}`, {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      })
+      if (!res.ok) return NextResponse.json({ error: 'Erreur lors de la vérification' }, { status: 500 })
+
+      const prediction = await res.json()
+      if (prediction.status === 'completed' && prediction.output) {
+        const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+        return NextResponse.json({ status: 'succeeded', outputUrl })
+      }
+      if (prediction.status === 'failed') {
+        return NextResponse.json({ status: 'failed', error: 'La transformation a échoué' }, { status: 500 })
+      }
+      return NextResponse.json({ status: prediction.status })
+    } else {
+      // Poll Replicate status
+      const res = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      })
+      if (!res.ok) return NextResponse.json({ error: 'Erreur lors de la vérification' }, { status: 500 })
+
+      const prediction = await res.json()
+      if (prediction.status === 'succeeded' && prediction.output) {
+        const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+        return NextResponse.json({ status: 'succeeded', outputUrl })
+      }
+      if (prediction.status === 'failed') {
+        return NextResponse.json({ status: 'failed', error: 'La transformation a échoué' }, { status: 500 })
+      }
+      return NextResponse.json({ status: prediction.status })
     }
-
-    const res = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
-      headers: { 'Authorization': `Bearer ${config.replicateApiKey}` },
-    })
-
-    if (!res.ok) {
-      return NextResponse.json({ error: 'Erreur lors de la vérification du statut' }, { status: 500 })
-    }
-
-    const prediction = await res.json()
-
-    if (prediction.status === 'succeeded' && prediction.output) {
-      const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
-      return NextResponse.json({ status: 'succeeded', outputUrl })
-    }
-
-    if (prediction.status === 'failed') {
-      return NextResponse.json({ status: 'failed', error: 'La transformation a échoué' }, { status: 500 })
-    }
-
-    return NextResponse.json({ status: prediction.status })
   } catch (error) {
     console.error('GET /api/ai/virtual-tryon error:', error)
     if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {

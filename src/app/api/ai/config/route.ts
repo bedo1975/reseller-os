@@ -131,6 +131,8 @@ export async function GET() {
       apiKey: config.apiKey ? '••••••••' + config.apiKey.slice(-4) : null,
       hasApiKey: !!config.apiKey,
       hasReplicateApiKey: !!config.replicateApiKey,
+      hasFashnApiKey: !!config.fashnApiKey,
+      vtonProvider: config.vtonProvider || 'replicate',
       providers: AI_PROVIDERS,
     })
   } catch (error) {
@@ -146,7 +148,7 @@ export async function PUT(req: NextRequest) {
   try {
     const user = await requireAuth()
     const body = await req.json()
-    const { provider, apiKey, model, replicateApiKey: repKey } = body
+    const { provider, apiKey, model, replicateApiKey: repKey, fashnApiKey: fashnKey, vtonProvider: vton } = body
 
     if (!provider || !AI_PROVIDERS[provider as keyof typeof AI_PROVIDERS]) {
       return NextResponse.json({ error: 'Fournisseur invalide' }, { status: 400 })
@@ -175,6 +177,12 @@ export async function PUT(req: NextRequest) {
       }
       if (repKey && !repKey.startsWith('••••')) {
         updateData.replicateApiKey = repKey
+      }
+      if (fashnKey && !fashnKey.startsWith('••••')) {
+        (updateData as any).fashnApiKey = fashnKey
+      }
+      if (vton && ['replicate', 'fashn'].includes(vton)) {
+        (updateData as any).vtonProvider = vton
       }
       config = await db.aIConfig.update({
         where: { userId: user.id },

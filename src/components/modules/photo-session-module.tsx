@@ -190,12 +190,13 @@ export function PhotoSessionModule() {
         toast.success('Transformation réussie !')
       } else if (data.predictionId) {
         // Need to poll for the result
+        const provider = data.provider || 'replicate'
         toast.info('Transformation en cours...', { description: 'Cela peut prendre 30-60 secondes.' })
         const predictionId = data.predictionId
         // Poll every 5 seconds for up to 2 minutes
         for (let i = 0; i < 24; i++) {
           await new Promise(r => setTimeout(r, 5000))
-          const pollRes = await fetch(`/api/ai/virtual-tryon?id=${predictionId}`)
+          const pollRes = await fetch(`/api/ai/virtual-tryon?id=${predictionId}&provider=${provider}`)
           const pollData = await pollRes.json()
           if (pollData.status === 'succeeded' && pollData.outputUrl) {
             setTryonResult(pollData.outputUrl)

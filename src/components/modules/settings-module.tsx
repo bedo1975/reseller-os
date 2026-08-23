@@ -1325,6 +1325,8 @@ function AISection() {
   const [provider, setProvider] = useState<string>('zai')
   const [apiKey, setApiKey] = useState<string>('')
   const [replicateApiKey, setReplicateApiKey] = useState<string>('')
+  const [fashnApiKey, setFashnApiKey] = useState<string>('')
+  const [vtonProvider, setVtonProvider] = useState<string>('replicate')
   const [model, setModel] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -1336,6 +1338,10 @@ function AISection() {
   } else if (data && provider === 'zai' && data.provider === 'zai' && !apiKey && model === '' && data.model) {
     setModel(data.model)
   }
+  // Sync vtonProvider from data once
+  useEffect(() => {
+    if (data?.vtonProvider) setVtonProvider(data.vtonProvider)
+  }, [data?.vtonProvider])
 
   const currentProvider = data?.providers?.[provider]
   const hasApiKeySet = !!data?.hasApiKey && data?.provider === provider
@@ -1362,6 +1368,10 @@ function AISection() {
       if (replicateApiKey && !replicateApiKey.startsWith('••••')) {
         (body as any).replicateApiKey = replicateApiKey
       }
+      if (fashnApiKey && !fashnApiKey.startsWith('••••')) {
+        (body as any).fashnApiKey = fashnApiKey
+      }
+      ;(body as any).vtonProvider = vtonProvider
       const res = await fetch('/api/ai/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1374,6 +1384,7 @@ function AISection() {
       toast.success('Configuration IA enregistrée')
       setApiKey('')
       setReplicateApiKey('')
+      setFashnApiKey('')
       refresh()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Erreur')
@@ -1561,25 +1572,65 @@ function AISection() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-purple-600" />
-            Essai virtuel IA (Replicate)
+            Essai virtuel IA (Virtual Try-On)
           </CardTitle>
           <CardDescription className="text-xs">
-            Clé API Replicate pour le virtual try-on (transformer un article en photo portée par un mannequin).
-            Créez un compte sur <a href="https://replicate.com" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline">replicate.com</a> → Account → API tokens.
+            Transforme la photo d'un article en photo portée par un mannequin. Utilisé dans Shooting → bouton ✨.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <Label className="text-xs">Clé API Replicate</Label>
-          <Input
-            type="password"
-            value={replicateApiKey}
-            onChange={e => setReplicateApiKey(e.target.value)}
-            placeholder={data?.hasReplicateApiKey ? '•••••••••••• (clé enregistrée)' : 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
-            className="font-mono text-sm"
-          />
-          <p className="text-[10px] text-muted-foreground">
-            Coût : ~0.024€ par transformation. Crédits gratuits à l'inscription. Utilisé dans Shooting → bouton ✨ sur chaque photo.
-          </p>
+        <CardContent className="space-y-3">
+          {/* Provider selector */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Fournisseur</Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setVtonProvider('replicate')}
+                className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${vtonProvider === 'replicate' ? 'border-purple-400 bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300' : 'border-border text-muted-foreground hover:border-foreground/20'}`}
+              >
+                Replicate (IDM-VTON)
+                <p className="text-[10px] text-muted-foreground mt-0.5">~0.024€/photo · meilleure qualité</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setVtonProvider('fashn')}
+                className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${vtonProvider === 'fashn' ? 'border-purple-400 bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300' : 'border-border text-muted-foreground hover:border-foreground/20'}`}
+              >
+                FASHN.ai
+                <p className="text-[10px] text-muted-foreground mt-0.5">10 crédits gratuits · sans CB</p>
+              </button>
+            </div>
+          </div>
+
+          {/* Replicate key */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Clé API Replicate {(data as any)?.vtonProvider === 'fashn' && '(non utilisé si FASHN sélectionné)'}</Label>
+            <Input
+              type="password"
+              value={replicateApiKey}
+              onChange={e => setReplicateApiKey(e.target.value)}
+              placeholder={(data as any)?.hasReplicateApiKey ? '•••••••••••• (clé enregistrée)' : 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+              className="font-mono text-sm"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Créez un compte sur <a href="https://replicate.com" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline">replicate.com</a> → Account → API tokens
+            </p>
+          </div>
+
+          {/* FASHN key */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Clé API FASHN.ai {(data as any)?.vtonProvider !== 'fashn' && '(non utilisé si Replicate sélectionné)'}</Label>
+            <Input
+              type="password"
+              value={fashnApiKey}
+              onChange={e => setFashnApiKey(e.target.value)}
+              placeholder={(data as any)?.hasFashnApiKey ? '•••••••••••• (clé enregistrée)' : 'fs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+              className="font-mono text-sm"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Créez un compte sur <a href="https://fashn.ai" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline">fashn.ai</a> → 10 crédits gratuits sans carte bancaire
+            </p>
+          </div>
         </CardContent>
       </Card>
 
