@@ -40,9 +40,9 @@ export const AI_PROVIDERS = {
   },
   gemini: {
     label: 'Google Gemini',
-    description: 'Gratuit mais activation facturation Google Cloud requise',
-    defaultModel: 'gemini-2.0-flash',
-    models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro'],
+    description: 'Gratuit avec Google AI Studio — vision + génération d\'images',
+    defaultModel: 'gemini-2.5-flash',
+    models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3-flash', 'gemini-3.1-pro', 'gemini-3.5-flash'],
     apiKeyUrl: 'https://aistudio.google.com/app/apikey',
     free: true,
     type: 'gemini',

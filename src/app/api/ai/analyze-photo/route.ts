@@ -162,8 +162,11 @@ export async function POST(req: NextRequest) {
       'llama-3.1-8b-instant': 'openai/gpt-oss-20b',
       'llama-3.1-70b-versatile': 'openai/gpt-oss-120b',
       'llama-3.3-70b-versatile': 'openai/gpt-oss-120b',
-      'gemini-1.5-flash': 'gemini-2.0-flash',
-      'gemini-2.0-flash-exp': 'gemini-2.0-flash',
+      'gemini-1.5-flash': 'gemini-2.5-flash',
+      'gemini-2.0-flash': 'gemini-2.5-flash',
+      'gemini-2.0-flash-exp': 'gemini-2.5-flash',
+      'gemini-2.0-flash-lite': 'gemini-2.5-flash-lite',
+      'gemini-2.5-pro': 'gemini-2.5-flash',
     }
     if (DEPRECATED[model]) model = DEPRECATED[model]
 

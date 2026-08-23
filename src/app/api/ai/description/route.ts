@@ -23,9 +23,12 @@ Règles de rédaction :
 Réponds UNIQUEMENT avec la description, sans introduction ni commentaire.`
 
 const DEPRECATED_MODELS: Record<string, string> = {
-  'gemini-1.5-flash': 'gemini-2.0-flash',
-  'gemini-1.5-pro': 'gemini-2.5-pro',
-  'gemini-2.0-flash-exp': 'gemini-2.0-flash',
+  'gemini-1.5-flash': 'gemini-2.5-flash',
+  'gemini-1.5-pro': 'gemini-2.5-flash',
+  'gemini-2.0-flash': 'gemini-2.5-flash',
+  'gemini-2.0-flash-exp': 'gemini-2.5-flash',
+  'gemini-2.0-flash-lite': 'gemini-2.5-flash-lite',
+  'gemini-2.5-pro': 'gemini-2.5-flash',
   // Llama 4 models were deprecated/renamed by Groq/NVIDIA/Cerebras
   'meta-llama/llama-4-scout-17b-16e-instruct': 'openai/gpt-oss-120b',
   'meta-llama/llama-4-maverick-17b-128e-instruct': 'openai/gpt-oss-120b',
