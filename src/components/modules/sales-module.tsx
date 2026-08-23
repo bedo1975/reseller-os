@@ -18,7 +18,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, ShoppingCart, Search, Euro, TrendingUp, Percent, Edit, Trash2, FileText, Package } from 'lucide-react'
+import { Plus, ShoppingCart, Search, Euro, TrendingUp, Percent, Edit, Trash2, FileText, Package, Barcode } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePermissions } from '@/hooks/use-permissions'
 import {
@@ -28,6 +28,8 @@ import {
 import { cn } from '@/lib/utils'
 import { useConfirm } from '@/components/shared/confirm-provider'
 import { useSettings } from '@/hooks/use-settings'
+import { useBoutiqueCategories } from '@/hooks/use-boutique-categories'
+import { BarcodeScannerModal } from '@/components/stock/barcode-scanner'
 import type { StockItem } from './stock-module'
 
 interface Sale {
@@ -334,7 +336,9 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
   const [pickerCategory, setPickerCategory] = useState('')
   const [pickerSubcat, setPickerSubcat] = useState('')
   const [pickerSearch, setPickerSearch] = useState('')
+  const [scannerOpen, setScannerOpen] = useState(false)
   const { getByType } = useSettings()
+  const { categories: boutiqueCats, getSubcategories: getBoutiqueSubcats } = useBoutiqueCategories()
   const platforms = getByType('platform')
   // Plateforme par défaut = première plateforme des settings, ou 'vinted' en fallback
   const defaultPlatformCode = platforms[0]?.code || 'vinted'
@@ -507,15 +511,23 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
                   <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setPickerOpen(true)} title="Changer d'article">
                     <Search className="h-3.5 w-3.5" />
                   </Button>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setScannerOpen(true)} title="Scanner un code-barres">
+                    <Barcode className="h-3.5 w-3.5" />
+                  </Button>
                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => setForm({ ...form, stockItemId: '' })} title="Détacher">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
             ) : (
-              <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)} className="w-full justify-start text-muted-foreground">
-                <Search className="h-4 w-4 mr-2" /> Rechercher un article…
-              </Button>
+              <div className="flex gap-1">
+                <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)} className="flex-1 justify-start text-muted-foreground">
+                  <Search className="h-4 w-4 mr-2" /> Rechercher un article…
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setScannerOpen(true)} className="shrink-0" title="Scanner un code-barres">
+                  <Barcode className="h-4 w-4" />
+                </Button>
+              </div>
             )}
             {selectedItem && (
               <p className="text-xs text-muted-foreground">
@@ -692,14 +704,14 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Catégorie" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">Toutes catégories</SelectItem>
-                  {Array.from(new Set(availableItems.map(s => s.category))).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  {boutiqueCats.map(c => <SelectItem key={c.slug} value={c.slug}>{c.emoji} {c.label}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={pickerSubcat || '__all__'} onValueChange={v => setPickerSubcat(v === '__all__' ? '' : v)} disabled={!pickerCategory}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sous-cat." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">Toutes</SelectItem>
-                  {Array.from(new Set(availableItems.filter(s => s.category === pickerCategory && s.subcategory).map(s => s.subcategory))).map(sc => <SelectItem key={sc} value={sc as string}>{sc}</SelectItem>)}
+                  {getBoutiqueSubcats(pickerCategory).map(sc => <SelectItem key={sc.slug} value={sc.slug}>{sc.label}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Input value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} placeholder="Rechercher…" className="h-8 text-xs" />
@@ -749,6 +761,23 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Barcode scanner modal */}
+      <BarcodeScannerModal
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onFound={(item: any) => {
+          // The scanner found a stock item by barcode — select it
+          if (item && item.id) {
+            setForm({ ...form, stockItemId: item.id })
+            setScannerOpen(false)
+            toast.success(`Article trouvé : ${item.brand} ${item.title || item.category || ''}`)
+          }
+        }}
+        onNotFound={(code: string) => {
+          toast.error(`Aucun article avec le code-barres ${code}`)
+        }}
+      />
     </Dialog>
   )
 }
