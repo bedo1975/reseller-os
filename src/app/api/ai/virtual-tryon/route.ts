@@ -118,8 +118,8 @@ async function callGemini(apiKey: string, garmentDataUri: string, modelConfig: {
   const prompt = `Look at this clothing item. Generate a photorealistic image of ${genderHint} wearing this exact garment. The person should be standing, facing forward, in good lighting against a clean neutral background. The garment should fit naturally on the person. Keep the garment's color, pattern, and details exactly as shown in the original image.`
 
   // Call Gemini API — generateContent with inline_data (image) + text
-  // Model: gemini-2.5-flash-preview-image (Nano Banana) — supports image generation from image+text
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-image:generateContent?key=${apiKey}`, {
+  // Model: gemini-2.5-flash-image (Nano Banana) — supports image generation from image+text
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
