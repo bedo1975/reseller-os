@@ -1585,6 +1585,14 @@ function AISection() {
             <div className="flex gap-2">
               <button
                 type="button"
+                onClick={() => setVtonProvider('gemini')}
+                className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${vtonProvider === 'gemini' ? 'border-purple-400 bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300' : 'border-border text-muted-foreground hover:border-foreground/20'}`}
+              >
+                Gemini (Nano Banana)
+                <p className="text-[10px] text-muted-foreground mt-0.5">GRATUIT · utilise ta clé Google AI Studio</p>
+              </button>
+              <button
+                type="button"
                 onClick={() => setVtonProvider('replicate')}
                 className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${vtonProvider === 'replicate' ? 'border-purple-400 bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300' : 'border-border text-muted-foreground hover:border-foreground/20'}`}
               >
@@ -1597,10 +1605,19 @@ function AISection() {
                 className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${vtonProvider === 'fashn' ? 'border-purple-400 bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300' : 'border-border text-muted-foreground hover:border-foreground/20'}`}
               >
                 FASHN.ai
-                <p className="text-[10px] text-muted-foreground mt-0.5">10 crédits gratuits · sans CB</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">10 crédits gratuits</p>
               </button>
             </div>
           </div>
+
+          {/* Gemini note */}
+          {vtonProvider === 'gemini' && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900 p-3 text-xs text-emerald-800 dark:text-emerald-200">
+              ✅ <strong>Gemini est GRATUIT</strong> avec ta clé API Google AI Studio (déjà configurée dans "Fournisseur IA" ci-dessus, si tu as sélectionné Gemini comme provider principal).
+              Si ton provider IA principal n'est pas Gemini, configure ta clé Google AI Studio dans le champ "Clé API" en haut de cette page, puis sélectionne Gemini comme provider IA.
+              <p className="mt-1">Le modèle utilisé est <code className="bg-emerald-100 dark:bg-emerald-900/50 px-1 rounded">gemini-2.5-flash-image</code> (Nano Banana).</p>
+            </div>
+          )}
 
           {/* Replicate key */}
           <div className="space-y-1.5">

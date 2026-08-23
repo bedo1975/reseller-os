@@ -118,8 +118,8 @@ model AIConfig {
   replicateApiKey String?
   // FASHN.ai API key (alternative virtual try-on provider, 10 free credits)
   fashnApiKey String?
-  // Which virtual try-on provider to use: "replicate" | "fashn"
-  vtonProvider String @default("replicate")
+  // Which virtual try-on provider to use: "replicate" | "fashn" | "gemini"
+  vtonProvider String @default("gemini")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

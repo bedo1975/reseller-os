@@ -55,11 +55,19 @@ export async function POST(req: NextRequest) {
       config = await db.aIConfig.create({ data: { userId: user.id, provider: 'zai' } })
     }
 
-    const vtonProvider = config.vtonProvider || 'replicate'
-    const apiKey = vtonProvider === 'fashn' ? config.fashnApiKey : config.replicateApiKey
+    const vtonProvider = config.vtonProvider || 'gemini'
+    let apiKey: string | null = null
+    if (vtonProvider === 'fashn') {
+      apiKey = config.fashnApiKey
+    } else if (vtonProvider === 'replicate') {
+      apiKey = config.replicateApiKey
+    } else if (vtonProvider === 'gemini') {
+      // Gemini uses the main AI apiKey (Google AI Studio key)
+      apiKey = config.apiKey
+    }
 
     if (!apiKey) {
-      const providerName = vtonProvider === 'fashn' ? 'FASHN.ai' : 'Replicate'
+      const providerName = vtonProvider === 'fashn' ? 'FASHN.ai' : vtonProvider === 'replicate' ? 'Replicate' : 'Google AI Studio (Gemini)'
       return NextResponse.json({
         error: `Clé API ${providerName} requise. Configurez-la dans Paramètres → IA → Essai virtuel.`
       }, { status: 400 })
@@ -81,6 +89,8 @@ export async function POST(req: NextRequest) {
     // Call the appropriate provider
     if (vtonProvider === 'fashn') {
       return await callFashn(apiKey, dataUri, modelConfig.url)
+    } else if (vtonProvider === 'gemini') {
+      return await callGemini(apiKey, dataUri, modelConfig)
     } else {
       return await callReplicate(apiKey, dataUri, modelConfig.url)
     }
@@ -91,6 +101,80 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
+}
+
+/**
+ * Call Gemini (Nano Banana — gemini-2.5-flash-image)
+ * Uses the Google AI Studio API. Accepts an image + text prompt.
+ * The prompt asks Gemini to put the garment on a real person.
+ * Returns the generated image as base64.
+ *
+ * Free with Google AI Studio API key (same key as the main AI config).
+ */
+async function callGemini(apiKey: string, garmentDataUri: string, modelConfig: { url: string; label: string }) {
+  // Build the prompt for Gemini. We send the garment photo and ask it to
+  // create an image of a real person wearing this garment.
+  const genderHint = modelConfig.label.toLowerCase().includes('femme') ? 'a woman' : 'a man'
+  const prompt = `Look at this clothing item. Generate a photorealistic image of ${genderHint} wearing this exact garment. The person should be standing, facing forward, in good lighting against a clean neutral background. The garment should fit naturally on the person. Keep the garment's color, pattern, and details exactly as shown in the original image.`
+
+  // Call Gemini API — generateContent with inline_data (image) + text
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inline_data: { mime_type: garmentDataUri.split(';')[0].split(':')[1], data: garmentDataUri.split(',')[1] } },
+        ],
+      }],
+      generationConfig: {
+        responseModalities: ['TEXT', 'IMAGE'],
+      },
+    }),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    let errMsg = ''
+    try {
+      const errJson = JSON.parse(errText)
+      errMsg = errJson?.error?.message || errJson?.error || ''
+    } catch {
+      errMsg = errText.slice(0, 300)
+    }
+    console.error('[virtual-tryon] Gemini API error:', res.status, errMsg)
+    if (res.status === 401 || res.status === 403) return NextResponse.json({ error: 'Clé API Google AI Studio invalide.' }, { status: 401 })
+    if (res.status === 429) return NextResponse.json({ error: 'Quota Gemini dépassé. Attendez quelques minutes.' }, { status: 429 })
+    return NextResponse.json({ error: `Erreur Gemini: ${errMsg}` }, { status: 500 })
+  }
+
+  const data = await res.json()
+
+  // Gemini returns parts with inline_data (base64 image) in the response
+  const parts = data?.candidates?.[0]?.content?.parts
+  if (!parts) {
+    console.error('[virtual-tryon] Gemini no parts in response:', JSON.stringify(data).slice(0, 500))
+    return NextResponse.json({ error: 'Gemini n\'a pas retourné d\'image. Essayez une autre photo.' }, { status: 500 })
+  }
+
+  // Find the image part
+  const imagePart = parts.find((p: any) => p.inline_data || p.inlineData)
+  if (!imagePart) {
+    // Maybe Gemini returned only text (e.g. a refusal)
+    const textPart = parts.find((p: any) => p.text)
+    const textMsg = textPart?.text || 'Aucune image générée'
+    return NextResponse.json({ error: `Gemini: ${textMsg.slice(0, 200)}` }, { status: 500 })
+  }
+
+  const inlineData = imagePart.inline_data || imagePart.inlineData
+  const base64Image = inlineData.data
+  const mimeType = inlineData.mime_type || inlineData.mimeType || 'image/png'
+
+  // Return as a data URI that the frontend can display directly
+  const outputDataUri = `data:${mimeType};base64,${base64Image}`
+
+  return NextResponse.json({ outputUrl: outputDataUri })
 }
 
 /**
