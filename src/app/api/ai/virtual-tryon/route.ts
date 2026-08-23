@@ -78,7 +78,8 @@ export async function POST(req: NextRequest) {
     const modelConfig = MODEL_IMAGES[modelImage]
 
     // Call Replicate API to create a prediction
-    // Step 1: Create the prediction
+    // Using the model identifier format: owner/model:version_hash
+    // The version hash comes from replicate.com/cuuupid/idm-vton/versions
     const createRes = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
         'Prefer': 'wait',  // Wait for the prediction to complete (up to 60s)
       },
       body: JSON.stringify({
-        version: 'cuuupid/idm-vton@c11d5877d8a6d257e87ad7f57d2b1d3b1e1f3e0e',
+        version: 'cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4',
         input: {
           model_image: modelConfig.url,
           garment_image: dataUri,
