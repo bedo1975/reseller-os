@@ -181,7 +181,7 @@ export async function PUT(req: NextRequest) {
       if (fashnKey && !fashnKey.startsWith('••••')) {
         (updateData as any).fashnApiKey = fashnKey
       }
-      if (vton && ['replicate', 'fashn'].includes(vton)) {
+      if (vton && ['replicate', 'fashn', 'gemini'].includes(vton)) {
         (updateData as any).vtonProvider = vton
       }
       config = await db.aIConfig.update({
