@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   Camera, Plus, Trash2, Loader2, Image as ImageIcon, X, Check, Link2,
-  ChevronLeft, Upload, FileImage, Calendar, Tag, Download,
+  ChevronLeft, Upload, FileImage, Calendar, Tag, Download, Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,6 +47,11 @@ export function PhotoSessionModule() {
   const [creating, setCreating] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [tryonPhoto, setTryonPhoto] = useState<string | null>(null)  // photo path being transformed
+  const [tryonModel, setTryonModel] = useState<string>('man_1')
+  const [tryonLoading, setTryonLoading] = useState(false)
+  const [tryonResult, setTryonResult] = useState<string | null>(null)  // output URL from Replicate
+  const [tryonError, setTryonError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchSessions = useCallback(async () => {
@@ -161,6 +166,76 @@ export function PhotoSessionModule() {
       await fetchSessions()
     } catch {
       toast.error('Erreur réseau')
+    }
+  }
+
+  const handleVirtualTryOn = async () => {
+    if (!tryonPhoto) return
+    setTryonLoading(true)
+    setTryonError(null)
+    setTryonResult(null)
+    try {
+      const res = await fetch('/api/ai/virtual-tryon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photoPath: tryonPhoto, modelImage: tryonModel }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Erreur')
+      }
+      // If the prediction returned immediately (Prefer: wait)
+      if (data.outputUrl) {
+        setTryonResult(data.outputUrl)
+        toast.success('Transformation réussie !')
+      } else if (data.predictionId) {
+        // Need to poll for the result
+        toast.info('Transformation en cours...', { description: 'Cela peut prendre 30-60 secondes.' })
+        const predictionId = data.predictionId
+        // Poll every 5 seconds for up to 2 minutes
+        for (let i = 0; i < 24; i++) {
+          await new Promise(r => setTimeout(r, 5000))
+          const pollRes = await fetch(`/api/ai/virtual-tryon?id=${predictionId}`)
+          const pollData = await pollRes.json()
+          if (pollData.status === 'succeeded' && pollData.outputUrl) {
+            setTryonResult(pollData.outputUrl)
+            toast.success('Transformation réussie !')
+            return
+          }
+          if (pollData.status === 'failed') {
+            throw new Error('La transformation a échoué')
+          }
+        }
+        throw new Error('Délai dépassé. Réessayez.')
+      }
+    } catch (e: unknown) {
+      setTryonError(e instanceof Error ? e.message : 'Erreur')
+      toast.error(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setTryonLoading(false)
+    }
+  }
+
+  // Replace the original photo with the virtual try-on result
+  const applyTryOnResult = async () => {
+    if (!tryonResult || !tryonPhoto || !selectedSession) return
+    try {
+      // Download the result image and replace the original file
+      const res = await fetch(tryonResult)
+      const blob = await res.blob()
+      const buffer = Buffer.from(await blob.arrayBuffer())
+
+      // Write the new image to the same path (overwrite original)
+      const fullPath = `${process.cwd()}/public${tryonPhoto}`
+      const fs = await import('fs')
+      fs.writeFileSync(fullPath, buffer)
+
+      toast.success('Photo remplacée par la version virtuelle !')
+      setTryonPhoto(null)
+      setTryonResult(null)
+      await fetchSessions()
+    } catch (e: unknown) {
+      toast.error('Erreur lors du remplacement de la photo')
     }
   }
 
@@ -326,6 +401,13 @@ export function PhotoSessionModule() {
                   >
                     <ImageIcon className="h-3.5 w-3.5" />
                   </a>
+                  <button
+                    onClick={() => { setTryonPhoto(photo.path); setTryonResult(null); setTryonError(null) }}
+                    className="absolute bottom-2 right-2 bg-purple-600 hover:bg-purple-700 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Essai virtuel (IA)"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </button>
                 </div>
                 <CardContent className="p-2">
                   <p className="text-xs text-muted-foreground truncate">
@@ -349,6 +431,94 @@ export function PhotoSessionModule() {
             <strong>Stock</strong> → éditez l'article → section Photos → bouton "Importer depuis shooting".
           </CardContent>
         </Card>
+
+        {/* Virtual Try-On Dialog */}
+        {tryonPhoto && (
+          <Dialog open={true} onOpenChange={(o) => { if (!o) { setTryonPhoto(null); setTryonResult(null); setTryonError(null) } }}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-purple-600" />
+                  Essai virtuel IA
+                </DialogTitle>
+                <DialogDescription>
+                  Transforme la photo de l'article en photo portée par un mannequin. ~30 secondes par transformation.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                {/* Photo originale */}
+                <div className="flex gap-3">
+                  <div className="w-32 h-32 rounded-lg overflow-hidden border shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photoUrl(tryonPhoto)} alt="Original" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <p className="text-xs text-muted-foreground">Photo d'origine</p>
+                    <Label className="text-xs">Modèle (mannequin)</Label>
+                    <select
+                      value={tryonModel}
+                      onChange={e => setTryonModel(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="man_1">Homme — debout, face</option>
+                      <option value="woman_1">Femme — debout, face</option>
+                      <option value="man_2">Homme — décontracté</option>
+                      <option value="woman_2">Femme — décontracté</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Résultat */}
+                {tryonResult && (
+                  <div className="space-y-2">
+                    <div className="flex gap-3">
+                      <div className="w-32 h-32 rounded-lg overflow-hidden border shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={photoUrl(tryonPhoto)} alt="Avant" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="text-2xl flex items-center">→</div>
+                      <div className="w-32 h-32 rounded-lg overflow-hidden border shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={tryonResult} alt="Après" className="w-full h-full object-cover" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-emerald-600">✓ Transformation réussie ! Voulez-vous remplacer la photo d'origine ?</p>
+                  </div>
+                )}
+
+                {tryonError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-3 text-xs text-red-700 dark:text-red-300">
+                    ❌ {tryonError}
+                  </div>
+                )}
+
+                {tryonLoading && (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                    <span className="ml-2 text-sm text-muted-foreground">Transformation en cours...</span>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="flex gap-2">
+                <Button variant="outline" onClick={() => { setTryonPhoto(null); setTryonResult(null); setTryonError(null) }}>
+                  Fermer
+                </Button>
+                {!tryonResult && !tryonLoading && (
+                  <Button onClick={handleVirtualTryOn} className="bg-purple-600 hover:bg-purple-700">
+                    <Sparkles className="h-4 w-4 mr-1" /> Transformer
+                  </Button>
+                )}
+                {tryonResult && (
+                  <Button onClick={applyTryOnResult} className="bg-emerald-600 hover:bg-emerald-700">
+                    <Check className="h-4 w-4 mr-1" /> Remplacer la photo
+                  </Button>
+                )}
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     )
   }

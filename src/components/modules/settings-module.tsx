@@ -1324,6 +1324,7 @@ function AISection() {
   const { data, loading, refresh } = useFetch<AIConfigData>('/api/ai/config')
   const [provider, setProvider] = useState<string>('zai')
   const [apiKey, setApiKey] = useState<string>('')
+  const [replicateApiKey, setReplicateApiKey] = useState<string>('')
   const [model, setModel] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -1358,6 +1359,9 @@ function AISection() {
       if (apiKey && !apiKey.startsWith('••••')) {
         body.apiKey = apiKey
       }
+      if (replicateApiKey && !replicateApiKey.startsWith('••••')) {
+        (body as any).replicateApiKey = replicateApiKey
+      }
       const res = await fetch('/api/ai/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1369,6 +1373,7 @@ function AISection() {
       }
       toast.success('Configuration IA enregistrée')
       setApiKey('')
+      setReplicateApiKey('')
       refresh()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Erreur')
@@ -1550,6 +1555,33 @@ function AISection() {
           </CardContent>
         </Card>
       )}
+
+      {/* Replicate API key for Virtual Try-On (IDM-VTON) */}
+      <Card className="border-purple-200 dark:border-purple-900 bg-purple-50/40 dark:bg-purple-950/20">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-purple-600" />
+            Essai virtuel IA (Replicate)
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Clé API Replicate pour le virtual try-on (transformer un article en photo portée par un mannequin).
+            Créez un compte sur <a href="https://replicate.com" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline">replicate.com</a> → Account → API tokens.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label className="text-xs">Clé API Replicate</Label>
+          <Input
+            type="password"
+            value={replicateApiKey}
+            onChange={e => setReplicateApiKey(e.target.value)}
+            placeholder={data?.hasReplicateApiKey ? '•••••••••••• (clé enregistrée)' : 'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+            className="font-mono text-sm"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Coût : ~0.024€ par transformation. Crédits gratuits à l'inscription. Utilisé dans Shooting → bouton ✨ sur chaque photo.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Help card */}
       {activeProviderInfo && activeProviderInfo.apiKeyUrl && (

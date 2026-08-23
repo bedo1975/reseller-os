@@ -113,6 +113,10 @@ model AIConfig {
   apiKey    String?  // clé API du fournisseur (inutile pour zai)
   model     String?  // modèle à utiliser (optionnel, sinon défaut par provider)
 
+  // Replicate API key for virtual try-on (IDM-VTON)
+  // Separate from the main AI provider because Replicate is a different service.
+  replicateApiKey String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

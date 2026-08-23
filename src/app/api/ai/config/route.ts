@@ -130,6 +130,7 @@ export async function GET() {
       ...config,
       apiKey: config.apiKey ? '••••••••' + config.apiKey.slice(-4) : null,
       hasApiKey: !!config.apiKey,
+      hasReplicateApiKey: !!config.replicateApiKey,
       providers: AI_PROVIDERS,
     })
   } catch (error) {
@@ -145,7 +146,7 @@ export async function PUT(req: NextRequest) {
   try {
     const user = await requireAuth()
     const body = await req.json()
-    const { provider, apiKey, model } = body
+    const { provider, apiKey, model, replicateApiKey: repKey } = body
 
     if (!provider || !AI_PROVIDERS[provider as keyof typeof AI_PROVIDERS]) {
       return NextResponse.json({ error: 'Fournisseur invalide' }, { status: 400 })
@@ -154,10 +155,15 @@ export async function PUT(req: NextRequest) {
     let config = await db.aIConfig.findUnique({ where: { userId: user.id } })
     if (!config) {
       config = await db.aIConfig.create({
-        data: { userId: user.id, provider, apiKey: apiKey || null, model: model || null },
+        data: {
+          userId: user.id, provider,
+          apiKey: apiKey || null,
+          model: model || null,
+          replicateApiKey: repKey || null,
+        },
       })
     } else {
-      const updateData: { provider?: string; apiKey?: string | null; model?: string | null } = {
+      const updateData: { provider?: string; apiKey?: string | null; model?: string | null; replicateApiKey?: string | null } = {
         provider,
         model: model || null,
       }
@@ -166,6 +172,9 @@ export async function PUT(req: NextRequest) {
       }
       if (provider === 'zai') {
         updateData.apiKey = null
+      }
+      if (repKey && !repKey.startsWith('••••')) {
+        updateData.replicateApiKey = repKey
       }
       config = await db.aIConfig.update({
         where: { userId: user.id },
