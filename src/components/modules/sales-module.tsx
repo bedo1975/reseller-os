@@ -337,6 +337,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
   const [pickerSubcat, setPickerSubcat] = useState('')
   const [pickerSearch, setPickerSearch] = useState('')
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [pickerFilteredIds, setPickerFilteredIds] = useState<Set<string> | null>(null)
   const { getByType } = useSettings()
   const { categories: boutiqueCats, getSubcategories: getBoutiqueSubcats } = useBoutiqueCategories()
   const platforms = getByType('platform')
@@ -508,7 +509,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
                   {selectedItem ? `${selectedItem.brand} ${selectedItem.title || selectedItem.category} ${selectedItem.size ? '· ' + selectedItem.size : ''} ${selectedItem.color ? '· ' + selectedItem.color : ''}` : ''}
                 </span>
                 <div className="flex gap-1 shrink-0">
-                  <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setPickerOpen(true)} title="Changer d'article">
+                  <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setPickerFilteredIds(null); setPickerOpen(true) }} title="Changer d'article">
                     <Search className="h-3.5 w-3.5" />
                   </Button>
                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setScannerOpen(true)} title="Scanner un code-barres">
@@ -521,7 +522,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
               </div>
             ) : (
               <div className="flex gap-1">
-                <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)} className="flex-1 justify-start text-muted-foreground">
+                <Button type="button" variant="outline" size="sm" onClick={() => { setPickerFilteredIds(null); setPickerOpen(true) }} className="flex-1 justify-start text-muted-foreground">
                   <Search className="h-4 w-4 mr-2" /> Rechercher un article…
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => setScannerOpen(true)} className="shrink-0" title="Scanner un code-barres">
@@ -699,6 +700,14 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
               <DialogTitle>Rechercher un article</DialogTitle>
               <DialogDescription>Sélectionnez un article en stock (non vendu).</DialogDescription>
             </DialogHeader>
+            {pickerFilteredIds && (
+              <div className="flex items-center justify-between gap-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                <span>📋 {pickerFilteredIds.size} variantes trouvées par le scanner — choisissez la bonne.</span>
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setPickerFilteredIds(null)}>
+                  Voir tout
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-2 pb-2">
               <Select value={pickerCategory || '__all__'} onValueChange={v => { setPickerCategory(v === '__all__' ? '' : v); setPickerSubcat('') }}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Catégorie" /></SelectTrigger>
@@ -718,6 +727,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
             </div>
             <div className="max-h-[50vh] overflow-y-auto space-y-1">
               {availableItems
+                .filter(s => !pickerFilteredIds || pickerFilteredIds.has(s.id))
                 .filter(s => !pickerCategory || s.category === pickerCategory)
                 .filter(s => !pickerSubcat || s.subcategory === pickerSubcat)
                 .filter(s => !pickerSearch || s.brand.toLowerCase().includes(pickerSearch.toLowerCase()) || (s.title || '').toLowerCase().includes(pickerSearch.toLowerCase()) || s.sku.toLowerCase().includes(pickerSearch.toLowerCase()))
@@ -751,6 +761,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
                   )
                 })}
               {availableItems
+                .filter(s => !pickerFilteredIds || pickerFilteredIds.has(s.id))
                 .filter(s => !pickerCategory || s.category === pickerCategory)
                 .filter(s => !pickerSubcat || s.subcategory === pickerSubcat)
                 .filter(s => !pickerSearch || s.brand.toLowerCase().includes(pickerSearch.toLowerCase()) || (s.title || '').toLowerCase().includes(pickerSearch.toLowerCase()) || s.sku.toLowerCase().includes(pickerSearch.toLowerCase()))
@@ -785,14 +796,15 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
             return
           }
 
-          // Multiple matches (variants) — open the picker filtered by the matched items
+          // Multiple matches (variants) — open the picker filtered to only these items
           setScannerOpen(false)
-          setPickerSearch(matchable[0].brand)
+          setPickerFilteredIds(new Set(matchable.map((s: any) => s.id)))
+          setPickerSearch('')
+          setPickerCategory('')
+          setPickerSubcat('')
           toast.info(`${matchable.length} variantes trouvées — choisissez la bonne dans la liste`, {
             description: matchable.map((s: any) => `${s.size || '—'} ${s.color || ''}`.trim()).join(' · '),
           })
-          // Pre-filter the available items to only show the matched ones
-          // We store the matched IDs temporarily so the picker can filter
           setPickerOpen(true)
         }}
         onNotFound={(code: string) => {
