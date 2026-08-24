@@ -44,6 +44,7 @@ interface StockItemLite {
   condition: string
   photos: string  // JSON array
   quantity: number
+  purchaseCost: number
 }
 
 interface PreOrderItem {
@@ -399,6 +400,7 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
         size: item.size || '',
         color: item.color || '',
         condition: item.condition || '',
+        unitPrice: item.purchaseCost || 0,
       }
     }))
   }
