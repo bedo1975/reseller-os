@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useFetch } from '@/hooks/use-fetch'
 import { useSettings } from '@/hooks/use-settings'
 import { useBoutiqueCategories } from '@/hooks/use-boutique-categories'
+import { BarcodeScannerModal } from '@/components/stock/barcode-scanner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +20,7 @@ import {
 import {
   Plus, Trash2, Loader2, ArrowLeft, ClipboardList, CheckCircle2, Clock,
   XCircle, Package, Edit3, FileText, ShoppingCart, PackagePlus, PackageCheck, Search,
-  Upload, Download, Printer, ExternalLink,
+  Upload, Download, Printer, ExternalLink, Barcode,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -351,6 +352,7 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
   const [saving, setSaving] = useState(false)
   const [creatingArticleIdx, setCreatingArticleIdx] = useState<number | null>(null)
   const [pickerIdx, setPickerIdx] = useState<number | null>(null)  // which item line is picking a product
+  const [scannerIdx, setScannerIdx] = useState<number | null>(null)  // which item line is scanning a barcode
 
   const [name, setName] = useState('')
   const [supplierId, setSupplierId] = useState<string>('')
@@ -596,15 +598,27 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
                     </div>
                   </div>
                 ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPickerIdx(idx)}
-                    className="w-full justify-start text-muted-foreground"
-                  >
-                    <Search className="h-4 w-4 mr-2" /> Rechercher un article existant…
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPickerIdx(idx)}
+                      className="flex-1 justify-start text-muted-foreground"
+                    >
+                      <Search className="h-4 w-4 mr-2" /> Rechercher un article existant…
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setScannerIdx(idx)}
+                      className="shrink-0"
+                      title="Scanner un code-barres"
+                    >
+                      <Barcode className="h-4 w-4" />
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -718,6 +732,34 @@ function CreatePreOrderForm({ onBack, onCreated }: { onBack: () => void; onCreat
           onPick={(stockItemId) => {
             selectStockItem(pickerIdx, stockItemId)
             setPickerIdx(null)
+          }}
+        />
+      )}
+
+      {/* Barcode scanner modal */}
+      {scannerIdx !== null && (
+        <BarcodeScannerModal
+          open={true}
+          onOpenChange={(o) => { if (!o) setScannerIdx(null) }}
+          onFound={(data: any) => {
+            // The scanner found a stock item by barcode — link it to this line
+            const allItems = data.items || [data.item]
+            const matchable = allItems.filter((s: any) => s.id)
+            if (matchable.length === 1) {
+              selectStockItem(scannerIdx, matchable[0].id)
+              setScannerIdx(null)
+              toast.success(`Article trouvé : ${matchable[0].brand} ${matchable[0].title || ''}`)
+            } else if (matchable.length > 1) {
+              // Multiple matches — open the picker filtered to these items
+              setScannerIdx(null)
+              setPickerIdx(scannerIdx)
+              toast.info(`${matchable.length} variantes trouvées — choisissez la bonne`)
+            } else {
+              toast.error('Aucun article trouvé')
+            }
+          }}
+          onNotFound={(code: string) => {
+            toast.error(`Aucun article avec le code-barres ${code}`)
           }}
         />
       )}
