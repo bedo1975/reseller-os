@@ -77,7 +77,9 @@ export async function GET(
     }
 
     const designation = `${sale.stockItem.brand} ${sale.stockItem.category} ${sale.stockItem.size || ''} ${sale.stockItem.color || ''}`.trim().replace(/\s+/g, ' ')
-    const itemDescription = sale.stockItem.description || ''
+    // Strip HTML tags from description for the invoice
+    const rawDescription = sale.stockItem.description || ''
+    const itemDescription = rawDescription.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
 
     // Look up the parent BoutiqueOrder — if a coupon was applied, prorate the discount
     // onto this invoice (each invoice = 1 item, but coupon applies to whole order).

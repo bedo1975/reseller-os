@@ -89,7 +89,10 @@ export async function GET(
     const totalVAT = totalTTC - totalHT
 
     const designation = `${sale.stockItem.brand} ${sale.stockItem.category} ${sale.stockItem.size || ''} ${sale.stockItem.color || ''}`.trim().replace(/\s+/g, ' ')
-    const itemDescription = sale.stockItem.description || ''
+    // Strip HTML tags from description for the invoice (the description may contain HTML
+    // from the WYSIWYG editor — on the invoice PDF we want plain text only)
+    const rawDescription = sale.stockItem.description || ''
+    const itemDescription = rawDescription.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
     const shippingHT = settings.vatEnabled ? sale.shippingCost / (1 + vatRate / 100) : sale.shippingCost
     const shippingTTC = sale.shippingCost
     const feesTotal = (sale.platformFees || 0) + (sale.platformFixedFees || 0)
