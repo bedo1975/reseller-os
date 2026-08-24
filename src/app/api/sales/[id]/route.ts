@@ -19,7 +19,7 @@ export async function PATCH(
 
     const allowed = [
       'saleDate', 'platform', 'customerName', 'customerContact',
-      'salePrice', 'shippingCost', 'carrierShippingCost', 'paymentFees', 'platformFees', 'platformFixedFees',
+      'salePrice', 'shippingCost', 'carrierShippingCost', 'paymentFees', 'paymentMethod', 'platformFees', 'platformFixedFees',
       'carrier', 'trackingNumber', 'parcelStatus', 'notes',
     ]
     const updateData: Record<string, unknown> = {}

@@ -359,6 +359,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
     trackingNumber: '',
     parcelStatus: 'A_PREPARER',
     notes: '',
+    paymentMethod: '',
   })
 
   // Auto-remplir les frais depuis les settings quand la plateforme change (en mode création)
@@ -398,6 +399,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
       trackingNumber: editingSale.trackingNumber || '',
       parcelStatus: editingSale.parcelStatus,
       notes: editingSale.notes || '',
+      paymentMethod: (editingSale as any).paymentMethod || '',
     })
     // Garder une trace des frais € pour l'envoi
     ;(form as Record<string, unknown>)._platformFeesEuro = feesEuro
@@ -449,6 +451,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
         shippingCost: form.shippingCost,
         carrierShippingCost: form.carrierShippingCost || '0',
         paymentFees: form.paymentFees || '0',
+        paymentMethod: form.paymentMethod || null,
         // En édition : envoyer le montant € existant. En création : calculer depuis le %
         platformFees: editingSale ? String(editingSale.platformFees) : String(feesEuro.toFixed(2)),
         platformFixedFees: autoFixed,
@@ -563,8 +566,40 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Frais bancaires (€)</Label>
-              <Input type="number" step="0.01" value={form.paymentFees} onChange={e => setForm({ ...form, paymentFees: e.target.value })} placeholder="0.00" />
-              <p className="text-[10px] text-muted-foreground">Stripe/PayPal — déduit du CA</p>
+              <div className="flex gap-1">
+                <Input type="number" step="0.01" value={form.paymentFees} onChange={e => setForm({ ...form, paymentFees: e.target.value })} placeholder="0.00" className="flex-1" />
+                <Select
+                  value={form.paymentMethod || '__none__'}
+                  onValueChange={async (v) => {
+                    if (v === '__none__') {
+                      setForm({ ...form, paymentMethod: '', paymentFees: '0' })
+                      return
+                    }
+                    // Fetch the payment method's fee settings
+                    try {
+                      const res = await fetch('/api/boutique/payments')
+                      const data = await res.json()
+                      const method = (data.methods || []).find((m: any) => m.code === v)
+                      if (method) {
+                        // Calculate fees: fixed + (salePrice × percent/100)
+                        const salePrice = parseFloat(form.salePrice) || 0
+                        const calculatedFees = (method.feesFixed || 0) + (salePrice * (method.feesPercent || 0) / 100)
+                        setForm({ ...form, paymentMethod: v, paymentFees: calculatedFees.toFixed(2) })
+                      }
+                    } catch {}
+                  }}
+                >
+                  <SelectTrigger className="w-[120px] shrink-0"><SelectValue placeholder="Méthode" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Aucun</SelectItem>
+                    <SelectItem value="stripe">Stripe</SelectItem>
+                    <SelectItem value="paypal">PayPal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Sélectionnez Stripe/PayPal pour calculer automatiquement les frais depuis Boutique Admin → Paiements.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Frais plateforme %</Label>
