@@ -18,7 +18,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, ShoppingCart, Search, Euro, TrendingUp, Percent, Edit, Trash2, FileText, Package, Barcode } from 'lucide-react'
+import { Plus, ShoppingCart, Search, Euro, TrendingUp, Percent, Edit, Trash2, FileText, Package, Barcode, Truck, CreditCard, Store } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePermissions } from '@/hooks/use-permissions'
 import {
@@ -350,6 +350,32 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
   const platforms = getByType('platform')
   // Plateforme par défaut = première plateforme des settings, ou 'vinted' en fallback
   const defaultPlatformCode = platforms[0]?.code || 'vinted'
+
+  // Payment methods — fetched from the admin endpoint (all methods, active or not).
+  // This lets the admin select Stripe, PayPal, or any custom method they configured
+  // in Boutique Admin → Paiements, even if a method is currently inactive for the storefront.
+  const [paymentMethods, setPaymentMethods] = useState<Array<{
+    code: string; label: string; icon: string | null
+    feesFixed: number; feesPercent: number; provider: string
+  }>>([])
+  useEffect(() => {
+    if (!open) return
+    fetch('/api/boutique/admin/payments')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data.methods)) {
+          setPaymentMethods(data.methods.map((m: any) => ({
+            code: m.code, label: m.label, icon: m.icon,
+            feesFixed: Number(m.feesFixed) || 0,
+            feesPercent: Number(m.feesPercent) || 0,
+            provider: m.provider || 'demo',
+          })))
+        }
+      })
+      .catch(() => {})
+  }, [open])
+
+  const selectedPaymentMethod = paymentMethods.find(m => m.code === form.paymentMethod)
   const [form, setForm] = useState({
     stockItemId: '',
     saleDate: new Date().toISOString().split('T')[0],
@@ -559,99 +585,138 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
             </div>
           </div>
 
-          {/* Frais */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Frais port facturés client (€)</Label>
-              <Input type="number" step="0.01" value={form.shippingCost} onChange={e => setForm({ ...form, shippingCost: e.target.value })} />
-              <p className="text-[10px] text-muted-foreground">Revenu net (non déduit du CA)</p>
+          {/* Frais — 3 encadrés distincts */}
+          <div className="space-y-3">
+            {/* Encadré 1 : Frais de port */}
+            <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50/40 dark:bg-blue-950/20 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wide">
+                <Truck className="h-3.5 w-3.5" />
+                Frais de port
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Facturés au client (€)</Label>
+                  <Input type="number" step="0.01" value={form.shippingCost} onChange={e => setForm({ ...form, shippingCost: e.target.value })} />
+                  <p className="text-[10px] text-muted-foreground">Revenu net (non déduit du CA)</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Coût réel transporteur (€)</Label>
+                  <Input type="number" step="0.01" value={form.carrierShippingCost} onChange={e => setForm({ ...form, carrierShippingCost: e.target.value })} placeholder="0.00" />
+                  <p className="text-[10px] text-muted-foreground">Charge réelle déduite du CA</p>
+                </div>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Frais port réels transporteur (€)</Label>
-              <Input type="number" step="0.01" value={form.carrierShippingCost} onChange={e => setForm({ ...form, carrierShippingCost: e.target.value })} placeholder="0.00" />
-              <p className="text-[10px] text-muted-foreground">Charge réelle déduite du CA</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Frais bancaires (€)</Label>
-              <div className="flex gap-1">
-                <Input type="number" step="0.01" value={form.paymentFees} onChange={e => setForm({ ...form, paymentFees: e.target.value })} placeholder="0.00" className="flex-1" />
-                <Select
-                  value={form.paymentMethod || '__none__'}
-                  onValueChange={async (v) => {
-                    if (v === '__none__') {
-                      setForm({ ...form, paymentMethod: '', paymentFees: '0' })
-                      return
-                    }
-                    // Fetch the payment method's fee settings
-                    try {
-                      const res = await fetch('/api/boutique/payments')
-                      const data = await res.json()
-                      const method = (data.methods || []).find((m: any) => m.code === v)
+
+            {/* Encadré 2 : Frais bancaires */}
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/20 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wide">
+                <CreditCard className="h-3.5 w-3.5" />
+                Frais bancaires
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Méthode de paiement</Label>
+                  <Select
+                    value={form.paymentMethod || '__none__'}
+                    onValueChange={async (v) => {
+                      if (v === '__none__') {
+                        setForm({ ...form, paymentMethod: '', paymentFees: '0' })
+                        return
+                      }
+                      // Lookup the payment method from admin list (all methods, not just active ones)
+                      const method = paymentMethods.find(m => m.code === v)
                       if (method) {
-                        // Calculate fees: fixed + (salePrice × percent/100)
                         const salePrice = parseFloat(form.salePrice) || 0
                         const calculatedFees = (method.feesFixed || 0) + (salePrice * (method.feesPercent || 0) / 100)
                         setForm({ ...form, paymentMethod: v, paymentFees: calculatedFees.toFixed(2) })
+                      } else {
+                        setForm({ ...form, paymentMethod: v })
                       }
-                    } catch {}
-                  }}
-                >
-                  <SelectTrigger className="w-[120px] shrink-0"><SelectValue placeholder="Méthode" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Aucun</SelectItem>
-                    <SelectItem value="stripe">Stripe</SelectItem>
-                    <SelectItem value="paypal">PayPal</SelectItem>
-                  </SelectContent>
-                </Select>
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Aucun</SelectItem>
+                      {paymentMethods.map(m => (
+                        <SelectItem key={m.code} value={m.code}>
+                          {m.icon ? `${m.icon} ` : ''}{m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedPaymentMethod && (selectedPaymentMethod.feesPercent > 0 || selectedPaymentMethod.feesFixed > 0) && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Tarif : {selectedPaymentMethod.feesFixed.toFixed(2)}€ fixe + {selectedPaymentMethod.feesPercent}% variable
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Montant frais (€)</Label>
+                  <Input type="number" step="0.01" value={form.paymentFees} onChange={e => setForm({ ...form, paymentFees: e.target.value })} placeholder="0.00" />
+                  <p className="text-[10px] text-muted-foreground">Déduit du CA</p>
+                </div>
               </div>
-              <p className="text-[10px] text-muted-foreground">
-                Sélectionnez Stripe/PayPal pour calculer automatiquement les frais depuis Boutique Admin → Paiements.
-              </p>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Frais plateforme %</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={form.platformFeesPercent}
-                onChange={e => setForm({ ...form, platformFeesPercent: e.target.value })}
-                placeholder={String(platformDefault.percent)}
-                disabled={!!editingSale}
-              />
-              {editingSale && (
-                <p className="text-[10px] text-muted-foreground">Montant actuel : {formatEUR(editingSale.platformFees || 0)}</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Frais plateforme fixe (€)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={form.platformFixedFees}
-                onChange={e => setForm({ ...form, platformFixedFees: e.target.value })}
-                placeholder={String(platformDefault.fixed)}
-              />
-              <p className="text-[10px] text-muted-foreground">Ex. 0,70€ Vinted Pro</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Plateforme</Label>
-              <Select value={form.platform} onValueChange={v => setForm({ ...form, platform: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {platforms.map(p => <SelectItem key={p.code} value={p.code}>{p.value}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {(() => {
-                const platformAttr = platforms.find(p => p.code === form.platform)
-                if (!platformAttr) return null
-                const hasFees = (platformAttr.percentFees ?? 0) > 0 || (platformAttr.fixedFees ?? 0) > 0
-                if (!hasFees) return null
-                return (
-                  <p className="text-[10px] text-muted-foreground">
-                    Frais configurés : {platformAttr.percentFees ?? 0}% + {Number(platformAttr.fixedFees ?? 0).toFixed(2)}€ fixe
-                  </p>
-                )
-              })()}
+
+            {/* Encadré 3 : Frais plateforme */}
+            <div className="rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/40 dark:bg-violet-950/20 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wide">
+                <Store className="h-3.5 w-3.5" />
+                Frais plateforme
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1 col-span-1">
+                  <Label className="text-xs">Plateforme</Label>
+                  <Select value={form.platform} onValueChange={v => setForm({ ...form, platform: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {platforms.map(p => <SelectItem key={p.code} value={p.code}>{p.value}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {(() => {
+                    const platformAttr = platforms.find(p => p.code === form.platform)
+                    if (!platformAttr) return null
+                    const hasFees = (platformAttr.percentFees ?? 0) > 0 || (platformAttr.fixedFees ?? 0) > 0
+                    if (!hasFees) return null
+                    return (
+                      <p className="text-[10px] text-muted-foreground">
+                        Config : {platformAttr.percentFees ?? 0}% + {Number(platformAttr.fixedFees ?? 0).toFixed(2)}€
+                      </p>
+                    )
+                  })()}
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Frais variable (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={form.platformFeesPercent}
+                    onChange={e => setForm({ ...form, platformFeesPercent: e.target.value })}
+                    placeholder={String(platformDefault.percent)}
+                    disabled={!!editingSale}
+                  />
+                  {editingSale && (
+                    <p className="text-[10px] text-muted-foreground">Montant actuel : {formatEUR(editingSale.platformFees || 0)}</p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Frais fixe (€)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={form.platformFixedFees}
+                    onChange={e => setForm({ ...form, platformFixedFees: e.target.value })}
+                    placeholder={String(platformDefault.fixed)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">Ex. 0,70€ Vinted Pro</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-xs pt-1 border-t border-violet-100 dark:border-violet-900">
+                <span className="text-muted-foreground">Total frais plateforme (calculé)</span>
+                <span className="font-semibold text-rose-600">
+                  -{formatEUR((feesEuro || 0) + (parseFloat(autoFixed) || 0))}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -708,12 +773,6 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
           {projectedProfit !== 0 && form.salePrice && (
             <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Frais plateforme totaux</span>
-                <span className="font-semibold text-rose-600">
-                  -{formatEUR((feesEuro || 0) + (parseFloat(autoFixed) || 0))}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm mt-1">
                 <span className="text-muted-foreground">Bénéfice projeté</span>
                 <span className="font-semibold text-emerald-600">{formatEUR(projectedProfit)}</span>
               </div>
