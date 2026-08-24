@@ -375,7 +375,6 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
       .catch(() => {})
   }, [open])
 
-  const selectedPaymentMethod = paymentMethods.find(m => m.code === form.paymentMethod)
   const [form, setForm] = useState({
     stockItemId: '',
     saleDate: new Date().toISOString().split('T')[0],
@@ -394,6 +393,9 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
     notes: '',
     paymentMethod: '',
   })
+
+  // Must be declared AFTER `form` (uses form.paymentMethod) — TDZ safe.
+  const selectedPaymentMethod = paymentMethods.find(m => m.code === form.paymentMethod)
 
   // Auto-remplir les frais depuis les settings quand la plateforme change (en mode création)
   // On utilise un effet pour détecter le changement de plateforme et pré-remplir si les champs sont vides
