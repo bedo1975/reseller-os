@@ -164,17 +164,33 @@ function SyntheseTab({ year }: { year: number }) {
   // Frais de port RÉELS payés au transporteur (charge déductible)
   const totalCarrierShipping = yearSales.reduce((s, x) => s + (x.carrierShippingCost || 0), 0)
   // Frais bancaires (Stripe, PayPal...) — déduits du CA (charge déductible)
-  const totalPaymentFees = yearSales.reduce((s, x) => s + (x.paymentFees || 0), 0)
+  const totalPaymentFees = yearSales.reduce((s, x) => s + Math.max(0, x.paymentFees || 0), 0)
+  // COGS = coût d'achat des articles VENDUS (pas tous les achats — les articles invendus restent en stock)
+  const totalCOGS = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost * (x.stockItem.quantity || 1), 0)
   const totalOtherExpenses = yearExpenses.reduce((s, e) => s + e.amount, 0)
   const taxRate = taxSettings?.taxRate || 0
   const urssafCotisation = totalCA * taxRate / 100
-  // Bénéfice net = CA - Total des charges (tous les décaissements)
-  // En micro-entreprise, on déduit TOUTES les charges au moment du paiement (pas au moment de la vente).
-  // achatsData.total includes: StockItems (purchaseCost × qty) + Purchases (hors stock) + Expenses (dépenses)
-  // So we must NOT deduct totalOtherExpenses again (it's already in achatsData.total via the Expenses).
-  // Fallback: if achatsData hasn't loaded, use totalPurchases (StockItems + Purchases) + totalOtherExpenses (Expenses)
+
+  // Bénéfice net (exploitation) = CA - COGS des articles vendus - achats hors stock - dépenses - frais - URSSAF
+  // On utilise COGS (coût des articles vendus) et non pas "total des achats de la période",
+  // car les articles invendus restent en stock (ils ne sont pas une charge consommée).
+  // ─ Distinction trésorerie vs résultat ─
+  // Pour la fiscalité micro-entreprise, toutes les dépenses décaissées sont déductibles.
+  // Mais pour la marge par vente, seul le COGS des articles vendus doit être déduit.
+  // Le "Bénéfice net" ci-dessous est le résultat d'exploitation (marge réelle par vente).
   const totalProfit = totalCA
-    - (achatsData?.total ?? (totalPurchases + totalOtherExpenses))  // all charges
+    - totalCOGS                       // coût des articles vendus (pas le stock total)
+    - totalHorsStockPurchases          // achats hors stock (fournitures, emballages, outils)
+    - totalOtherExpenses              // dépenses saisies (abonnements, carburant, etc.)
+    - totalPlatformFees
+    - totalCarrierShipping
+    - totalPaymentFees
+    - urssafCotisation
+
+  // Trésorerie nette = CA - toutes les sorties de cash (y compris stock invendu)
+  // Indicateur fiscal (micro-entreprise) : ce que vous allez réellement payer/déclarer.
+  const totalCashProfit = totalCA
+    - (achatsData?.total ?? (totalPurchases + totalOtherExpenses))
     - totalPlatformFees
     - totalCarrierShipping
     - totalPaymentFees
@@ -470,15 +486,17 @@ function SyntheseTab({ year }: { year: number }) {
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <SummaryCard label="Chiffre d'affaires" value={totalCA} hint="Inclut prix article + frais port client" />
-          <SummaryCard label="Achats + Dépenses" value={achatsData?.total ?? (totalPurchases + totalOtherExpenses)} hint="Articles stock + hors stock + dépenses (visible dans le Registre des achats)" />
+          <SummaryCard label="COGS (articles vendus)" value={totalCOGS} hint="Coût d'achat des articles vendus uniquement (le stock invendu reste en actif)" />
+          <SummaryCard label="Achats + Dépenses" value={achatsData?.total ?? (totalPurchases + totalOtherExpenses)} hint="Tous les achats de la période (stock + hors stock + dépenses) — indicateur de trésorerie" />
           <SummaryCard label="Frais plateforme" value={totalPlatformFees} />
           <SummaryCard label="dont Frais port client" value={totalShippingBilled} hint="Inclus dans le CA (revenu)" />
           <SummaryCard label="Frais port réels (transporteur)" value={totalCarrierShipping} hint="Charge déductible du CA" />
           <SummaryCard label="Frais bancaires (Stripe/PayPal)" value={totalPaymentFees} hint="Charge déductible du CA" />
           <SummaryCard label="Autres dépenses" value={totalOtherExpenses} hint="Dépenses saisies dans l'onglet Dépenses" />
           <SummaryCard label={`Cotisations URSSAF (${taxRate}%)`} value={parseFloat(urssafCotisation.toFixed(2))} />
-          <SummaryCard label="Bénéfice net" value={totalProfit} highlight />
-          <SummaryCard label="Marge nette" value={totalCA > 0 ? parseFloat(((totalProfit / totalCA) * 100).toFixed(1)) : 0} suffix="%" />
+          <SummaryCard label="Bénéfice net (exploitation)" value={totalProfit} highlight hint="CA - COGS - dépenses - frais - URSSAF" />
+          <SummaryCard label="Marge nette" value={totalCA > 0 ? parseFloat(((totalProfit / totalCA) * 100).toFixed(1)) : 0} suffix="%" hint="Bénéfice net / CA" />
+          <SummaryCard label="Trésorerie nette (fiscale)" value={totalCashProfit} hint="CA - tous les achats (y compris stock invendu) - frais - URSSAF" />
           <SummaryCard label="Nb ventes" value={yearSales.length} />
         </div>
       )}

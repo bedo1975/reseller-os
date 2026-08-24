@@ -412,6 +412,19 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.platform])
 
+  // Recalculer les frais bancaires quand le prix ou les frais de port changent (si une méthode est sélectionnée).
+  // Stripe/PayPal facturent sur le MONTANT TOTAL (article + port), pas seulement sur l'article.
+  useEffect(() => {
+    if (editingSale) return // En édition, on conserve le montant existant
+    if (!form.paymentMethod) return // Pas de méthode sélectionnée → rien à recalculer
+    const method = paymentMethods.find(m => m.code === form.paymentMethod)
+    if (!method) return
+    const totalAmount = (parseFloat(form.salePrice) || 0) + (parseFloat(form.shippingCost) || 0)
+    const calculatedFees = (method.feesFixed || 0) + (totalAmount * (method.feesPercent || 0) / 100)
+    setForm(prev => ({ ...prev, paymentFees: calculatedFees.toFixed(2) }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.salePrice, form.shippingCost])
+
   // Sync form quand on ouvre en mode édition
   const lastEditingId = useRef<string | null>(null)
   if (editingSale && editingSale.id !== lastEditingId.current) {
@@ -628,8 +641,10 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
                       // Lookup the payment method from admin list (all methods, not just active ones)
                       const method = paymentMethods.find(m => m.code === v)
                       if (method) {
-                        const salePrice = parseFloat(form.salePrice) || 0
-                        const calculatedFees = (method.feesFixed || 0) + (salePrice * (method.feesPercent || 0) / 100)
+                        // Stripe/PayPal charge fees on the TOTAL amount (article + shipping),
+                        // not just the article price. Use ca as the base.
+                        const totalAmount = (parseFloat(form.salePrice) || 0) + (parseFloat(form.shippingCost) || 0)
+                        const calculatedFees = (method.feesFixed || 0) + (totalAmount * (method.feesPercent || 0) / 100)
                         setForm({ ...form, paymentMethod: v, paymentFees: calculatedFees.toFixed(2) })
                       } else {
                         setForm({ ...form, paymentMethod: v })
@@ -648,7 +663,7 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
                   </Select>
                   {selectedPaymentMethod && (selectedPaymentMethod.feesPercent > 0 || selectedPaymentMethod.feesFixed > 0) && (
                     <p className="text-[10px] text-muted-foreground">
-                      Tarif : {selectedPaymentMethod.feesFixed.toFixed(2)}€ fixe + {selectedPaymentMethod.feesPercent}% variable
+                      Tarif : {selectedPaymentMethod.feesFixed.toFixed(2)}€ fixe + {selectedPaymentMethod.feesPercent}% du montant total (article + port)
                     </p>
                   )}
                 </div>
