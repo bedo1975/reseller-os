@@ -145,6 +145,10 @@ model InvoiceSettings {
   // Identifiants légaux
   siret           String?
   rcs             String?  // RCS/RM
+  // REP (Responsabilité Élargie du Producteur) — IDU (Identifiant Unique)
+  // Obligatoire en France pour les producteurs/distributeurs depuis 2025.
+  // Affiché sur la facture sous le SIRET et RCS.
+  repIdu          String?  // Identifiant Unique REP (ex: FR123456789_ABCDE)
 
   // TVA
   vatEnabled      Boolean  @default(false)

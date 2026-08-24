@@ -171,6 +171,7 @@ export async function GET(
         ${settings.phone ? `<div>Tél : ${escapeHtml(settings.phone)}</div>` : ''}
         ${settings.siret ? `<div>SIRET : ${escapeHtml(settings.siret)}</div>` : ''}
         ${settings.rcs ? `<div>${escapeHtml(settings.rcs)}</div>` : ''}
+        ${settings.repIdu ? `<div>IDU REP : ${escapeHtml(settings.repIdu)}</div>` : ''}
       </div>
     </div>
     <div class="invoice-meta">

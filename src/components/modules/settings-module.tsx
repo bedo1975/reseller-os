@@ -25,7 +25,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Plus, Trash2, Star, Edit, Tag, Layers, Ruler, Palette, AlertCircle, Truck, ExternalLink, Users, Settings as SettingsIcon, Award,
-  FileText, Database, Download, Upload, HardDrive, ShieldAlert, RefreshCw, FileDown, Sparkles, Key, ExternalLink as LinkIcon, CheckCircle2, Percent, Bell, Clock, Calendar, Store, Package, Mail, BookOpen, ChevronDown, Loader2,
+  FileText, Database, Download, Upload, HardDrive, ShieldAlert, RefreshCw, FileDown, Sparkles, Key, ExternalLink as LinkIcon, CheckCircle2, Percent, Bell, Clock, Calendar, Store, Package, Mail, BookOpen, ChevronDown, Loader2, Recycle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -1013,6 +1013,7 @@ interface InvoiceSettings {
   phone: string | null
   siret: string | null
   rcs: string | null
+  repIdu: string | null
   vatEnabled: boolean
   vatNumber: string | null
   vatRate: number
@@ -1152,6 +1153,34 @@ function InvoicingSection() {
           <div className="space-y-1.5">
             <Label className="text-xs">RCS</Label>
             <Input value={form.rcs || ''} onChange={e => set('rcs', e.target.value || null)} placeholder="Paris 123 456 789" className="font-mono" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* REP — Responsabilité Élargie du Producteur */}
+      <Card className="border-amber-200 dark:border-amber-900 bg-amber-50/30 dark:bg-amber-950/10">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Recycle className="h-4 w-4 text-amber-600" /> REP — Responsabilité Élargie du Producteur
+          </CardTitle>
+          <CardDescription>
+            IDU (Identifiant Unique) affiché sur la facture sous le SIRET et RCS.
+            Obligatoire en France pour les producteurs/distributeurs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">IDU REP (Identifiant Unique)</Label>
+            <Input
+              value={form.repIdu || ''}
+              onChange={e => set('repIdu', e.target.value || null)}
+              placeholder="FR123456789_ABCDE"
+              className="font-mono"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Obtenable sur <a href="https://www.ecologie.gouv.fr/rep-idu" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">ecologie.gouv.fr</a> ou auprès de votre éco-organisme (Citeo, Refashion, etc.).
+              Laissez vide si non concerné.
+            </p>
           </div>
         </CardContent>
       </Card>

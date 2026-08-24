@@ -36,7 +36,7 @@ export async function PUT(req: NextRequest) {
     const body = await req.json()
     const {
       companyName, address, postalCode, city, country,
-      email, phone, siret, rcs,
+      email, phone, siret, rcs, repIdu,
       vatEnabled, vatNumber, vatRate, vatExemptionText,
       invoicePrefix, invoicePadLength,
       legalMentions,
@@ -71,6 +71,7 @@ export async function PUT(req: NextRequest) {
         phone: phone?.trim() || null,
         siret: siret?.trim() || null,
         rcs: rcs?.trim() || null,
+        repIdu: repIdu?.trim() || null,
         vatEnabled: !!vatEnabled,
         vatNumber: vatEnabled ? (vatNumber?.trim() || null) : null,
         vatRate: vatEnabled ? (parseFloat(vatRate) || 20.0) : 20.0,
