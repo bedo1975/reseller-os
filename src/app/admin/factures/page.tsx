@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useFetch } from '@/hooks/use-fetch'
+import { useSettings } from '@/hooks/use-settings'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,24 +38,18 @@ interface SaleWithInvoice {
   }
 }
 
-// All known sales platforms — always shown in the filter, even if no sale exists yet.
-const PLATFORM_LABELS: Record<string, string> = {
-  vinted: 'Vinted',
-  leboncoin: 'Leboncoin',
-  ebay: 'eBay',
-  vestiaire: 'Vestiaire Collective',
-  boutique: 'Boutique',
-  instagram: 'Instagram',
-  facebook: 'Facebook Marketplace',
-  whatsapp: 'WhatsApp',
-  depop: 'Depop',
-  etsy: 'Etsy',
-  rakuten: 'Rakuten',
-  other: 'Autre',
-}
-
 export default function FacturesPage() {
   const { data: sales, loading } = useFetch<SaleWithInvoice[]>('/api/sales')
+  const { getByType, getLabel: getAttrLabel } = useSettings()
+
+  // Platforms come from the user's settings (Paramètres → Plateformes), not a hardcoded list.
+  // This way, if the user adds/edits/removes platforms in settings, the filter follows.
+  const platformAttrs = getByType('platform')
+
+  // Resolve a platform code to its display label (falls back to the raw code if not found).
+  const platformLabel = (code: string): string =>
+    platformAttrs.find(p => p.code === code)?.value || getAttrLabel('platform', code) || code
+
   const [search, setSearch] = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
   const [yearFilter, setYearFilter] = useState('all')
@@ -130,15 +125,14 @@ export default function FacturesPage() {
     setMonthFilter('all')
   }
 
-  // Build the platform dropdown — all known platforms (always) + any unknown ones found in the data
+  // Build the platform dropdown — platforms from settings + any extras found in the data
+  // (extras can happen if a platform was deleted from settings but old sales still reference it)
   const platforms = useMemo(() => {
-    const known = Object.keys(PLATFORM_LABELS)
-    const extra = Array.from(new Set(salesWithInvoices.map(s => s.platform)))
-      .filter(p => !known.includes(p))
-    return [...known, ...extra].sort((a, b) =>
-      (PLATFORM_LABELS[a] || a).localeCompare(PLATFORM_LABELS[b] || b, 'fr')
-    )
-  }, [salesWithInvoices])
+    const fromSettings = platformAttrs.map(p => p.code)
+    const extras = Array.from(new Set(salesWithInvoices.map(s => s.platform)))
+      .filter(p => !fromSettings.includes(p))
+    return [...fromSettings, ...extras]
+  }, [platformAttrs, salesWithInvoices])
 
   // Build the public PDF URL — uses window.location.origin so it works even without shareSiteUrl
   const buildInvoiceUrl = (invoiceNumber: string): string => {
@@ -303,7 +297,7 @@ export default function FacturesPage() {
               <SelectContent>
                 <SelectItem value="all">Toutes plateformes</SelectItem>
                 {platforms.map(p => (
-                  <SelectItem key={p} value={p}>{PLATFORM_LABELS[p] || p}</SelectItem>
+                  <SelectItem key={p} value={p}>{platformLabel(p)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -385,7 +379,7 @@ export default function FacturesPage() {
                           </div>
                         </td>
                         <td className="px-3 py-2.5">
-                          <Badge variant="outline">{PLATFORM_LABELS[s.platform] || s.platform}</Badge>
+                          <Badge variant="outline">{platformLabel(s.platform)}</Badge>
                         </td>
                         <td className="px-3 py-2.5 text-right font-semibold">{formatEUR(s.salePrice)}</td>
                         <td className="px-3 py-2.5">
