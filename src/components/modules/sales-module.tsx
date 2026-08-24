@@ -186,6 +186,13 @@ export function SalesModule() {
               <Plus className="h-4 w-4 mr-2" /> Nouvelle vente
             </Button>
             )}
+            <Button
+              variant="outline"
+              onClick={() => window.open('/admin/factures', '_blank')}
+              title="Liste des factures émises"
+            >
+              <FileText className="h-4 w-4 mr-2" /> Factures
+            </Button>
           </div>
         </CardContent>
       </Card>
