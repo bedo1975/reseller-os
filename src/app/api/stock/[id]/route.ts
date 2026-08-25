@@ -5,8 +5,15 @@ import { revalidatePath } from 'next/cache'
 import { notifyBackInStock } from '@/lib/email'
 
 // Helper: check if a stock item is "visible on the boutique"
-function isBoutiqueVisible(item: { status: string; suggestedPrice: number | null }): boolean {
-  return item.status === 'PUBLIE' && !!item.suggestedPrice && item.suggestedPrice > 0
+// An item is visible on the boutique only if:
+//   - stockType is "boutique" (not "plateforme")
+//   - status is PUBLIE
+//   - suggestedPrice is set and > 0
+function isBoutiqueVisible(item: { status: string; suggestedPrice: number | null; stockType?: string | null }): boolean {
+  return item.stockType !== 'plateforme'
+    && item.status === 'PUBLIE'
+    && !!item.suggestedPrice
+    && item.suggestedPrice > 0
 }
 
 export async function PATCH(
@@ -33,11 +40,15 @@ export async function PATCH(
       'purchaseInvoiceNumber', 'supplierOrderNumber', 'purchasePaymentMethod',
       'warehouse', 'rack', 'shelf', 'bin', 'weight', 'quantity',
       'description', 'suggestedPrice', 'salePrice', 'saleActive', 'photos', 'barcode', 'measurements',
-      'status', 'platform', 'salePlatform', 'platforms',
+      'status', 'platform', 'salePlatform', 'platforms', 'stockType',
       'invoicePath', 'invoiceName',
     ]
     for (const key of allowed) {
       if (key in body) updateData[key] = body[key]
+    }
+    // Normalize stockType: only "boutique" or "plateforme" allowed (default to "boutique")
+    if ('stockType' in updateData) {
+      updateData.stockType = updateData.stockType === 'plateforme' ? 'plateforme' : 'boutique'
     }
     // Handle purchaseCost: allow empty string → 0, otherwise parse
     if ('purchaseCost' in updateData) {

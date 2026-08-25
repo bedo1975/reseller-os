@@ -13,8 +13,9 @@ export async function GET(
     const { sku } = await params
 
     // Allow quantity = 0 products to be visible (shown as "Non disponible" on the product page)
+    // Only boutique-type items appear on the storefront (excludes "plateforme" stock)
     const item = await db.stockItem.findFirst({
-      where: { sku, status: 'PUBLIE' },
+      where: { sku, status: 'PUBLIE', stockType: 'boutique' },
       select: {
         id: true,
         sku: true,

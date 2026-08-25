@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status')
     const brand = searchParams.get('brand')
     const platform = searchParams.get('platform')
+    const stockType = searchParams.get('stockType')
     const search = searchParams.get('search')
 
     // All authenticated users can see all stock items (permission-based visibility is handled in the UI)
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
           status ? { status } : {},
           brand ? { brand } : {},
           platform ? { platform } : {},
+          stockType ? { stockType } : {},
           search ? {
             OR: [
               { sku: { contains: search } },
@@ -53,7 +55,7 @@ export async function POST(req: NextRequest) {
       purchaseInvoiceNumber, supplierOrderNumber, purchasePaymentMethod,
       warehouse, rack, shelf, bin, weight, quantity,
       description, suggestedPrice, salePrice, saleActive, photos, barcode, measurements,
-      status, platform, salePlatform, platforms,
+      status, platform, salePlatform, platforms, stockType,
     } = body
 
     if (!sku || !brand) {
@@ -101,13 +103,16 @@ export async function POST(req: NextRequest) {
         platform: platform || null,
         salePlatform: salePlatform || null,
         platforms: platforms || JSON.stringify([]),
+        // stockType: "boutique" (default) or "plateforme" (not visible on online store)
+        stockType: stockType === 'plateforme' ? 'plateforme' : 'boutique',
         userId: user.id,
       },
       include: { supplier: true },
     })
 
     // Invalidate sitemap if the new item is published to the boutique
-    if (item.status === 'PUBLIE' && item.suggestedPrice && item.suggestedPrice > 0) {
+    // (only boutique-type items appear on the storefront)
+    if (item.stockType === 'boutique' && item.status === 'PUBLIE' && item.suggestedPrice && item.suggestedPrice > 0) {
       try {
         revalidatePath('/sitemap.xml')
         revalidatePath('/')

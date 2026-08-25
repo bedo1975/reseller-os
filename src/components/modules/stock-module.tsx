@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Plus, Search, MapPin, Barcode, Edit, Trash2, Package, ChevronLeft, ChevronRight,
   Eye, AlertCircle, Camera, Upload, RefreshCw, Sparkles, ScanEye, QrCode, Link2, Download,
-  Tag, Euro, Layers, Loader2, Printer, Wand2, Calculator,
+  Tag, Euro, Layers, Loader2, Printer, Wand2, Calculator, Store, ShoppingCart, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -108,6 +108,8 @@ export function StockModule() {
   const [brandFilter, setBrandFilter] = useState<string>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [subcategoryFilter, setSubcategoryFilter] = useState<string>('all')
+  // Stock type filter: 'all' | 'boutique' | 'plateforme'
+  const [stockTypeFilter, setStockTypeFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
   const [showForm, setShowForm] = useState(false)
   const [showPurchaseForm, setShowPurchaseForm] = useState(false)
@@ -181,6 +183,8 @@ export function StockModule() {
       if (brandFilter !== 'all' && i.brand !== brandFilter) return false
       if (categoryFilter !== 'all' && i.category !== categoryFilter) return false
       if (subcategoryFilter !== 'all' && (i as { subcategory?: string }).subcategory !== subcategoryFilter) return false
+      const iStockType = (i as { stockType?: string }).stockType || 'boutique'
+      if (stockTypeFilter !== 'all' && iStockType !== stockTypeFilter) return false
       if (search) {
         const q = search.toLowerCase()
         return (
@@ -193,10 +197,10 @@ export function StockModule() {
       }
       return true
     })
-  }, [items, search, statusFilter, brandFilter, categoryFilter, subcategoryFilter])
+  }, [items, search, statusFilter, brandFilter, categoryFilter, subcategoryFilter, stockTypeFilter])
 
   // Quand les filtres changent, on reset la page via la clé de filtre
-  const filterKey = `${search}|${statusFilter}|${brandFilter}|${categoryFilter}|${subcategoryFilter}`
+  const filterKey = `${search}|${statusFilter}|${brandFilter}|${categoryFilter}|${subcategoryFilter}|${stockTypeFilter}`
   const [lastFilterKey, setLastFilterKey] = useState(filterKey)
   if (filterKey !== lastFilterKey) {
     setLastFilterKey(filterKey)
@@ -480,6 +484,20 @@ export function StockModule() {
               />
             </div>
             <div className="grid grid-cols-3 gap-2 lg:flex">
+              {/* Stock type filter — boutique vs plateforme */}
+              <Select value={stockTypeFilter} onValueChange={setStockTypeFilter}>
+                <SelectTrigger className="w-full lg:w-[160px]">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+                    <SelectValue placeholder="Type de stock" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous types</SelectItem>
+                  <SelectItem value="boutique">🟢 Boutique</SelectItem>
+                  <SelectItem value="plateforme">🟣 Plateforme</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-full lg:w-[150px]">
                   <SelectValue placeholder="Statut" />
@@ -674,7 +692,14 @@ export function StockModule() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="font-mono text-xs">{item.sku}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {item.sku}
+                          {(item as { stockType?: string }).stockType === 'plateforme' && (
+                            <span className="ml-1 inline-block align-middle px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" title="Stock plateforme — non visible sur la boutique">
+                              PLATEFORME
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell className="font-medium">{item.brand}</TableCell>
                         <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{getLabel('category', item.category)}</TableCell>
                         <TableCell className="hidden lg:table-cell text-xs">{item.size || '—'}</TableCell>
@@ -985,6 +1010,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     description: '', suggestedPrice: '', salePrice: '', saleActive: false,
     platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', supplierOrderNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
     barcode: '',
+    stockType: 'boutique',
   })
   // Multi-variant mode
   const [multiVariant, setMultiVariant] = useState(false)
@@ -1018,6 +1044,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         salePlatform: (item as { salePlatform?: string }).salePlatform || '',
         status: item.status,
         barcode: item.barcode || '',
+        stockType: (item as { stockType?: string }).stockType || 'boutique',
       })
       try { setPhotos(JSON.parse(item.photos) || []) } catch { setPhotos([]) }
     } else if (open) {
@@ -1029,6 +1056,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         description: '', suggestedPrice: '', salePrice: '', saleActive: false,
         platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', supplierOrderNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
         barcode: prefillBarcode || '',
+        stockType: 'boutique',
       })
       setPhotos([])
     }
@@ -1356,9 +1384,45 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:!max-w-4xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{item ? 'Modifier l\'article' : 'Nouvel article'}</DialogTitle>
+          <DialogTitle className="flex items-center justify-between gap-3 flex-wrap">
+            <span>{item ? 'Modifier l\'article' : 'Nouvel article'}</span>
+            {/* Stock type toggle — boutique vs plateforme */}
+            <div className="flex items-center gap-1 p-1 rounded-lg border bg-muted/40">
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, stockType: 'boutique' }))}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  form.stockType !== 'plateforme'
+                    ? 'bg-emerald-500 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Visible sur la boutique en ligne"
+              >
+                <Store className="h-3.5 w-3.5" />
+                Boutique
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, stockType: 'plateforme' }))}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  form.stockType === 'plateforme'
+                    ? 'bg-violet-500 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Réservé à la revente sur marketplaces — n'apparaît pas sur la boutique"
+              >
+                <ShoppingCart className="h-3.5 w-3.5" />
+                Plateforme
+              </button>
+            </div>
+          </DialogTitle>
           <DialogDescription>
             {item ? `SKU: ${item.sku}` : 'Renseignez les informations d\'identification et de stockage.'}
+            {form.stockType === 'plateforme' && (
+              <span className="block mt-1 text-violet-600 dark:text-violet-300 font-medium">
+                ⓘ Cet article sera réservé à la revente sur marketplaces — il n'apparaîtra pas sur la boutique en ligne.
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-5 py-2">

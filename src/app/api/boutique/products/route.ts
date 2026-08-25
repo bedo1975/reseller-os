@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
 
     const where: any = {
       status: 'PUBLIE',
+      // Only items flagged as "boutique" — exclude "plateforme"-type items (reserved for marketplace resale)
+      stockType: 'boutique',
       // Allow quantity = 0 (out-of-stock products are shown with "Indisponible" badge)
       // Only items with a price
       suggestedPrice: { gt: 0 },

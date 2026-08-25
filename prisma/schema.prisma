@@ -242,6 +242,10 @@ model StockItem {
   status        String   @default("A_PHOTOGRAPHIER")
   // A_PHOTOGRAPHIER | A_REDIGER | PRET_A_PUBLIER | PUBLIE | RESERVE | VENDU
 
+  // Type de stock : "boutique" = visible sur la boutique en ligne | "plateforme" = réservé à la revente sur marketplaces (Vinted, Leboncoin, etc.)
+  // Les articles "plateforme" n'apparaissent PAS sur la boutique en ligne.
+  stockType     String   @default("boutique")  // "boutique" | "plateforme"
+
   salePlatform  String?  // plateforme de VENTE (attribut configurable - rempli quand l'article est vendu)
   platform      String?  // legacy: plateforme de VENTE (rempli quand l'article est vendu)
   platforms     String   @default("[]")  // JSON array : plateformes où l'article est publié (ex: ["vinted","leboncoin"])

@@ -86,6 +86,8 @@ export async function GET() {
     const products = await db.stockItem.findMany({
       where: {
         status: 'PUBLIE',
+        // Only boutique-type items are listed on the online store
+        stockType: 'boutique',
         suggestedPrice: { gt: 0 },
       },
       select: {
