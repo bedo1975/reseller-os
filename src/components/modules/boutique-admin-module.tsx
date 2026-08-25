@@ -812,6 +812,7 @@ interface BoutiqueSettingsData {
   logoImage: string | null
   faviconLetter: string
   faviconBgColor: string | null
+  faviconTabText: string  // texte libre affiché dans l'onglet du navigateur à côté du favicon
   watermarkEnabled: boolean
   watermarkOffsetX: number
   watermarkOffsetY: number
@@ -1101,6 +1102,34 @@ function AppearanceTab() {
                 </div>
                 <p className="text-[10px] text-muted-foreground">Si vide → utilise la couleur primaire de la boutique.</p>
               </div>
+            </div>
+            {/* Texte de l'onglet navigateur (document.title) */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Texte de l'onglet navigateur (à côté du favicon)</Label>
+              <div className="flex items-center gap-2">
+                {/* Mini aperçu fidèle de l'onglet */}
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted border text-xs whitespace-nowrap shrink-0">
+                  <div
+                    className="w-4 h-4 rounded-sm flex items-center justify-center text-white font-bold text-[10px]"
+                    style={{ backgroundColor: '#' + (form.faviconBgColor || form.primaryColor || '007bff') }}
+                  >
+                    {(form.faviconLetter || form.logoText?.charAt(0) || 'B').toUpperCase()}
+                  </div>
+                  <span className="font-medium text-foreground truncate max-w-[160px]">
+                    {form.faviconTabText || form.seoTitle || 'Titre par défaut'}
+                  </span>
+                </div>
+                <Input
+                  value={form.faviconTabText || ''}
+                  onChange={e => set('faviconTabText', e.target.value.slice(0, 60))}
+                  placeholder="Ex : Ma Boutique — Vêtements seconde main"
+                  maxLength={60}
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Texte libre affiché dans l'onglet du navigateur (max 60 caractères). Si vide → utilise le titre SEO ou le titre par défaut.
+              </p>
             </div>
             <p className="text-[11px] text-muted-foreground">
               💡 Le favicon peut mettre plusieurs heures à se mettre à jour dans le navigateur (cache). Pour forcer : ouvrez une navigation privée ou ajoutez <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">?v=2</code> à l'URL.

@@ -18,6 +18,7 @@ export interface BoutiqueSettings {
   logoImage: string | null
   faviconLetter: string
   faviconBgColor: string | null
+  faviconTabText: string  // short text shown in the browser tab next to the favicon
   watermarkEnabled: boolean
   watermarkOffsetX: number
   watermarkOffsetY: number
@@ -118,6 +119,7 @@ const DEFAULTS: BoutiqueSettings = {
   logoImage: null,
   faviconLetter: 'B',
   faviconBgColor: null,
+  faviconTabText: '',
   watermarkEnabled: false,
   watermarkOffsetX: 20,
   watermarkOffsetY: 20,

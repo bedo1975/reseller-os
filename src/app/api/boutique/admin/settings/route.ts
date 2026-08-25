@@ -22,7 +22,7 @@ export async function PUT(req: NextRequest) {
     const {
       heroEyebrow, heroTitle, heroSubtitle, heroCtaLabel, heroCtaLink, heroImage,
       topBarText, footerAbout, footerEmail, footerPhone,
-      logoText, logoSubtitle, logoImage, faviconLetter, faviconBgColor, watermarkEnabled, watermarkOffsetX, watermarkOffsetY, imagePaddingMode, primaryColor, primaryDarkColor,
+      logoText, logoSubtitle, logoImage, faviconLetter, faviconBgColor, faviconTabText, watermarkEnabled, watermarkOffsetX, watermarkOffsetY, imagePaddingMode, primaryColor, primaryDarkColor,
       headerBgColor, topbarBgColor, footerBgColor,
       freeShippingEnabled, freeShippingThreshold, boutiqueClosed, boutiqueClosedMessage, emailDesign,
       hoursJson, hoursVisible, cgvText, legalText,
@@ -68,6 +68,7 @@ export async function PUT(req: NextRequest) {
     if (logoImage !== undefined) data.logoImage = logoImage || null
     if (typeof faviconLetter === 'string') data.faviconLetter = faviconLetter.slice(0, 1)
     if (typeof faviconBgColor === 'string') data.faviconBgColor = faviconBgColor || null
+    if (typeof faviconTabText === 'string') data.faviconTabText = faviconTabText.slice(0, 60)
     if (typeof watermarkEnabled === 'boolean') data.watermarkEnabled = watermarkEnabled
     if (typeof watermarkOffsetX === 'number') data.watermarkOffsetX = Math.max(5, Math.min(500, watermarkOffsetX))
     if (typeof watermarkOffsetY === 'number') data.watermarkOffsetY = Math.max(5, Math.min(500, watermarkOffsetY))

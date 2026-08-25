@@ -63,7 +63,12 @@ export function BoutiqueShell({ children }: { children: React.ReactNode }) {
 
   // Update document title and meta description from boutique settings (SEO)
   useEffect(() => {
-    if (settings.seoTitle) {
+    // Tab title priority: faviconTabText (free text in Boutique Admin → Apparence) > seoTitle > default
+    // faviconTabText is the short label shown next to the favicon in the browser tab.
+    // If we're on a sub-page (e.g. /produit/xxx), append the page name as a suffix for context.
+    if (settings.faviconTabText) {
+      document.title = settings.faviconTabText
+    } else if (settings.seoTitle) {
       document.title = settings.seoTitle
     }
     if (settings.seoDescription) {
@@ -75,7 +80,7 @@ export function BoutiqueShell({ children }: { children: React.ReactNode }) {
       }
       meta.setAttribute('content', settings.seoDescription)
     }
-  }, [settings.seoTitle, settings.seoDescription])
+  }, [settings.faviconTabText, settings.seoTitle, settings.seoDescription])
 
   const logout = async () => {
     await fetch('/api/boutique/client/logout', { method: 'POST' })

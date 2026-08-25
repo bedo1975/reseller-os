@@ -580,6 +580,9 @@ model BoutiqueSettings {
   faviconLetter   String   @default("B")
   // Couleur de fond du favicon (hex sans #, ex: "007bff"). Si vide → utilise primaryColor.
   faviconBgColor  String?
+  // Texte libre affiché dans l'onglet du navigateur à côté du favicon (document.title).
+  // Si vide → utilise seoTitle, sinon le titre par défaut.
+  faviconTabText  String   @default("")
   // Filigrane (watermark) sur les photos produits.
   // Si true, le texte du logo (logoText) est ajouté en bas à droite des photos
   // lors de l'upload (Stock form + shooting photo). Désactivé par défaut.
