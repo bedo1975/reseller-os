@@ -86,9 +86,11 @@ export async function GET(
       })(),
     }
 
-    // Fetch variants: other published items with the same title + brand (but different SKU).
+    // Fetch variants: other published boutique items with the same title + brand (but different SKU).
     // Items created via the multi-variant form share the same title and brand, so this
     // is the most reliable way to detect variants regardless of SKU format.
+    // We filter on stockType: 'boutique' so a sibling variant marked as "plateforme"
+    // (marketplace-only) does NOT appear as a clickable variant on the boutique product page.
     let variants: any[] = []
     if (item.title) {
       const siblingItems = await db.stockItem.findMany({
@@ -96,6 +98,7 @@ export async function GET(
           title: item.title,
           brand: item.brand,
           status: 'PUBLIE',
+          stockType: 'boutique',
           sku: { not: item.sku },
           suggestedPrice: { gt: 0 },
         },
