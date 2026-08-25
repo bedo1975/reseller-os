@@ -101,6 +101,83 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
     setActivePhoto(0)
   }, [sku])
 
+  // Set document.title + meta description + JSON-LD structured data for SEO
+  useEffect(() => {
+    if (!product) return
+    const productLabel = [product.brand, product.title].filter(Boolean).join(' ')
+    const boutiqueName = settings.faviconTabText || settings.logoText || ''
+    document.title = boutiqueName
+      ? `${productLabel} — ${boutiqueName}`
+      : productLabel
+
+    // Meta description: brand + title + size + color + condition, then shop name
+    const descParts = [
+      product.brand,
+      product.title || product.category,
+      product.size && `Taille ${product.size}`,
+      product.color,
+    ].filter(Boolean)
+    const description = `${descParts.join(' · ')} — ${boutiqueName || 'Boutique'}. Livraison rapide, retours 14 jours.`
+    let meta = document.querySelector('meta[name="description"]')
+    if (!meta) {
+      meta = document.createElement('meta')
+      meta.setAttribute('name', 'description')
+      document.head.appendChild(meta)
+    }
+    meta.setAttribute('content', description)
+
+    // Open Graph tags (for Facebook/WhatsApp/Telegram sharing previews)
+    const setOg = (key: string, value: string) => {
+      let tag = document.querySelector(`meta[property="${key}"]`)
+      if (!tag) {
+        tag = document.createElement('meta')
+        tag.setAttribute('property', key)
+        document.head.appendChild(tag)
+      }
+      tag.setAttribute('content', value)
+    }
+    setOg('og:title', `${productLabel} — ${boutiqueName || 'Boutique'}`)
+    setOg('og:description', description)
+    setOg('og:type', 'product')
+    if (product.mainPhoto) setOg('og:image', product.mainPhoto)
+
+    // JSON-LD structured data — tells Google this is a Product (rich results in search)
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: productLabel,
+      brand: { '@type': 'Brand', name: product.brand },
+      category: product.category,
+      ...(product.size && { size: product.size }),
+      ...(product.color && { color: product.color }),
+      ...(product.mainPhoto && { image: product.mainPhoto }),
+      offers: {
+        '@type': 'Offer',
+        price: product.price,
+        priceCurrency: 'EUR',
+        availability: (product.quantity ?? 0) > 0
+          ? 'https://schema.org/InStock'
+          : 'https://schema.org/OutOfStock',
+        itemCondition: `https://schema.org/${product.condition === 'neuf' ? 'NewCondition' : 'UsedCondition'}`,
+      },
+    }
+    let script = document.getElementById('product-jsonld') as HTMLScriptElement | null
+    if (!script) {
+      script = document.createElement('script')
+      script.id = 'product-jsonld'
+      script.type = 'application/ld+json'
+      document.head.appendChild(script)
+    }
+    script.textContent = JSON.stringify(jsonLd)
+
+    // Cleanup: when leaving the product page, restore the boutique tab title (BoutiqueShell will re-apply)
+    return () => {
+      document.title = settings.faviconTabText || settings.seoTitle || 'Boutique'
+      const jsonLdTag = document.getElementById('product-jsonld')
+      if (jsonLdTag) jsonLdTag.remove()
+    }
+  }, [product, settings.faviconTabText, settings.logoText, settings.seoTitle])
+
   const addToCart = () => {
     if (!product) return
     setAdding(true)
