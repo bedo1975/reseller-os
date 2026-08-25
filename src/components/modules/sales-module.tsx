@@ -18,7 +18,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, ShoppingCart, Search, Euro, TrendingUp, Percent, Edit, Trash2, FileText, Package, Barcode, Truck, CreditCard, Store } from 'lucide-react'
+import { Plus, ShoppingCart, Search, Euro, TrendingUp, Percent, Edit, Trash2, FileText, Package, Barcode, Truck, CreditCard, Store, Calendar, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePermissions } from '@/hooks/use-permissions'
 import {
@@ -71,15 +71,45 @@ export function SalesModule() {
   const { can } = usePermissions()
   const [search, setSearch] = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
+  const [yearFilter, setYearFilter] = useState('all')
+  const [monthFilter, setMonthFilter] = useState('all')
   const [showForm, setShowForm] = useState(false)
   const [editingSale, setEditingSale] = useState<Sale | null>(null)
 
   const availableItems = (stockItems || []).filter(i => i.status !== 'VENDU')
 
+  // Available years — descending, derived from sale dates
+  const years = useMemo(() => {
+    if (!sales) return []
+    const set = new Set<string>()
+    sales.forEach(s => {
+      const d = new Date(s.saleDate)
+      if (!isNaN(d.getTime())) set.add(String(d.getFullYear()))
+    })
+    return Array.from(set).sort((a, b) => Number(b) - Number(a))
+  }, [sales])
+
+  const MONTHS = [
+    { value: '01', label: 'Janvier' }, { value: '02', label: 'Février' },
+    { value: '03', label: 'Mars' }, { value: '04', label: 'Avril' },
+    { value: '05', label: 'Mai' }, { value: '06', label: 'Juin' },
+    { value: '07', label: 'Juillet' }, { value: '08', label: 'Août' },
+    { value: '09', label: 'Septembre' }, { value: '10', label: 'Octobre' },
+    { value: '11', label: 'Novembre' }, { value: '12', label: 'Décembre' },
+  ]
+  const hasDateFilter = yearFilter !== 'all' || monthFilter !== 'all'
+  const resetDateFilter = () => { setYearFilter('all'); setMonthFilter('all') }
+
   const filtered = useMemo(() => {
     if (!sales) return []
     return sales.filter(s => {
       if (platformFilter !== 'all' && s.platform !== platformFilter) return false
+      if (yearFilter !== 'all' || monthFilter !== 'all') {
+        const d = new Date(s.saleDate)
+        if (isNaN(d.getTime())) return false
+        if (yearFilter !== 'all' && String(d.getFullYear()) !== yearFilter) return false
+        if (monthFilter !== 'all' && String(d.getMonth() + 1).padStart(2, '0') !== monthFilter) return false
+      }
       if (search) {
         const q = search.toLowerCase()
         return (
@@ -91,7 +121,7 @@ export function SalesModule() {
       }
       return true
     })
-  }, [sales, search, platformFilter])
+  }, [sales, search, platformFilter, yearFilter, monthFilter])
 
   const totalCA = filtered.reduce((s, x) => s + x.salePrice, 0)
   const totalProfit = filtered.reduce((s, x) => s + x.profit, 0)
@@ -159,8 +189,8 @@ export function SalesModule() {
       {/* Toolbar */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col lg:flex-row gap-3">
-            <div className="relative flex-1">
+          <div className="flex flex-col lg:flex-row gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Rechercher par SKU, marque, client, n° suivi..."
@@ -169,6 +199,27 @@ export function SalesModule() {
                 className="pl-9"
               />
             </div>
+            <Select value={yearFilter} onValueChange={v => { setYearFilter(v); if (v === 'all') setMonthFilter('all') }}>
+              <SelectTrigger className="w-full lg:w-[130px]">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                  <SelectValue placeholder="Année" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes années</SelectItem>
+                {years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={monthFilter} onValueChange={setMonthFilter} disabled={yearFilter === 'all'}>
+              <SelectTrigger className="w-full lg:w-[150px]">
+                <SelectValue placeholder="Mois" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous mois</SelectItem>
+                {MONTHS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
             <Select value={platformFilter} onValueChange={setPlatformFilter}>
               <SelectTrigger className="w-full lg:w-[180px]">
                 <SelectValue placeholder="Plateforme" />
@@ -178,6 +229,12 @@ export function SalesModule() {
                 {platforms.map(p => <SelectItem key={p.code} value={p.code}>{p.value}</SelectItem>)}
               </SelectContent>
             </Select>
+            {hasDateFilter && (
+              <Button variant="ghost" size="sm" onClick={resetDateFilter} title="Effacer le filtre date" className="gap-1">
+                <X className="h-3.5 w-3.5" />
+                <span className="hidden lg:inline">Effacer date</span>
+              </Button>
+            )}
             {can('sales', 'create') && (
             <Button
               onClick={() => { setEditingSale(null); setShowForm(true) }}
@@ -204,8 +261,26 @@ export function SalesModule() {
         <Card>
           <CardContent className="py-16 text-center">
             <ShoppingCart className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-            <p className="text-sm font-medium">Aucune vente</p>
-            <p className="text-xs text-muted-foreground mt-1">Enregistrez votre première vente pour démarrer.</p>
+            <p className="text-sm font-medium">
+              {hasDateFilter || platformFilter !== 'all' || search
+                ? 'Aucune vente ne correspond à vos filtres'
+                : 'Aucune vente'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {hasDateFilter || platformFilter !== 'all' || search
+                ? 'Essayez d\'élargir la période ou la plateforme.'
+                : 'Enregistrez votre première vente pour démarrer.'}
+            </p>
+            {(hasDateFilter || platformFilter !== 'all' || search) && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => { resetDateFilter(); setPlatformFilter('all'); setSearch('') }}
+              >
+                Réinitialiser les filtres
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
