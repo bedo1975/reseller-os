@@ -12,6 +12,7 @@ interface ProductCardProps {
     size?: string | null
     color?: string | null
     condition?: string | null
+    grade?: string | null
     price: number | null
     hasVariants?: boolean
     variantCount?: number
@@ -38,8 +39,16 @@ const CATEGORY_LABELS: Record<string, string> = {
   maison: 'Maison',
 }
 
+// Grade badges — same colors as on the product page (Grade A = green, B = yellow, C = orange)
+const GRADE_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  A: { label: 'Grade A', bg: 'bg-emerald-500', text: 'text-white' },
+  B: { label: 'Grade B', bg: 'bg-yellow-400', text: 'text-yellow-950' },
+  C: { label: 'Grade C', bg: 'bg-orange-500', text: 'text-white' },
+}
+
 export function ProductCard({ product }: ProductCardProps) {
   const outOfStock = product.quantity != null && product.quantity <= 0
+  const grade = product.grade && GRADE_CONFIG[product.grade] ? GRADE_CONFIG[product.grade] : null
   return (
     <Link
       href={`/produit/${product.sku}`}
@@ -59,11 +68,22 @@ export function ProductCard({ product }: ProductCardProps) {
             <Package className="h-12 w-12" />
           </div>
         )}
-        {product.condition && (
-          <span className="absolute top-2 left-2 bg-white/95 text-[10px] font-semibold px-2 py-1 rounded-full text-gray-700 uppercase">
-            {CONDITION_LABELS[product.condition] || product.condition}
-          </span>
-        )}
+        {/* Top-left: condition + grade badges stacked vertically */}
+        <div className="absolute top-2 left-2 flex flex-col gap-1 items-start">
+          {product.condition && (
+            <span className="bg-white/95 text-[10px] font-semibold px-2 py-1 rounded-full text-gray-700 uppercase">
+              {CONDITION_LABELS[product.condition] || product.condition}
+            </span>
+          )}
+          {grade && (
+            <span
+              className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${grade.bg} ${grade.text}`}
+              title="En savoir plus sur nos grades"
+            >
+              {grade.label}
+            </span>
+          )}
+        </div>
         {outOfStock && (
           <span className="absolute top-2 right-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase">
             Indisponible
