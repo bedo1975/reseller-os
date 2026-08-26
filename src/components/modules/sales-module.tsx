@@ -18,7 +18,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, ShoppingCart, Search, Euro, TrendingUp, Percent, Edit, Trash2, FileText, Package, Barcode, Truck, CreditCard, Store, Calendar, X } from 'lucide-react'
+import { Plus, ShoppingCart, Search, Euro, TrendingUp, Percent, Edit, Trash2, FileText, Package, Barcode, Truck, CreditCard, Store, Calendar, X, Layers } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePermissions } from '@/hooks/use-permissions'
 import {
@@ -128,6 +128,40 @@ export function SalesModule() {
   const totalCA = filtered.reduce((s, x) => s + x.salePrice, 0)
   const totalProfit = filtered.reduce((s, x) => s + x.profit, 0)
   const avgMargin = totalCA > 0 ? (totalProfit / totalCA) * 100 : 0
+
+  // Group sales by BoutiqueOrder for display:
+  // - Sales sharing the same boutiqueOrderId → 1 group (multi-article sale)
+  // - Sales without boutiqueOrderId → 1 group each (single-article sale)
+  // This matches the parcels module behavior and avoids showing duplicate rows
+  // for articles that were sold together in the same checkout.
+  interface SaleGroup {
+    key: string
+    boutiqueOrderId: string | null
+    sales: Sale[]
+  }
+  const grouped = useMemo<SaleGroup[]>(() => {
+    if (!filtered.length) return []
+    const groupsMap = new Map<string, Sale[]>()
+    const singles: Sale[] = []
+    for (const s of filtered) {
+      if (s.boutiqueOrderId) {
+        if (!groupsMap.has(s.boutiqueOrderId)) groupsMap.set(s.boutiqueOrderId, [])
+        groupsMap.get(s.boutiqueOrderId)!.push(s)
+      } else {
+        singles.push(s)
+      }
+    }
+    const allGroups: SaleGroup[] = []
+    for (const [id, group] of groupsMap.entries()) {
+      // Sort sales within a group by SKU for stable display
+      group.sort((a, b) => a.stockItem.sku.localeCompare(b.stockItem.sku))
+      allGroups.push({ key: `order-${id}`, boutiqueOrderId: id, sales: group })
+    }
+    for (const s of singles) {
+      allGroups.push({ key: `sale-${s.id}`, boutiqueOrderId: null, sales: [s] })
+    }
+    return allGroups
+  }, [filtered])
 
   const handleDelete = async (id: string) => {
     const ok = await confirm({
@@ -307,32 +341,54 @@ export function SalesModule() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(s => {
-                    const totalFees = (s.platformFees || 0) + (s.platformFixedFees || 0)
+                  {grouped.map(group => {
+                    const first = group.sales[0]
+                    const isMulti = group.sales.length > 1
+                    const groupTotal = group.sales.reduce((s, x) => s + x.salePrice, 0)
+                    const groupProfit = group.sales.reduce((s, x) => s + x.profit, 0)
+                    const groupFees = group.sales.reduce((s, x) => s + (x.platformFees || 0) + (x.platformFixedFees || 0), 0)
+                    const groupMargin = groupTotal > 0 ? (groupProfit / groupTotal) * 100 : 0
                     return (
-                      <tr key={s.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                      <tr key={group.key} className={cn('border-b last:border-0 hover:bg-muted/30 transition-colors', isMulti && 'bg-muted/10')}>
                         <td className="px-3 py-2.5 whitespace-nowrap text-xs text-muted-foreground">
-                          {formatDateTime(s.saleDate)}
+                          {formatDateTime(first.saleDate)}
                         </td>
                         <td className="px-3 py-2.5">
-                          <p className="font-medium">{s.stockItem.brand}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{s.stockItem.sku}</p>
+                          {group.sales.map((s, idx) => (
+                            <div key={s.id} className={cn(idx > 0 && 'mt-1.5 pt-1.5 border-t border-dashed border-border/40')}>
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-medium">{s.stockItem.brand}</p>
+                                {s.stockItem.size && (
+                                  <span className="text-[10px] text-muted-foreground">· {s.stockItem.size}</span>
+                                )}
+                                {s.stockItem.color && (
+                                  <span className="text-[10px] text-muted-foreground">· {s.stockItem.color}</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground font-mono">{s.stockItem.sku}</p>
+                            </div>
+                          ))}
+                          {isMulti && (
+                            <span className="inline-flex items-center gap-1 mt-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+                              <Layers className="h-2.5 w-2.5" /> Lot de {group.sales.length} articles
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2.5">
-                          {s.invoiceNumber ? (
+                          {first.invoiceNumber ? (
                             <a
-                              href={`/api/invoices/${s.id}/pdf`}
+                              href={`/api/invoices/${first.id}/pdf`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 px-1.5 py-0.5 rounded font-mono transition-colors"
                               title="Voir la facture PDF"
                             >
                               <FileText className="h-3 w-3" />
-                              {s.invoiceNumber}
+                              {first.invoiceNumber}
                             </a>
                           ) : (
                             <a
-                              href={`/api/invoices/${s.id}/pdf`}
+                              href={`/api/invoices/${first.id}/pdf`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-[10px] bg-muted hover:bg-muted/80 px-1.5 py-0.5 rounded transition-colors text-muted-foreground"
@@ -343,23 +399,30 @@ export function SalesModule() {
                           )}
                         </td>
                         <td className="px-3 py-2.5">
-                          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', getPlatformColor(s.platform))}>
-                            {getPlatformLabel(s.platform)}
+                          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', getPlatformColor(first.platform))}>
+                            {getPlatformLabel(first.platform)}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-xs">{s.customerName || '—'}</td>
-                        <td className="px-3 py-2.5 text-right font-medium">{formatEUR(s.salePrice)}</td>
+                        <td className="px-3 py-2.5 text-xs">{first.customerName || '—'}</td>
+                        <td className="px-3 py-2.5 text-right font-medium">
+                          {isMulti ? (
+                            <div>
+                              <div>{formatEUR(groupTotal)}</div>
+                              <p className="text-[9px] text-muted-foreground">Σ {group.sales.length} articles</p>
+                            </div>
+                          ) : formatEUR(first.salePrice)}
+                        </td>
                         <td className="px-3 py-2.5 text-right text-xs text-rose-600 hidden lg:table-cell">
-                          -{formatEUR(totalFees)}
+                          -{formatEUR(groupFees)}
                         </td>
                         <td className="px-3 py-2.5 text-right">
-                          <Badge variant="outline" className="font-mono">{s.margin}%</Badge>
+                          <Badge variant="outline" className="font-mono">{groupMargin.toFixed(1)}%</Badge>
                         </td>
-                        <td className="px-3 py-2.5 text-right font-semibold text-emerald-600">{formatEUR(s.profit)}</td>
-                        <td className="px-3 py-2.5 text-xs hidden md:table-cell">{s.carrier ? getCarrierLabel(s.carrier) : '—'}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-emerald-600">{formatEUR(groupProfit)}</td>
+                        <td className="px-3 py-2.5 text-xs hidden md:table-cell">{first.carrier ? getCarrierLabel(first.carrier) : '—'}</td>
                         <td className="px-3 py-2.5">
-                          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', getParcelStatusColor(s.parcelStatus))}>
-                            {getParcelStatusLabel(s.parcelStatus)}
+                          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', getParcelStatusColor(first.parcelStatus))}>
+                            {getParcelStatusLabel(first.parcelStatus)}
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-right">
@@ -369,7 +432,8 @@ export function SalesModule() {
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0"
-                              onClick={() => { setEditingSale(s); setShowForm(true) }}
+                              onClick={() => { setEditingSale(first); setShowForm(true) }}
+                              title={isMulti ? `Modifier la première vente du lot (${group.sales.length} articles)` : 'Modifier la vente'}
                             >
                               <Edit className="h-3.5 w-3.5" />
                             </Button>
@@ -379,7 +443,8 @@ export function SalesModule() {
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700"
-                              onClick={() => handleDelete(s.id)}
+                              onClick={() => handleDelete(first.id)}
+                              title={isMulti ? `Supprimer la première vente du lot (les autres ventes du lot restent)` : 'Supprimer la vente'}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>

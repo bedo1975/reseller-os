@@ -192,6 +192,9 @@ function OrdersTab() {
     matched: boolean
   }>>([])
   const [prepareValidating, setPrepareValidating] = useState(false)
+  // User-declared article count for cross-check: the preparer counts the physical articles
+  // in the parcel and enters the number here. Must match the expected count for validation.
+  const [prepareCountInput, setPrepareCountInput] = useState('')
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -353,6 +356,7 @@ function OrdersTab() {
   // Open the prepare-order dialog — fetch barcodes for each item's SKU
   const openPrepare = async (order: Order) => {
     setPrepareOrder(order)
+    setPrepareCountInput('')
     // Optimistically populate without barcodes (grayed-out state)
     setPrepareItems(order.items.map(it => ({
       sku: it.sku,
@@ -398,13 +402,24 @@ function OrdersTab() {
   // Check if all items are matched — enables the "Valider la préparation" button
   const allMatched = prepareItems.length > 0 && prepareItems.every(it => it.matched)
 
+  // Expected article count = sum of all qty in the order
+  const expectedCount = prepareItems.reduce((sum, it) => sum + (it.qty || 1), 0)
+
+  // User-entered article count (parsed, NaN-safe)
+  const enteredCount = parseInt(prepareCountInput, 10)
+  const enteredCountValid = !Number.isNaN(enteredCount)
+  const countMatches = enteredCountValid && enteredCount === expectedCount
+
+  // Validation enabled only when: all barcodes matched AND count entered AND count matches
+  const canValidate = allMatched && countMatches
+
   // Determine which item is the "active" one (next not-yet-matched)
   // Items above the active one are validated (green), items below are grayed out
   const activeIdx = prepareItems.findIndex(it => !it.matched)
 
   // Validate the preparation — call mark-ready endpoint, send email, close dialog
   const validatePrepare = async () => {
-    if (!prepareOrder || !allMatched) return
+    if (!prepareOrder || !canValidate) return
     setPrepareValidating(true)
     try {
       const res = await fetch(`/api/boutique/admin/orders/${prepareOrder.id}/mark-ready`, {
@@ -804,13 +819,17 @@ function OrdersTab() {
                   Articles vérifiés : <strong className="text-foreground">{prepareItems.filter(it => it.matched).length}</strong> / {prepareItems.length}
                 </span>
                 <div className="flex items-center gap-2">
-                  {allMatched ? (
+                  {canValidate ? (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-semibold">
-                      <Check className="h-3 w-3" /> Tout est vérifié
+                      <Check className="h-3 w-3" /> Prêt à valider
+                    </span>
+                  ) : allMatched ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-[11px] font-semibold">
+                      <Check className="h-3 w-3" /> Scans OK — vérif. compte restante
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 text-[11px] font-semibold">
-                      <Loader2 className="h-3 w-3 animate-spin" /> En cours
+                      <Loader2 className="h-3 w-3 animate-spin" /> Scan en cours
                     </span>
                   )}
                 </div>
@@ -857,10 +876,21 @@ function OrdersTab() {
                           <p className="text-[10px] text-muted-foreground font-mono mt-1">SKU : {it.sku}</p>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Code-barres attendu</p>
-                          <p className="font-mono text-sm font-semibold bg-white dark:bg-gray-900 px-2 py-1 rounded border dark:border-gray-700">
-                            {it.barcode || <span className="text-muted-foreground italic">Aucun</span>}
-                          </p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Code-barres</p>
+                          {it.barcode ? (
+                            // Display the barcode as a PNG image (no human-readable text) so the
+                            // preparer MUST use a scanner to read it — prevents manual typing.
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={`/api/barcode/image?code=${encodeURIComponent(it.barcode)}&t=${Date.now()}`}
+                              alt="Code-barres à scanner"
+                              className="h-12 w-auto bg-white border dark:border-gray-700 rounded px-1"
+                              // Cache-busting via ?t=Date.now() — each render fetches a fresh PNG
+                              // (the API returns no-store so browsers won't cache it anyway)
+                            />
+                          ) : (
+                            <span className="text-muted-foreground italic text-xs">Aucun code-barres</span>
+                          )}
                         </div>
                       </div>
 
@@ -897,12 +927,60 @@ function OrdersTab() {
                 })}
               </div>
 
+              {/* Cross-check: count the physical articles */}
+              <div className={`rounded-lg border p-3 transition-all ${
+                countMatches
+                  ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30'
+                  : enteredCountValid && !countMatches
+                    ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30'
+                    : 'border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <Label className="text-xs font-semibold mb-1 block">
+                      Vérification finale : comptez les articles dans le colis
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Nombre d'articles attendus : <strong className="text-foreground">{expectedCount}</strong>
+                      {prepareItems.some(it => it.qty > 1) && (
+                        <span className="ml-1 italic">(somme des quantités de chaque ligne)</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={prepareCountInput}
+                      onChange={(e) => setPrepareCountInput(e.target.value)}
+                      disabled={!allMatched}
+                      placeholder="?"
+                      className={`w-20 text-center font-bold text-lg ${
+                        countMatches ? 'border-emerald-300' : enteredCountValid && !countMatches ? 'border-red-300' : ''
+                      }`}
+                    />
+                    {countMatches ? (
+                      <Check className="h-6 w-6 text-emerald-500" />
+                    ) : enteredCountValid && !countMatches ? (
+                      <X className="h-6 w-6 text-red-500" />
+                    ) : null}
+                  </div>
+                </div>
+                {enteredCountValid && !countMatches && (
+                  <p className="text-[11px] text-red-700 dark:text-red-300 mt-1.5">
+                    ⚠ Le nombre saisi ({enteredCount}) ne correspond pas au nombre attendu ({expectedCount}). Vérifiez le contenu du colis.
+                  </p>
+                )}
+              </div>
+
               {/* Action footer */}
               <div className="flex items-center justify-between gap-2 pt-3 border-t">
                 <p className="text-xs text-muted-foreground">
-                  {allMatched
-                    ? '✓ Tous les articles sont vérifiés. Vous pouvez valider la préparation.'
-                    : 'Vérifiez tous les articles pour activer le bouton de validation.'}
+                  {canValidate
+                    ? '✓ Tous les articles sont vérifiés et le compte est correct. Vous pouvez valider.'
+                    : allMatched
+                      ? 'Comptez les articles du colis et saisissez le nombre pour activer la validation.'
+                      : 'Vérifiez tous les articles (scan) pour activer la vérification finale.'}
                 </p>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setPrepareOrder(null)}>
@@ -910,7 +988,7 @@ function OrdersTab() {
                   </Button>
                   <Button
                     onClick={validatePrepare}
-                    disabled={!allMatched || prepareValidating}
+                    disabled={!canValidate || prepareValidating}
                     className="bg-teal-600 hover:bg-teal-700 text-white"
                   >
                     {prepareValidating ? (
