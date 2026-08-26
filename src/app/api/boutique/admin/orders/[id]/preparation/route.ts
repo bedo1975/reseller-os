@@ -96,7 +96,8 @@ export async function GET(
     }
 
     const STATUS_LABELS: Record<string, string> = {
-      pending: 'En attente', paid: 'Payée', shipped: 'Expédiée',
+      pending: 'En attente', paid: 'Payée', preparation: 'En préparation',
+      ready_to_ship: 'Prête pour l\'expédition', shipped: 'Expédiée',
       delivered: 'Livrée', cancelled: 'Annulée',
     }
 

@@ -358,6 +358,7 @@ export async function notifyOrderStatusChange(
       pending: 'En attente',
       paid: 'Payée',
       preparation: 'En préparation',
+      ready_to_ship: 'Prête pour l\'expédition',
       shipped: 'Expédiée',
       delivered: 'Livrée',
       cancelled: 'Annulée',
@@ -456,6 +457,86 @@ ${trackingHtml}`
     })
   } catch (e: any) {
     console.error('[email] notifyOrderStatusChange error:', e?.message)
+  }
+}
+
+/**
+ * notifyOrderReady — sent to the customer when their order is marked as "ready_to_ship"
+ * (i.e. the preparer has finished scanning + verifying all items).
+ *
+ * Uses the templateOrderReady template from BoutiqueSettings (same template system as
+ * the other emails — customizable in Paramètres → Email → "Commande prête pour l'expédition").
+ *
+ * Variables: {firstName}, {orderId}
+ */
+export async function notifyOrderReady(opts: {
+  clientEmail: string
+  clientFirstName: string
+  orderId: string
+}) {
+  try {
+    console.log('[email] notifyOrderReady triggered:', opts.orderId, 'to', opts.clientEmail)
+    const { clientEmail, clientFirstName, orderId } = opts
+
+    const config = await getEmailConfig()
+    const template = config?.templateOrderReady || null
+    const bs = await getBoutiqueSettings()
+    const siteUrl = bs.shareSiteUrl || ''
+    const logoText = bs.logoText || 'Boutique'
+    const ordersUrl = siteUrl ? `${siteUrl}/compte/commandes` : ''
+
+    const defaultText = `Bonjour ${clientFirstName},\n\nVotre commande ${orderId} a été préparée avec soin et est maintenant prête pour l'expédition. Nous vous tiendrons informé(e) de l'expédition prochainement.\n\nMerci pour votre confiance !\n${ordersUrl ? 'Suivez votre commande : ' + ordersUrl : ''}`
+    const text = applyTemplate(
+      template,
+      defaultText,
+      { firstName: clientFirstName, orderId },
+    )
+
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      // Template is HTML — replace variables
+      let processedTemplate = template
+      const vars: Record<string, string> = {
+        firstName: clientFirstName,
+        orderId,
+        ordersUrl,
+      }
+      for (const [key, value] of Object.entries(vars)) {
+        processedTemplate = processedTemplate.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      html = migrateRelativeUrls(processedTemplate, siteUrl)
+    } else {
+      // Standard HTML template
+      const bodyHtml = `
+<p style="margin:0 0 12px 0;">Votre commande est maintenant <strong style="color:#10b981;">prête pour l'expédition</strong>.</p>
+<div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:16px;margin:12px 0;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Commande</p>
+<p style="margin:0;font-family:monospace;font-weight:600;font-size:15px;">${orderId}</p>
+<p style="margin:8px 0 0 0;font-size:13px;color:#065f46;">📦 Tous les articles ont été vérifiés et le colis est en attente de remise au transporteur.</p>
+</div>
+<p style="margin:0 0 8px 0;">Nous vous tiendrons informé(e) dès que le colis sera expédié.</p>`
+
+      const result = buildEmailTemplate({
+        title: 'Préparation terminée ✓',
+        headerColor: '#10b981',
+        firstName: clientFirstName,
+        bodyHtml,
+        siteUrl,
+        buttonText: siteUrl ? 'Suivre ma commande →' : undefined,
+        buttonUrl: ordersUrl || undefined,
+        logoText,
+      })
+      html = result.html
+    }
+
+    await sendEmail({
+      to: clientEmail,
+      subject: `Votre commande ${orderId} est prête pour l'expédition`,
+      text,
+      html,
+    })
+  } catch (e: any) {
+    console.error('[email] notifyOrderReady error:', e?.message)
   }
 }
 

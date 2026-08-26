@@ -1060,6 +1060,7 @@ model EmailSettings {
   templateOrderStatus      String?  // changement status commande
   templateAdminOrder       String?  // nouvelle commande (envoyé à l'admin)
   templateBackInStock      String?  // alerte retour en stock (envoyé au visiteur inscrit)
+  templateOrderReady       String?  // commande prête pour l'expédition (envoyé au client)
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

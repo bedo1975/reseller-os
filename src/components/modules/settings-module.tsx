@@ -2556,6 +2556,7 @@ interface EmailSettingsData {
   templateOrderStatus: string | null
   templateAdminOrder: string | null
   templateBackInStock: string | null
+  templateOrderReady: string | null
 }
 
 // Modern HTML preset generator for email templates.
@@ -2647,6 +2648,13 @@ ${footerBlock}
         '<p>Bonjour,</p><p>L\'article que vous convoitez est de nouveau disponible sur notre boutique. Ne tardez pas — il pourrait repartir très vite !</p><div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;text-align:left;"><img src="{photoUrl}" alt="{brand}" width="80" height="80" style="width:80px;height:80px;object-fit:cover;border-radius:6px;display:block;background:#e5e7eb;margin:0 0 12px 0;" /><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Marque</p><p style="margin:0 0 12px 0;font-weight:600;font-size:15px;">{brand}</p><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Référence</p><p style="margin:0;font-family:monospace;font-weight:600;font-size:15px;">{sku}</p></div>',
         'Voir l\'article',
         '{productUrl}',
+      )
+    case 'templateOrderReady':
+      return wrap(
+        'Préparation terminée ✓',
+        '<p>Bonjour {firstName},</p><p>Votre commande <strong>{orderId}</strong> a été préparée avec soin et est maintenant <strong style="color:#10b981;">prête pour l\'expédition</strong>.</p><div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:16px;margin:12px 0;"><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Commande</p><p style="margin:0;font-family:monospace;font-weight:600;font-size:15px;">{orderId}</p><p style="margin:8px 0 0 0;font-size:13px;color:#065f46;">📦 Tous les articles ont été vérifiés et le colis est en attente de remise au transporteur.</p></div><p>Nous vous tiendrons informé(e) dès que le colis sera expédié.</p>',
+        'Suivre ma commande',
+        '{ordersUrl}',
       )
     default:
       return wrap('Bonjour {firstName}', '<p>Votre message ici.</p>')
@@ -2846,6 +2854,7 @@ function EmailSection() {
             { key: 'templateOrderStatus' as const, label: 'Changement de statut commande', placeholder: 'Bonjour {firstName}, le statut de votre commande {orderId} est maintenant : {status}.' },
             { key: 'templateAdminOrder' as const, label: 'Nouvelle commande (admin)', placeholder: 'Nouvelle commande reçue. Client : {clientFirstName}, commande : {orderId}, montant : {total}.' },
             { key: 'templateBackInStock' as const, label: 'Retour en stock', placeholder: 'Bonjour, l\'article {brand} (SKU : {sku}) que vous attendiez est de nouveau disponible.' },
+            { key: 'templateOrderReady' as const, label: 'Commande prête pour l\'expédition', placeholder: 'Bonjour {firstName}, votre commande {orderId} est prête pour l\'expédition.' },
           ].map(t => (
             <div key={t.key} className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">

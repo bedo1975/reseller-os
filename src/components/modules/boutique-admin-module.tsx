@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler, Calculator, CreditCard, Calendar,
+  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler, Calculator, CreditCard, Calendar, PackageCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -144,6 +144,7 @@ const STATUS_OPTIONS = [
   { value: 'pending', label: 'En attente', color: 'bg-amber-100 text-amber-700' },
   { value: 'paid', label: 'Payée', color: 'bg-blue-100 text-blue-700' },
   { value: 'preparation', label: 'En préparation', color: 'bg-purple-100 text-purple-700' },
+  { value: 'ready_to_ship', label: 'Prête pour l\'expédition', color: 'bg-teal-100 text-teal-700' },
   { value: 'shipped', label: 'Expédiée', color: 'bg-indigo-100 text-indigo-700' },
   { value: 'delivered', label: 'Livrée', color: 'bg-green-100 text-green-700' },
   { value: 'cancelled', label: 'Annulée', color: 'bg-red-100 text-red-700' },
@@ -177,6 +178,20 @@ function OrdersTab() {
   const [editCarrier, setEditCarrier] = useState('')
   const [editPlatform, setEditPlatform] = useState('')
   const [saving, setSaving] = useState(false)
+  // Prepare-order dialog — barcode verification per item
+  const [prepareOrder, setPrepareOrder] = useState<Order | null>(null)
+  const [prepareItems, setPrepareItems] = useState<Array<{
+    sku: string
+    brand: string
+    category: string
+    size: string | null
+    color: string | null
+    qty: number
+    barcode: string | null
+    scanned: string
+    matched: boolean
+  }>>([])
+  const [prepareValidating, setPrepareValidating] = useState(false)
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
@@ -333,6 +348,80 @@ function OrdersTab() {
     setEditTracking('')
     setEditCarrier('')
     setEditPlatform(order.platform || 'boutique')
+  }
+
+  // Open the prepare-order dialog — fetch barcodes for each item's SKU
+  const openPrepare = async (order: Order) => {
+    setPrepareOrder(order)
+    // Optimistically populate without barcodes (grayed-out state)
+    setPrepareItems(order.items.map(it => ({
+      sku: it.sku,
+      brand: it.brand,
+      category: it.category,
+      size: it.size || null,
+      color: it.color || null,
+      qty: it.qty,
+      barcode: null,        // populated after fetch
+      scanned: '',
+      matched: false,
+    })))
+    // Fetch barcodes from /api/stock in parallel
+    try {
+      const res = await fetch('/api/stock?limit=200')
+      const stockList = await res.json()
+      const barcodeBySku = new Map<string, string | null>()
+      if (Array.isArray(stockList)) {
+        for (const s of stockList) {
+          barcodeBySku.set(s.sku, s.barcode || null)
+        }
+      }
+      setPrepareItems(prev => prev.map(it => ({
+        ...it,
+        barcode: barcodeBySku.get(it.sku) || null,
+      })))
+    } catch (e) {
+      console.error('[prepare] Failed to fetch barcodes:', e)
+      toast.error('Impossible de récupérer les codes-barres')
+    }
+  }
+
+  // Update the scanned barcode for an item, recompute match
+  const updateScanned = (idx: number, value: string) => {
+    setPrepareItems(prev => prev.map((it, i) => {
+      if (i !== idx) return it
+      const scanned = value.trim()
+      const matched = !!scanned && !!it.barcode && scanned === it.barcode
+      return { ...it, scanned, matched }
+    }))
+  }
+
+  // Check if all items are matched — enables the "Valider la préparation" button
+  const allMatched = prepareItems.length > 0 && prepareItems.every(it => it.matched)
+
+  // Determine which item is the "active" one (next not-yet-matched)
+  // Items above the active one are validated (green), items below are grayed out
+  const activeIdx = prepareItems.findIndex(it => !it.matched)
+
+  // Validate the preparation — call mark-ready endpoint, send email, close dialog
+  const validatePrepare = async () => {
+    if (!prepareOrder || !allMatched) return
+    setPrepareValidating(true)
+    try {
+      const res = await fetch(`/api/boutique/admin/orders/${prepareOrder.id}/mark-ready`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Erreur')
+      }
+      toast.success(`Commande ${prepareOrder.orderId} marquée "prête pour l'expédition" — email envoyé au client`)
+      setPrepareOrder(null)
+      fetchOrders()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setPrepareValidating(false)
+    }
   }
 
   const saveEdit = async () => {
@@ -601,6 +690,22 @@ function OrdersTab() {
                     >
                       <Package className="h-3.5 w-3.5 mr-1" /> Bon de préparation
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-teal-300 text-teal-700 hover:bg-teal-50"
+                      onClick={() => openPrepare(order)}
+                      disabled={order.status === 'cancelled' || order.status === 'ready_to_ship' || order.status === 'shipped' || order.status === 'delivered'}
+                      title={
+                        order.status === 'ready_to_ship' ? 'Commande déjà marquée prête'
+                        : order.status === 'shipped' ? 'Commande déjà expédiée'
+                        : order.status === 'delivered' ? 'Commande déjà livrée'
+                        : order.status === 'cancelled' ? 'Commande annulée'
+                        : 'Vérifier les articles par scan de code-barres'
+                      }
+                    >
+                      <PackageCheck className="h-3.5 w-3.5 mr-1" /> Préparer la commande
+                    </Button>
                     {can('boutique-admin', 'delete') && (
                       <Button size="sm" variant="ghost" className="text-red-600" onClick={() => deleteOrder(order.id)}>
                         <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer
@@ -674,6 +779,150 @@ function OrdersTab() {
               Sauvegarder
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Prepare order dialog — barcode verification */}
+      <Dialog open={!!prepareOrder} onOpenChange={(o) => !o && setPrepareOrder(null)}>
+        <DialogContent className="sm:!max-w-3xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PackageCheck className="h-5 w-5 text-teal-600" />
+              Préparation de la commande {prepareOrder?.orderId}
+            </DialogTitle>
+            <DialogDescription>
+              Scannez le code-barres de chaque article pour vérifier qu'il correspond bien.
+              Une fois tous les articles validés, cliquez sur « Valider la préparation » pour marquer la commande comme prête pour l'expédition et notifier le client par email.
+            </DialogDescription>
+          </DialogHeader>
+
+          {prepareOrder && (
+            <div className="space-y-3 py-2">
+              {/* Progress indicator */}
+              <div className="flex items-center justify-between text-xs bg-muted/40 rounded-md px-3 py-2">
+                <span className="text-muted-foreground">
+                  Articles vérifiés : <strong className="text-foreground">{prepareItems.filter(it => it.matched).length}</strong> / {prepareItems.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  {allMatched ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-semibold">
+                      <Check className="h-3 w-3" /> Tout est vérifié
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 text-[11px] font-semibold">
+                      <Loader2 className="h-3 w-3 animate-spin" /> En cours
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Items list */}
+              <div className="space-y-2">
+                {prepareItems.map((it, idx) => {
+                  const isActive = idx === activeIdx
+                  const isDone = it.matched
+                  const isGrayed = idx > activeIdx && !it.matched
+                  return (
+                    <div
+                      key={`${it.sku}-${idx}`}
+                      className={`rounded-lg border p-3 transition-all ${
+                        isDone
+                          ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30'
+                          : isActive
+                            ? 'border-teal-400 bg-teal-50 dark:border-teal-700 dark:bg-teal-950/30 shadow-sm'
+                            : 'border-gray-200 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-950/30 opacity-60'
+                      }`}
+                    >
+                      {/* Item header */}
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm truncate">{it.brand}</p>
+                            {isDone ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500 text-white">
+                                <Check className="h-2.5 w-2.5" /> OK
+                              </span>
+                            ) : isActive && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-teal-500 text-white animate-pulse">
+                                À scanner
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {CATEGORY_LABELS[it.category] || it.category}
+                            {it.size && ` · Taille ${it.size}`}
+                            {it.color && ` · ${it.color}`}
+                            {it.qty > 1 && ` · ×${it.qty}`}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground font-mono mt-1">SKU : {it.sku}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Code-barres attendu</p>
+                          <p className="font-mono text-sm font-semibold bg-white dark:bg-gray-900 px-2 py-1 rounded border dark:border-gray-700">
+                            {it.barcode || <span className="text-muted-foreground italic">Aucun</span>}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Scan input — enabled only for the active item */}
+                      <div className="flex items-center gap-2">
+                        <Label className="text-[10px] text-muted-foreground whitespace-nowrap uppercase tracking-wide">Code scanné :</Label>
+                        <Input
+                          value={it.scanned}
+                          onChange={(e) => updateScanned(idx, e.target.value)}
+                          onKeyDown={(e) => {
+                            // Allow Enter to advance to next item
+                            if (e.key === 'Enter' && it.matched) {
+                              e.preventDefault()
+                              // Find next input element
+                              const next = (e.target as HTMLElement).closest('div.space-y-2')?.querySelectorAll('input')[idx + 1] as HTMLInputElement | undefined
+                              next?.focus()
+                            }
+                          }}
+                          disabled={isDone || isGrayed}
+                          placeholder={isDone ? 'Vérifié ✓' : isGrayed ? 'En attente' : 'Scannez ou saisissez le code-barres'}
+                          autoFocus={isActive}
+                          className={`font-mono text-sm ${
+                            isDone ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30' : ''
+                          } ${isGrayed ? 'cursor-not-allowed' : ''}`}
+                        />
+                        {isDone ? (
+                          <Check className="h-5 w-5 text-emerald-500 shrink-0" />
+                        ) : it.scanned && !it.matched ? (
+                          <X className="h-5 w-5 text-red-500 shrink-0" />
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Action footer */}
+              <div className="flex items-center justify-between gap-2 pt-3 border-t">
+                <p className="text-xs text-muted-foreground">
+                  {allMatched
+                    ? '✓ Tous les articles sont vérifiés. Vous pouvez valider la préparation.'
+                    : 'Vérifiez tous les articles pour activer le bouton de validation.'}
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setPrepareOrder(null)}>
+                    Annuler
+                  </Button>
+                  <Button
+                    onClick={validatePrepare}
+                    disabled={!allMatched || prepareValidating}
+                    className="bg-teal-600 hover:bg-teal-700 text-white"
+                  >
+                    {prepareValidating ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Validation…</>
+                    ) : (
+                      <><PackageCheck className="h-4 w-4 mr-2" /> Valider la préparation</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

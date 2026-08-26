@@ -68,7 +68,7 @@ export async function PATCH(
 
     const data: any = {}
     if (typeof status === 'string') {
-      const ALLOWED_STATUSES = ['pending', 'paid', 'preparation', 'shipped', 'delivered', 'cancelled']
+      const ALLOWED_STATUSES = ['pending', 'paid', 'preparation', 'ready_to_ship', 'shipped', 'delivered', 'cancelled']
       if (!ALLOWED_STATUSES.includes(status)) {
         return NextResponse.json({ error: `Statut invalide. Valeurs autorisées : ${ALLOWED_STATUSES.join(', ')}` }, { status: 400 })
       }
