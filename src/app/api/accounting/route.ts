@@ -47,33 +47,61 @@ export async function GET(req: NextRequest) {
         orderBy: { saleDate: 'asc' },
       })
 
-      const entries = sales.map((sale, idx) => {
-        const platformLabels: Record<string, string> = {
-          vinted: 'Vinted', leboncoin: 'Leboncoin', ebay: 'eBay', vestiaire: 'Vestiaire Collective',
-          boutique: 'Boutique',
+      // Group sales by invoiceNumber — 1 entry per invoice (not per Sale).
+      // Multi-article orders share the same invoiceNumber → merged into 1 entry
+      // with the total amount + shipping + total article count.
+      const invoiceGroups = new Map<string, typeof sales>()
+      const invoiceOrder: string[] = []  // preserve insertion order
+      for (const sale of sales) {
+        const key = sale.invoiceNumber || `__no_invoice__${sale.id}`
+        if (!invoiceGroups.has(key)) {
+          invoiceGroups.set(key, [])
+          invoiceOrder.push(key)
         }
-        const platformPaymentMethods: Record<string, string> = {
-          vinted: 'Virement (porte-monnaie Vinted)',
-          leboncoin: 'Virement / Paiement LBC',
-          ebay: 'Virement PayPal / eBay',
-          vestiaire: 'Virement Vestiaire Collective',
-        }
-        // Pour les ventes boutique, utiliser le paymentMethod réel (CB, PayPal, etc.)
-        // Pour les ventes marketplace, utiliser le mode de paiement par défaut de la plateforme
-        const modePaiement = sale.paymentMethod || platformPaymentMethods[sale.platform] || 'Virement'
+        invoiceGroups.get(key)!.push(sale)
+      }
+
+      const platformLabels: Record<string, string> = {
+        vinted: 'Vinted', leboncoin: 'Leboncoin', ebay: 'eBay', vestiaire: 'Vestiaire Collective',
+        boutique: 'Boutique',
+      }
+      const platformPaymentMethods: Record<string, string> = {
+        vinted: 'Virement (porte-monnaie Vinted)',
+        leboncoin: 'Virement / Paiement LBC',
+        ebay: 'Virement PayPal / eBay',
+        vestiaire: 'Virement Vestiaire Collective',
+      }
+
+      const entries = invoiceOrder.map((key, idx) => {
+        const group = invoiceGroups.get(key)!
+        const first = group[0]
+        const qty = group.reduce((s, sale) => s + ((sale as any).qty || 1), 0)
+        const itemsTotalTTC = group.reduce((s, sale) => s + sale.salePrice * ((sale as any).qty || 1), 0)
+        const shippingTotal = group.reduce((s, sale) => s + (sale.shippingCost || 0), 0)
+        const grandTotalTTC = itemsTotalTTC + shippingTotal
+        const grandTotalHT = vatEnabled
+          ? grandTotalTTC / (1 + (invoiceSettings?.vatRate || 20) / 100)
+          : grandTotalTTC
+        const modePaiement = first.paymentMethod || platformPaymentMethods[first.platform] || 'Virement'
+        const designation = group.length === 1
+          ? `${first.stockItem.brand} ${first.stockItem.category} ${first.stockItem.size || ''} ${first.stockItem.color || ''}`.trim().replace(/\s+/g, ' ')
+          : `${group.length} articles (${group.map(s => s.stockItem.brand).join(', ')})`
         return {
           numero: idx + 1,
-          date: sale.saleDate,
-          dateEncaissement: sale.saleDate,
-          invoiceNumber: sale.invoiceNumber || '—',
-          designation: `${sale.stockItem.brand} ${sale.stockItem.category} ${sale.stockItem.size || ''} ${sale.stockItem.color || ''}`.trim().replace(/\s+/g, ' '),
-          client: sale.customerName || `Client ${platformLabels[sale.platform] || sale.platform}`,
-          origine: platformLabels[sale.platform] || sale.platform,
+          date: first.saleDate,
+          dateEncaissement: first.saleDate,
+          invoiceNumber: first.invoiceNumber || '—',
+          saleId: first.id,  // anchor Sale id for the invoice PDF link
+          designation,
+          articleCount: qty,
+          client: first.customerName || `Client ${platformLabels[first.platform] || first.platform}`,
+          origine: platformLabels[first.platform] || first.platform,
           modePaiement,
-          montantHT: parseFloat((sale.salePrice / 1.2).toFixed(2)),
-          montantTTC: parseFloat(sale.salePrice.toFixed(2)),
+          montantHT: parseFloat(grandTotalHT.toFixed(2)),
+          montantTTC: parseFloat(grandTotalTTC.toFixed(2)),
+          shipping: parseFloat(shippingTotal.toFixed(2)),
           tva: 0,
-          sku: sale.stockItem.sku,
+          sku: group.length === 1 ? first.stockItem.sku : `${group.length} articles`,
         }
       })
 
@@ -93,7 +121,8 @@ export async function GET(req: NextRequest) {
           monthlyTotals.push({
             month: new Date(year, m, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
             monthNum: m + 1,
-            total: parseFloat(monthEntries.reduce((s, sal) => s + sal.salePrice, 0).toFixed(2)),
+            // total = sum(salePrice × qty + shipping) — correct CA including shipping
+            total: parseFloat(monthEntries.reduce((s, sal) => s + sal.salePrice * ((sal as any).qty || 1) + (sal.shippingCost || 0), 0).toFixed(2)),
             count: monthEntries.length,
           })
         }

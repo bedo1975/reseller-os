@@ -233,7 +233,7 @@ export function ParcelsModule() {
                     <TableHead>Plateforme</TableHead>
                     <TableHead className="hidden lg:table-cell">Transporteur</TableHead>
                     <TableHead className="hidden lg:table-cell">N° suivi</TableHead>
-                    <TableHead className="text-right hidden sm:table-cell">Total</TableHead>
+                    <TableHead className="text-right hidden sm:table-cell">Valeur du colis</TableHead>
                     <TableHead className="hidden xl:table-cell">Date vente</TableHead>
                     <TableHead>Statut colis</TableHead>
                     <TableHead className="text-right">Actions</TableHead>

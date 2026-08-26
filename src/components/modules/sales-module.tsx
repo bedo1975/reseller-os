@@ -335,7 +335,7 @@ export function SalesModule() {
                     <th className="px-3 py-2.5 font-medium">N° facture</th>
                     <th className="px-3 py-2.5 font-medium">Plateforme</th>
                     <th className="px-3 py-2.5 font-medium">Client</th>
-                    <th className="px-3 py-2.5 font-medium text-right">Prix</th>
+                    <th className="px-3 py-2.5 font-medium text-right">Prix (incl. port)</th>
                     <th className="px-3 py-2.5 font-medium text-right hidden lg:table-cell">Frais</th>
                     <th className="px-3 py-2.5 font-medium text-right">Marge</th>
                     <th className="px-3 py-2.5 font-medium text-right">Profit</th>
@@ -349,6 +349,8 @@ export function SalesModule() {
                     const first = group.sales[0]
                     const isMulti = group.sales.length > 1
                     const groupTotal = group.sales.reduce((s, x) => s + (x.salePrice * ((x as { qty?: number }).qty || 1)), 0)
+                    const groupShipping = group.sales.reduce((s, x) => s + (x.shippingCost || 0), 0)
+                    const groupTotalWithShipping = groupTotal + groupShipping
                     const groupProfit = group.sales.reduce((s, x) => s + x.profit, 0)
                     const groupFees = group.sales.reduce((s, x) => s + (x.platformFees || 0) + (x.platformFixedFees || 0), 0)
                     const groupMargin = groupTotal > 0 ? (groupProfit / groupTotal) * 100 : 0
@@ -411,12 +413,16 @@ export function SalesModule() {
                         <td className="px-3 py-2.5 text-right font-medium">
                           {isMulti ? (
                             <div>
-                              <div>{formatEUR(groupTotal)}</div>
+                              <div>{formatEUR(groupTotalWithShipping)}</div>
+                              <p className="text-[9px] text-muted-foreground">incl. {formatEUR(groupShipping)} port</p>
                               <p className="text-[9px] text-muted-foreground">Σ {group.sales.length} articles</p>
                             </div>
                           ) : (
                             <div>
-                              <div>{formatEUR(first.salePrice * ((first as { qty?: number }).qty || 1))}</div>
+                              <div>{formatEUR(first.salePrice * ((first as { qty?: number }).qty || 1) + (first.shippingCost || 0))}</div>
+                              {(first.shippingCost || 0) > 0 && (
+                                <p className="text-[9px] text-muted-foreground">incl. {formatEUR(first.shippingCost)} port</p>
+                              )}
                               {((first as { qty?: number }).qty || 1) > 1 && (
                                 <p className="text-[9px] text-muted-foreground">
                                   {formatEUR(first.salePrice)} × {(first as { qty?: number }).qty}

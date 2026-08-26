@@ -752,12 +752,15 @@ interface RecetteEntry {
   date: string
   dateEncaissement: string
   invoiceNumber: string  // OBLIGATOIRE légalement
+  saleId?: string        // anchor Sale id for the invoice PDF link
   designation: string
+  articleCount?: number  // total physical article count (sum of qty across all Sales in the invoice)
   client: string
   origine: string
   modePaiement: string
   montantHT: number
   montantTTC: number
+  shipping?: number      // shipping cost included in montantTTC
   tva: number
   sku: string
 }
@@ -853,7 +856,7 @@ function RecettesTab({ year }: { year: number }) {
                 <td>${formatDate(e.date)}</td>
                 <td><strong>${e.invoiceNumber}</strong></td>
                 <td>${formatDate(e.dateEncaissement)}</td>
-                <td>${e.designation}</td>
+                <td>${e.designation}${(e.articleCount ?? 1) > 1 ? ` <span style="color:#888;">(${e.articleCount} art.)</span>` : ''}</td>
                 <td>${e.client}</td>
                 <td>${e.origine}</td>
                 <td>${e.modePaiement}</td>
@@ -914,17 +917,17 @@ function RecettesTab({ year }: { year: number }) {
 
   const exportCSV = () => {
     const rows: string[][] = [
-      ['N°', 'Date', 'N° facture', 'Date encaissement', 'Désignation', 'Client', 'Origine', 'Mode paiement', 'Montant HT', 'TVA', 'Montant TTC'],
+      ['N°', 'Date', 'N° facture', 'Date encaissement', 'Désignation', 'Nb articles', 'Client', 'Origine', 'Mode paiement', 'Montant HT', 'dont port', 'TVA', 'Montant TTC'],
     ]
     data.entries.forEach(e => {
       rows.push([
         String(e.numero), formatDate(e.date), e.invoiceNumber, formatDate(e.dateEncaissement),
-        e.designation, e.client, e.origine, e.modePaiement,
-        e.montantHT.toFixed(2), '0.00', e.montantTTC.toFixed(2),
+        e.designation, String(e.articleCount ?? 1), e.client, e.origine, e.modePaiement,
+        e.montantHT.toFixed(2), (e.shipping ?? 0).toFixed(2), '0.00', e.montantTTC.toFixed(2),
       ])
     })
     rows.push([])
-    rows.push(['', '', '', '', '', '', '', 'TOTAL', data.totalHT.toFixed(2), '0.00', data.totalTTC.toFixed(2)])
+    rows.push(['', '', '', '', '', '', '', '', 'TOTAL', data.totalHT.toFixed(2), '', '0.00', data.totalTTC.toFixed(2)])
     const csv = rows.map(r => r.map(c => `"${(c || '').replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -1044,11 +1047,14 @@ function RecettesTab({ year }: { year: number }) {
                     <th className="px-2 py-2 font-medium">Date</th>
                     <th className="px-2 py-2 font-medium">N° facture</th>
                     <th className="px-2 py-2 font-medium">Désignation</th>
+                    <th className="px-2 py-2 font-medium text-center hidden md:table-cell">Art.</th>
                     <th className="px-2 py-2 font-medium hidden md:table-cell">Client</th>
                     <th className="px-2 py-2 font-medium hidden lg:table-cell">Origine</th>
                     <th className="px-2 py-2 font-medium hidden lg:table-cell">Mode paiement</th>
                     <th className="px-2 py-2 font-medium text-right">HT</th>
+                    <th className="px-2 py-2 font-medium text-right">dont port</th>
                     <th className="px-2 py-2 font-medium text-right">TTC</th>
+                    <th className="px-2 py-2 font-medium text-center">Facture</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1061,20 +1067,41 @@ function RecettesTab({ year }: { year: number }) {
                           {e.invoiceNumber}
                         </code>
                       </td>
-                      <td className="px-2 py-2 max-w-[200px] truncate">{e.designation}</td>
+                      <td className="px-2 py-2 max-w-[200px] truncate" title={e.designation}>{e.designation}</td>
+                      <td className="px-2 py-2 text-center hidden md:table-cell text-muted-foreground text-xs">
+                        {e.articleCount ?? 1}
+                      </td>
                       <td className="px-2 py-2 hidden md:table-cell text-muted-foreground">{e.client}</td>
                       <td className="px-2 py-2 hidden lg:table-cell text-muted-foreground">{e.origine}</td>
                       <td className="px-2 py-2 hidden lg:table-cell text-muted-foreground text-[10px]">{e.modePaiement}</td>
                       <td className="px-2 py-2 text-right">{formatEUR(e.montantHT)}</td>
+                      <td className="px-2 py-2 text-right text-xs text-muted-foreground">
+                        {(e.shipping ?? 0) > 0 ? formatEUR(e.shipping!) : '—'}
+                      </td>
                       <td className="px-2 py-2 text-right font-semibold">{formatEUR(e.montantTTC)}</td>
+                      <td className="px-2 py-2 text-center">
+                        {e.saleId && e.invoiceNumber !== '—' ? (
+                          <a
+                            href={`/api/invoices/${e.saleId}/pdf`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                            title="Ouvrir / imprimer la facture"
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                          </a>
+                        ) : '—'}
+                      </td>
                     </tr>
                   ))}
                   <tr className="bg-emerald-50 dark:bg-emerald-950/30 border-t-2 border-emerald-200 dark:border-emerald-900">
-                    <td colSpan={7} className="px-2 py-2.5 text-right font-semibold text-xs uppercase">
+                    <td colSpan={8} className="px-2 py-2.5 text-right font-semibold text-xs uppercase">
                       Total {data.month ? 'mensuel' : 'annuel'}
                     </td>
                     <td className="px-2 py-2.5 text-right font-bold">{formatEUR(data.totalHT)}</td>
+                    <td className="px-2 py-2.5"></td>
                     <td className="px-2 py-2.5 text-right font-bold text-emerald-600">{formatEUR(data.totalTTC)}</td>
+                    <td className="px-2 py-2.5"></td>
                   </tr>
                 </tbody>
               </table>
