@@ -155,7 +155,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const invoiceNumbers: string[] = []
+    // Generate ONE invoice number for the entire order — all articles in the
+    // checkout will share this same invoiceNumber, so the generated invoice
+    // will display all the order's articles on a single document.
+    const { generateInvoiceNumber } = await import('@/lib/invoice')
+    const { number: sharedInvoiceNumber } = await generateInvoiceNumber(adminUser.id)
+    const invoiceNumbers: string[] = [sharedInvoiceNumber]
+
     let subtotal = 0
     const orderItems: any[] = []
 
@@ -189,13 +195,9 @@ export async function POST(req: NextRequest) {
       const profit = ca - itemPaymentFees - purchaseCost - itemCarrierShipping
       const margin = ca > 0 ? (profit / ca) * 100 : 0
 
-      // Generate invoice number
-      const counter = (invoiceSettings?.invoiceCounter || 0) + invoiceNumbers.length + 1
-      const padLength = invoiceSettings?.invoicePadLength || 3
-      const paddedCounter = String(counter).padStart(padLength, '0')
-      const prefix = (invoiceSettings?.invoicePrefix || 'F-{YEAR}-').replace('{YEAR}', String(new Date().getFullYear()))
-      const invoiceNumber = `${prefix}${paddedCounter}`
-
+      // Create one Sale per article — all sharing the SAME invoice number.
+      // The invoice PDF will fetch all Sales with this invoice number and
+      // display them on a single document.
       await db.sale.create({
         data: {
           saleDate: new Date(),
@@ -215,7 +217,7 @@ export async function POST(req: NextRequest) {
           }),
           stockItemId: stockItem.id,
           userId: adminUser.id,
-          invoiceNumber,
+          invoiceNumber: sharedInvoiceNumber,
           profit: parseFloat(profit.toFixed(2)),
           margin: parseFloat(margin.toFixed(2)),
         },
@@ -236,7 +238,6 @@ export async function POST(req: NextRequest) {
         },
       })
 
-      invoiceNumbers.push(invoiceNumber)
       orderItems.push({
         sku: item.sku,
         brand: stockItem.brand,
@@ -248,7 +249,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    if (invoiceNumbers.length === 0) {
+    if (orderItems.length === 0) {
       return NextResponse.json({ error: 'Aucun article disponible' }, { status: 400 })
     }
 
@@ -348,13 +349,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Increment invoice counter (single update)
-    if (invoiceSettings) {
-      await db.invoiceSettings.update({
-        where: { id: invoiceSettings.id },
-        data: { invoiceCounter: { increment: invoiceNumbers.length } },
-      })
-    }
+    // Note: invoice counter was already incremented by generateInvoiceNumber() above.
+    // No need to increment again — we now use ONE shared invoice number per order
+    // (not one per article, as before).
 
     // Send email notifications (client + admin)
     await notifyNewOrder(customer.email, customer.firstName, orderId, total)

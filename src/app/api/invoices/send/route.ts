@@ -48,8 +48,22 @@ export async function POST(req: NextRequest) {
     })
 
     // Build the email body
+    // For multi-article orders, fetch ALL sales sharing this invoice number
+    // so the email shows all the articles + total (not just the first one).
+    const allInvoiceSales = await db.sale.findMany({
+      where: { invoiceNumber },
+      include: { stockItem: true },
+      orderBy: { stockItem: { sku: 'asc' } },
+    })
+    const totalAmount = allInvoiceSales.reduce((sum, s) => sum + s.salePrice, 0)
+    const articlesListHtml = allInvoiceSales.length > 1
+      ? `<ul style="margin:0 0 12px 0;padding-left:20px;font-size:13px;">
+          ${allInvoiceSales.map(s => `<li>${s.stockItem.brand} ${s.stockItem.title || s.stockItem.category} — <strong>${s.salePrice.toFixed(2)} €</strong></li>`).join('')}
+        </ul>`
+      : `<p style="margin:0 0 12px 0;font-weight:600;">${sale.stockItem.brand} ${sale.stockItem.title || sale.stockItem.category}</p>`
+
     const subject = `Votre facture ${invoiceNumber} — ${logoText}`
-    const text = `Bonjour,\n\nVeuillez trouver ci-joint la facture correspondante à votre achat en date du ${formattedDate}.\n\nFacture n° ${invoiceNumber}\nArticle : ${sale.stockItem.brand} ${sale.stockItem.title || sale.stockItem.category}\nMontant : ${sale.salePrice.toFixed(2)} €\n\nMerci de votre confiance.\n\nÀ bientôt sur ${logoText} !`
+    const text = `Bonjour,\n\nVeuillez trouver ci-joint la facture correspondante à votre achat en date du ${formattedDate}.\n\nFacture n° ${invoiceNumber}\n${allInvoiceSales.length > 1 ? `${allInvoiceSales.length} articles :\n` + allInvoiceSales.map(s => `  - ${s.stockItem.brand} ${s.stockItem.title || s.stockItem.category} — ${s.salePrice.toFixed(2)} €`).join('\n') : `Article : ${sale.stockItem.brand} ${sale.stockItem.title || sale.stockItem.category}`}\nMontant total : ${totalAmount.toFixed(2)} €\n\nMerci de votre confiance.\n\nÀ bientôt sur ${logoText} !`
 
     // Build HTML body using the same template as other emails
     const bodyHtml = `
@@ -57,10 +71,10 @@ export async function POST(req: NextRequest) {
 <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
   <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Numéro de facture</p>
   <p style="margin:0 0 12px 0;font-family:monospace;font-weight:600;font-size:15px;">${invoiceNumber}</p>
-  <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Article</p>
-  <p style="margin:0 0 12px 0;font-weight:600;">${sale.stockItem.brand} ${sale.stockItem.title || sale.stockItem.category}</p>
-  <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Montant</p>
-  <p style="margin:0;font-size:20px;font-weight:700;color:#007bff;">${sale.salePrice.toFixed(2)} €</p>
+  <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">${allInvoiceSales.length > 1 ? 'Articles' : 'Article'}</p>
+  ${articlesListHtml}
+  <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Montant total</p>
+  <p style="margin:0;font-size:20px;font-weight:700;color:#007bff;">${totalAmount.toFixed(2)} €</p>
 </div>
 <p style="margin:0 0 12px 0;">Merci de votre confiance.</p>`
 

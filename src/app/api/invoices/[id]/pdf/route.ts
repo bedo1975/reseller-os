@@ -45,7 +45,18 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
+// Strip HTML tags from a description (descriptions may contain HTML from the WYSIWYG editor)
+function stripHtml(raw: string): string {
+  return String(raw || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 // GET /api/invoices/[id]/pdf — Génère une facture HTML imprimable
+// Fetches ALL sales sharing the same invoice number (so multi-article orders
+// produce ONE invoice with all the articles, not one invoice per article).
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -54,12 +65,13 @@ export async function GET(
     const user = await requireAuth()
     const { id } = await params
 
-    const sale = await db.sale.findFirst({
+    // Fetch the "anchor" sale (used to determine the invoice number)
+    const anchorSale = await db.sale.findFirst({
       where: { id, userId: user.id },
       include: { stockItem: true },
     })
 
-    if (!sale) {
+    if (!anchorSale) {
       return new Response('Facture introuvable', { status: 404 })
     }
 
@@ -73,86 +85,144 @@ export async function GET(
       : null  // null → use existing logic (legalMentions or default)
 
     // Si pas de n° de facture, on en génère un rétroactivement
-    let invoiceNumber = sale.invoiceNumber
+    let invoiceNumber = anchorSale.invoiceNumber
     if (!invoiceNumber) {
       const { number } = await generateInvoiceNumber(user.id)
       invoiceNumber = number
       await db.sale.update({ where: { id }, data: { invoiceNumber } })
     }
 
-    const saleDate = new Date(sale.saleDate)
+    // Fetch ALL sales sharing this invoice number — they all belong to the same order
+    // and should be displayed on a single invoice document.
+    const allSales = await db.sale.findMany({
+      where: { invoiceNumber },
+      include: { stockItem: true },
+      orderBy: { stockItem: { sku: 'asc' } },
+    })
+
+    if (allSales.length === 0) {
+      // Should never happen since anchorSale matches, but defensive
+      return new Response('Facture introuvable', { status: 404 })
+    }
+
+    // Use the first sale for customer info + sale date (they're all the same order)
+    const firstSale = allSales[0]
+    const saleDate = new Date(firstSale.saleDate)
     const formattedDate = saleDate.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
 
     const vatRate = settings.vatEnabled ? settings.vatRate : 0
-    const totalTTC = sale.salePrice
-    const totalHT = settings.vatEnabled ? totalTTC / (1 + vatRate / 100) : totalTTC
-    const totalVAT = totalTTC - totalHT
 
-    const designation = `${sale.stockItem.brand} ${sale.stockItem.category} ${sale.stockItem.size || ''} ${sale.stockItem.color || ''}`.trim().replace(/\s+/g, ' ')
-    // Strip HTML tags from description for the invoice (the description may contain HTML
-    // from the WYSIWYG editor — on the invoice PDF we want plain text only)
-    const rawDescription = sale.stockItem.description || ''
-    const itemDescription = rawDescription.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
-    const shippingHT = settings.vatEnabled ? sale.shippingCost / (1 + vatRate / 100) : sale.shippingCost
-    const shippingTTC = sale.shippingCost
-    const feesTotal = (sale.platformFees || 0) + (sale.platformFixedFees || 0)
+    // ── Build line items (one per Sale) ──────────────────────────────────────
+    // Each Sale = 1 article (qty is on the Sale.stockItem, not on the Sale itself).
+    // For boutique orders, each Sale has qty=1 (the checkout creates 1 Sale per article).
+    // For manual sales, there's only 1 Sale per invoice (no grouping needed).
+    type LineItem = {
+      designation: string
+      description: string
+      sku: string
+      qty: number
+      unitPriceTTC: number
+      unitPriceHT: number
+      lineTotalTTC: number
+      lineTotalHT: number
+    }
+    const lineItems: LineItem[] = allSales.map(s => {
+      const unitPriceTTC = s.salePrice
+      const unitPriceHT = settings.vatEnabled ? unitPriceTTC / (1 + vatRate / 100) : unitPriceTTC
+      // For boutique orders, qty is always 1 (the checkout creates 1 Sale per article).
+      // For manual sales, also 1. We use s.stockItem.quantity only as a fallback (shouldn't be needed).
+      const qty = 1
+      return {
+        designation: `${s.stockItem.brand} ${s.stockItem.category} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim().replace(/\s+/g, ' '),
+        description: stripHtml(s.stockItem.description || ''),
+        sku: s.stockItem.sku,
+        qty,
+        unitPriceTTC,
+        unitPriceHT,
+        lineTotalTTC: unitPriceTTC * qty,
+        lineTotalHT: unitPriceHT * qty,
+      }
+    })
 
-    // Look up the parent BoutiqueOrder — if a coupon was applied, prorate the discount
-    // onto this invoice (each invoice = 1 item, but coupon applies to whole order).
+    // ── Totals (sum across all sales) ────────────────────────────────────────
+    // Shipping cost: each Sale has its prorated share — we sum them to get the order's total shipping.
+    const totalShippingTTC = allSales.reduce((sum, s) => sum + (s.shippingCost || 0), 0)
+    const totalShippingHT = settings.vatEnabled ? totalShippingTTC / (1 + vatRate / 100) : totalShippingTTC
+
+    // Items total (sum of all line totals)
+    const itemsTotalTTC = lineItems.reduce((sum, it) => sum + it.lineTotalTTC, 0)
+    const itemsTotalHT = lineItems.reduce((sum, it) => sum + it.lineTotalHT, 0)
+
+    // ── Coupon (parent BoutiqueOrder lookup) ─────────────────────────────────
     let couponCode: string | null = null
     let couponOrderId: string | null = null
     let orderSubtotal = 0
     let orderDiscountTotal = 0
     let proratedDiscountTTC = 0
-    if (invoiceNumber) {
-      try {
-        const matchingOrders = await db.boutiqueOrder.findMany({
-          where: { invoiceNumbers: { contains: invoiceNumber } },
-          select: { orderId: true, couponCode: true, discountAmount: true, subtotal: true },
-          take: 1,
-        })
-        const parentOrder = matchingOrders[0]
-        if (parentOrder && parentOrder.couponCode && parentOrder.discountAmount > 0) {
-          couponCode = parentOrder.couponCode
-          couponOrderId = parentOrder.orderId
-          orderSubtotal = parentOrder.subtotal
-          orderDiscountTotal = parentOrder.discountAmount
-          if (orderSubtotal > 0) {
-            proratedDiscountTTC = orderDiscountTotal * (totalTTC / orderSubtotal)
-            proratedDiscountTTC = Math.round(proratedDiscountTTC * 100) / 100
-          }
+    try {
+      const matchingOrders = await db.boutiqueOrder.findMany({
+        where: { invoiceNumbers: { contains: invoiceNumber } },
+        select: { orderId: true, couponCode: true, discountAmount: true, subtotal: true },
+        take: 1,
+      })
+      const parentOrder = matchingOrders[0]
+      if (parentOrder && parentOrder.couponCode && parentOrder.discountAmount > 0) {
+        couponCode = parentOrder.couponCode
+        couponOrderId = parentOrder.orderId
+        orderSubtotal = parentOrder.subtotal
+        orderDiscountTotal = parentOrder.discountAmount
+        if (orderSubtotal > 0) {
+          // Discount applies to whole order — this invoice covers ALL items, so use full discount
+          proratedDiscountTTC = orderDiscountTotal
+          proratedDiscountTTC = Math.round(proratedDiscountTTC * 100) / 100
         }
-      } catch (e) {
-        console.error('Coupon lookup failed:', e)
       }
+    } catch (e) {
+      console.error('Coupon lookup failed:', e)
     }
 
     const discountHT = settings.vatEnabled ? proratedDiscountTTC / (1 + vatRate / 100) : proratedDiscountTTC
-    const grandTotalTTC = totalTTC - proratedDiscountTTC + shippingTTC
-    const grandTotalHT = totalHT - discountHT + shippingHT
+    const grandTotalTTC = itemsTotalTTC - proratedDiscountTTC + totalShippingTTC
+    const grandTotalHT = itemsTotalHT - discountHT + totalShippingHT
+    const totalVAT = grandTotalTTC - grandTotalHT
+    const feesTotal = allSales.reduce((sum, s) => sum + (s.platformFees || 0) + (s.platformFixedFees || 0), 0)
 
     const couponNotice = couponCode && proratedDiscountTTC > 0 ? `
       <div style="background:#ecfdf5; padding:10px 14px; border-radius:6px; font-size:11px; color:#065f46; margin-bottom:24px; border-left:3px solid #10b981;">
         <strong>🎁 Code promo <code style="font-family:monospace; background:#d1fae5; padding:1px 6px; border-radius:3px;">${escapeHtml(couponCode)}</code></strong>
         appliqué sur la commande <span style="color:#047857;">${escapeHtml(couponOrderId || '')}</span>.
-        Remise totale commande : <strong>−${orderDiscountTotal.toFixed(2)} €</strong> sur sous-total de ${orderSubtotal.toFixed(2)} €.
-        <div style="margin-top:2px; color:#047857; font-size:10px;">Part de cette facture : −${proratedDiscountTTC.toFixed(2)} € (prorata).</div>
+        Remise : <strong>−${orderDiscountTotal.toFixed(2)} €</strong> sur sous-total de ${orderSubtotal.toFixed(2)} €.
       </div>` : ''
 
     // Parse customer contact (JSON for boutique sales, plain text for others)
     let customerAddress = ''
     let customerEmail = ''
     let customerPhone = ''
-    if (sale.customerContact) {
+    if (firstSale.customerContact) {
       try {
-        const parsed = JSON.parse(sale.customerContact)
+        const parsed = JSON.parse(firstSale.customerContact)
         customerAddress = parsed.address || ''
         customerEmail = parsed.email || ''
         customerPhone = parsed.phone || ''
       } catch {
-        customerAddress = sale.customerContact
+        customerAddress = firstSale.customerContact
       }
     }
+
+    // Build the items table rows
+    const itemsRowsHtml = lineItems.map(it => `
+      <tr>
+        <td>
+          <strong>${escapeHtml(it.designation)}</strong>
+          ${it.description ? `<div style="font-size:10px; color:#666; font-style:italic; margin-top:2px;">${escapeHtml(it.description.slice(0, 200))}${it.description.length > 200 ? '...' : ''}</div>` : ''}
+          <div style="font-size:10px; color:#888; margin-top:2px;">SKU : ${escapeHtml(it.sku)}</div>
+        </td>
+        <td class="center">${it.qty}</td>
+        ${settings.vatEnabled
+          ? `<td class="right">${it.unitPriceHT.toFixed(2)} €</td><td class="right">${vatRate.toFixed(1)}%</td><td class="right">${it.lineTotalHT.toFixed(2)} €</td>`
+          : `<td class="right">${it.unitPriceTTC.toFixed(2)} €</td><td class="right">${it.lineTotalTTC.toFixed(2)} €</td>`
+        }
+      </tr>`).join('')
 
     const html = `<!DOCTYPE html>
 <html lang="fr">
@@ -211,6 +281,7 @@ export async function GET(
       <div class="invoice-title">FACTURE</div>
       <div class="invoice-number">N° ${escapeHtml(invoiceNumber)}</div>
       <div class="invoice-date">Date : ${formattedDate}</div>
+      ${allSales.length > 1 ? `<div style="font-size:10px; color:#888; margin-top:4px;">${allSales.length} articles</div>` : ''}
     </div>
   </div>
 
@@ -218,17 +289,17 @@ export async function GET(
     <div class="party">
       <div class="party-label">Facturé à</div>
       <div class="party-content">
-        <strong>${escapeHtml(sale.customerName || 'Client')}</strong>
+        <strong>${escapeHtml(firstSale.customerName || 'Client')}</strong>
         ${customerAddress ? `<div>${escapeHtml(customerAddress)}</div>` : ''}
         ${customerEmail ? `<div>Email : ${escapeHtml(customerEmail)}</div>` : ''}
         ${customerPhone ? `<div>Tél : ${escapeHtml(customerPhone)}</div>` : ''}
-        <div style="color:#888; margin-top:4px;">Plateforme : ${escapeHtml(sale.platform)}</div>
+        <div style="color:#888; margin-top:4px;">Plateforme : ${escapeHtml(firstSale.platform)}</div>
       </div>
     </div>
     <div class="party" style="text-align:right;">
       <div class="party-label">N° de suivi colis</div>
       <div class="party-content">
-        <strong>${sale.trackingNumber ? escapeHtml(sale.trackingNumber) : '—'}</strong>
+        <strong>${firstSale.trackingNumber ? escapeHtml(firstSale.trackingNumber) : '—'}</strong>
       </div>
     </div>
   </div>
@@ -247,23 +318,12 @@ export async function GET(
       </tr>
     </thead>
     <tbody>
-      <tr>
-        <td>
-          <strong>${escapeHtml(designation)}</strong>
-          ${itemDescription ? `<div style="font-size:10px; color:#666; font-style:italic; margin-top:2px;">${escapeHtml(itemDescription.slice(0, 200))}${itemDescription.length > 200 ? '...' : ''}</div>` : ''}
-          <div style="font-size:10px; color:#888; margin-top:2px;">SKU : ${escapeHtml(sale.stockItem.sku)}</div>
-        </td>
-        <td class="center">1</td>
-        ${settings.vatEnabled
-          ? `<td class="right">${totalHT.toFixed(2)} €</td><td class="right">${vatRate.toFixed(1)}%</td><td class="right">${totalHT.toFixed(2)} €</td>`
-          : `<td class="right">${totalTTC.toFixed(2)} €</td><td class="right">${totalTTC.toFixed(2)} €</td>`
-        }
-      </tr>
+      ${itemsRowsHtml}
       ${proratedDiscountTTC > 0 ? `
       <tr style="color:#065f46;">
         <td>
           <strong>Remise — Code promo ${escapeHtml(couponCode || '')}</strong>
-          <div style="font-size:10px; color:#047857; margin-top:2px;">Prorata de la remise commande ${escapeHtml(couponOrderId || '')}</div>
+          <div style="font-size:10px; color:#047857; margin-top:2px;">Remise commande ${escapeHtml(couponOrderId || '')}</div>
         </td>
         <td class="center">1</td>
         ${settings.vatEnabled
@@ -271,13 +331,13 @@ export async function GET(
           : `<td class="right">−${proratedDiscountTTC.toFixed(2)} €</td><td class="right">−${proratedDiscountTTC.toFixed(2)} €</td>`
         }
       </tr>` : ''}
-      ${sale.shippingCost > 0 ? `
+      ${totalShippingTTC > 0 ? `
       <tr>
         <td>Frais de port</td>
         <td class="center">1</td>
         ${settings.vatEnabled
-          ? `<td class="right">${shippingHT.toFixed(2)} €</td><td class="right">${vatRate.toFixed(1)}%</td><td class="right">${shippingHT.toFixed(2)} €</td>`
-          : `<td class="right">${shippingTTC.toFixed(2)} €</td><td class="right">${shippingTTC.toFixed(2)} €</td>`
+          ? `<td class="right">${totalShippingHT.toFixed(2)} €</td><td class="right">${vatRate.toFixed(1)}%</td><td class="right">${totalShippingHT.toFixed(2)} €</td>`
+          : `<td class="right">${totalShippingTTC.toFixed(2)} €</td><td class="right">${totalShippingTTC.toFixed(2)} €</td>`
         }
       </tr>` : ''}
     </tbody>
@@ -291,7 +351,7 @@ export async function GET(
       </div>
       <div class="totals-row">
         <span>TVA (${vatRate.toFixed(1)}%)</span>
-        <span>${(grandTotalTTC - grandTotalHT).toFixed(2)} €</span>
+        <span>${totalVAT.toFixed(2)} €</span>
       </div>
     ` : ''}
     ${proratedDiscountTTC > 0 ? `

@@ -98,7 +98,9 @@ export default function ConfirmationPage() {
 
         {order.invoiceNumbers.length > 0 && (
           <div className="pt-4 border-t border-gray-200">
-            <p className="text-xs text-gray-500 uppercase mb-2">Facture(s)</p>
+            <p className="text-xs text-gray-500 uppercase mb-2">
+              Facture{order.invoiceNumbers.length > 1 ? 's' : ''}
+            </p>
             <div className="space-y-2">
               {order.invoiceNumbers.map(n => (
                 <a
