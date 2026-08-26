@@ -130,6 +130,7 @@ interface Order {
   shippingMethod: string
   shippingCost: number
   paymentMethod: string | null
+  platform: string  // "boutique" (default) | "vinted" | "leboncoin" | "ebay" | ... (from Settings → Plateformes)
   subtotal: number
   total: number
   couponCode: string | null
@@ -157,15 +158,18 @@ function OrdersTab() {
   const { getByType } = useSettings()
   const { can } = usePermissions()
   const carriers = getByType('carrier')
+  const platforms = getByType('platform')  // Vinted, Leboncoin, eBay, Boutique, etc. (from Settings → Plateformes)
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [carrierFilter, setCarrierFilter] = useState<string>('all')
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('all')
+  const [platformFilter, setPlatformFilter] = useState<string>('all')
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   const [editStatus, setEditStatus] = useState('')
   const [editTracking, setEditTracking] = useState('')
   const [editCarrier, setEditCarrier] = useState('')
+  const [editPlatform, setEditPlatform] = useState('')
   const [saving, setSaving] = useState(false)
 
   const fetchOrders = useCallback(async () => {
@@ -227,6 +231,30 @@ function OrdersTab() {
     }))
   }, [orders])
 
+  // Build the platform dropdown — all configured platforms + any extras found in data
+  const platformLabel = (code: string): string =>
+    platforms.find(p => p.code === code)?.value || code
+
+  const availablePlatforms = useMemo(() => {
+    const fromSettings = platforms.map(p => p.code)
+    const inData = new Map<string, number>()
+    orders.forEach(o => {
+      const code = o.platform || 'boutique'
+      inData.set(code, (inData.get(code) || 0) + 1)
+    })
+    // Configured platforms (with their count, default 0)
+    const configured = fromSettings.map(code => ({
+      code,
+      label: platformLabel(code),
+      count: inData.get(code) || 0,
+    }))
+    // Extras found in data but not in settings (rare, but possible)
+    const extras = Array.from(inData.entries())
+      .filter(([code]) => !fromSettings.includes(code))
+      .map(([code, count]) => ({ code, label: code, count }))
+    return [...configured, ...extras].sort((a, b) => b.count - a.count)
+  }, [orders, platforms])
+
   const filtered = useMemo(() => {
     return orders.filter(o => {
       if (statusFilter !== 'all' && o.status !== statusFilter) return false
@@ -235,15 +263,17 @@ function OrdersTab() {
         const pm = o.paymentMethod || '__none__'
         if (pm !== paymentMethodFilter) return false
       }
+      if (platformFilter !== 'all' && (o.platform || 'boutique') !== platformFilter) return false
       return true
     })
-  }, [orders, statusFilter, carrierFilter, paymentMethodFilter])
+  }, [orders, statusFilter, carrierFilter, paymentMethodFilter, platformFilter])
 
   const openEdit = (order: Order) => {
     setEditingOrder(order)
     setEditStatus(order.status)
     setEditTracking('')
     setEditCarrier('')
+    setEditPlatform(order.platform || 'boutique')
   }
 
   const saveEdit = async () => {
@@ -255,6 +285,8 @@ function OrdersTab() {
         body.trackingNumber = editTracking.trim()
         body.carrier = editCarrier
       }
+      // Always send the platform (even if unchanged) so the user can re-tag an order
+      body.platform = editPlatform || 'boutique'
       const res = await fetch(`/api/boutique/admin/orders/${editingOrder.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -308,6 +340,18 @@ function OrdersTab() {
           </Select>
         </div>
         <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Plateforme :</Label>
+          <Select value={platformFilter} onValueChange={setPlatformFilter}>
+            <SelectTrigger className="w-full sm:w-[180px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes ({orders.length})</SelectItem>
+              {availablePlatforms.map(p => (
+                <SelectItem key={p.code} value={p.code}>{p.label} ({p.count})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
           <Label className="text-xs text-muted-foreground whitespace-nowrap">Transporteur :</Label>
           <Select value={carrierFilter} onValueChange={setCarrierFilter}>
             <SelectTrigger className="w-full sm:w-[200px] h-9"><SelectValue /></SelectTrigger>
@@ -320,21 +364,21 @@ function OrdersTab() {
           </Select>
         </div>
         <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">Plateforme :</Label>
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Moyen paiement :</Label>
           <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
             <SelectTrigger className="w-full sm:w-[180px] h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes ({orders.length})</SelectItem>
+              <SelectItem value="all">Tous ({orders.length})</SelectItem>
               {availablePaymentMethods.map(m => (
                 <SelectItem key={m.code} value={m.code}>{m.label} ({m.count})</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-        {(statusFilter !== 'all' || carrierFilter !== 'all' || paymentMethodFilter !== 'all') && (
+        {(statusFilter !== 'all' || carrierFilter !== 'all' || paymentMethodFilter !== 'all' || platformFilter !== 'all') && (
           <button
             type="button"
-            onClick={() => { setStatusFilter('all'); setCarrierFilter('all'); setPaymentMethodFilter('all') }}
+            onClick={() => { setStatusFilter('all'); setCarrierFilter('all'); setPaymentMethodFilter('all'); setPlatformFilter('all') }}
             className="text-xs text-muted-foreground hover:text-foreground underline"
           >
             Réinitialiser
@@ -407,8 +451,11 @@ function OrdersTab() {
                     </div>
                   </div>
 
-                  {/* Carrier + payment badges — quick visual indicators */}
+                  {/* Platform + carrier + payment badges — quick visual indicators */}
                   <div className="flex flex-wrap gap-1 mb-3">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300" title={`Plateforme : ${platformLabel(order.platform || 'boutique')}`}>
+                      <Store className="h-3 w-3" /> {platformLabel(order.platform || 'boutique')}
+                    </span>
                     {(() => {
                       const c = orderCarrier(order)
                       const carrierLabel = c === 'autre'
@@ -420,8 +467,8 @@ function OrdersTab() {
                         </span>
                       )
                     })()}
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" title={`Plateforme de paiement : ${order.paymentMethod || 'Aucune'}`}>
-                      <CreditCard className="h-3 w-3" /> {order.paymentMethod || 'Aucune'}
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" title={`Moyen de paiement : ${order.paymentMethod || 'Aucun'}`}>
+                      <CreditCard className="h-3 w-3" /> {order.paymentMethod || 'Aucun'}
                     </span>
                   </div>
 
@@ -465,10 +512,22 @@ function OrdersTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Modifier la commande {editingOrder?.orderId}</DialogTitle>
-            <DialogDescription>Changez le statut et ajoutez un numéro de suivi si expédiée</DialogDescription>
+            <DialogDescription>Changez le statut, la plateforme et ajoutez un numéro de suivi si expédiée</DialogDescription>
           </DialogHeader>
           {editingOrder && (
             <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label>Plateforme</Label>
+                <Select value={editPlatform} onValueChange={setEditPlatform}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {platforms.map(p => (
+                      <SelectItem key={p.code} value={p.code}>{p.value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">Utile pour ré-étiqueter une commande enregistrée manuellement pour une vente externe (Vinted, Leboncoin…).</p>
+              </div>
               <div className="space-y-1.5">
                 <Label>Statut</Label>
                 <Select value={editStatus} onValueChange={setEditStatus}>

@@ -973,6 +973,9 @@ model BoutiqueOrder {
   shippingMethod String
   shippingCost  Float
   paymentMethod String?  // code du PaymentMethod utilisé
+  // Plateforme d'origine de la commande : "boutique" (par défaut, commande passée sur la boutique en ligne)
+  // ou "vinted" / "leboncoin" / "ebay" / etc. (commande manuelle enregistrée pour une vente externe)
+  platform      String   @default("boutique")
   subtotal      Float
   total         Float
   // Coupon de réduction (optionnel)

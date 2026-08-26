@@ -23,6 +23,7 @@ export async function GET() {
         shippingMethod: o.shippingMethod,
         shippingCost: o.shippingCost,
         paymentMethod: o.paymentMethod,
+        platform: o.platform || 'boutique',
         subtotal: o.subtotal,
         total: o.total,
         couponCode: o.couponCode,

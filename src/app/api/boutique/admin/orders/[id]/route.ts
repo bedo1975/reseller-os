@@ -64,7 +64,7 @@ export async function PATCH(
     await requireAuth()
     const { id } = await params
     const body = await req.json()
-    const { status, notes, trackingNumber, carrier } = body
+    const { status, notes, trackingNumber, carrier, platform } = body
 
     const data: any = {}
     if (typeof status === 'string') {
@@ -75,6 +75,7 @@ export async function PATCH(
       data.status = status
     }
     if (typeof notes === 'string') data.notes = notes
+    if (typeof platform === 'string') data.platform = platform || 'boutique'
 
     // Récupère l'ordre AVANT update pour vérifier l'ancien statut
     const previousOrder = await db.boutiqueOrder.findUnique({ where: { id } })
