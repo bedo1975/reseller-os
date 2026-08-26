@@ -12,6 +12,16 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;')
 }
 
+// Strip HTML tags from a description (product descriptions are stored as HTML)
+// and normalize whitespace. Used for the preparation slip's article description column.
+function stripHtml(raw: string): string {
+  return String(raw || '')
+    .replace(/<[^>]*>/g, ' ')        // remove all HTML tags
+    .replace(/&nbsp;/g, ' ')          // decode non-breaking spaces
+    .replace(/\s+/g, ' ')             // collapse multiple whitespaces (incl. newlines)
+    .trim()
+}
+
 /**
  * GET /api/boutique/admin/orders/[id]/preparation
  * Admin — generates a printable preparation slip (bon de préparation).
@@ -185,7 +195,10 @@ export async function GET(
     </thead>
     <tbody>
       ${items.map(item => {
-        const desc = descMap.get(item.sku)
+        // Description is stored as HTML on StockItem — strip tags before display.
+        const rawDesc = descMap.get(item.sku) || ''
+        const plainDesc = stripHtml(rawDesc)
+        const truncatedDesc = plainDesc.length > 150 ? plainDesc.slice(0, 150) + '...' : plainDesc
         return `
       <tr>
         <td class="check-col"><span class="checkbox"></span></td>
@@ -193,7 +206,7 @@ export async function GET(
           <strong>${escapeHtml(item.brand || '')}</strong> ${escapeHtml(item.category || '')}
           ${item.size ? '<br><span style="font-size:11px; color:#666;">Taille : ' + escapeHtml(item.size) + '</span>' : ''}
           ${item.color ? '<br><span style="font-size:11px; color:#666;">Couleur : ' + escapeHtml(item.color) + '</span>' : ''}
-          ${desc ? '<br><span style="font-size:11px; color:#666; font-style:italic;">' + escapeHtml(desc.slice(0, 150)) + (desc.length > 150 ? '...' : '') + '</span>' : ''}
+          ${truncatedDesc ? '<br><span style="font-size:11px; color:#666; font-style:italic;">' + escapeHtml(truncatedDesc) + '</span>' : ''}
           ${item.sku ? '<br><span style="font-size:10px; color:#999; font-family:monospace;">SKU : ' + escapeHtml(item.sku) + '</span>' : ''}
         </td>
         <td style="text-align:center; font-weight:600; font-size:15px;">${item.qty || 1}</td>
