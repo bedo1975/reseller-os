@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
       const orderStatus = deriveOrderStatus(parcelStatus, trackingNumber)
       const orderId = `CMD-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
 
-      await db.boutiqueOrder.create({
+      const createdOrder = await db.boutiqueOrder.create({
         data: {
           orderId,
           clientId: matchedClient?.id || null,
@@ -195,6 +195,14 @@ export async function POST(req: NextRequest) {
           notes: notes || null,
         },
       })
+
+      // Link the Sale back to the BoutiqueOrder so the parcels module can group them
+      if (createdOrder?.id) {
+        await db.sale.update({
+          where: { id: sale.id },
+          data: { boutiqueOrderId: createdOrder.id },
+        })
+      }
     } catch (orderErr) {
       // Failure to create the linked BoutiqueOrder must NOT fail the sale itself.
       console.error('[sales] Failed to create linked BoutiqueOrder:', orderErr)

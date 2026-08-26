@@ -303,10 +303,13 @@ model Sale {
   trackingNumber String?
 
   parcelStatus  String   @default("A_PREPARER")
-  // A_PREPARER | A_IMPRIMER | A_DEPOSER | EN_TRANSIT | LIVRE | PROBLEME
+  // A_PREPARER | A_IMPRIMER | A_DEPOSER | PRET_EXPEDITION | EN_TRANSIT | LIVRE | PROBLEME
 
   notes         String?
   invoiceNumber String?  // ex: "F-2026-001" — numéro de facture séquentiel
+  // Lien optionnel vers la BoutiqueOrder (pour grouper plusieurs articles d'une même commande en un seul colis)
+  boutiqueOrderId String?
+  boutiqueOrder  BoutiqueOrder? @relation(fields: [boutiqueOrderId], references: [id], onDelete: SetNull)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -314,6 +317,7 @@ model Sale {
   user          User?    @relation(fields: [userId], references: [id])
 
   @@index([stockItemId])
+  @@index([boutiqueOrderId])
 }
 
 // ─────────────────────────────────────────────
@@ -991,6 +995,9 @@ model BoutiqueOrder {
   relayAddress   String?  // JSON: {address, postalCode, city, lat, lng}
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  // Sales liées à cette commande (plusieurs articles peuvent composer un seul colis)
+  sales          Sale[]
 
   @@index([clientId])
   @@index([createdAt])

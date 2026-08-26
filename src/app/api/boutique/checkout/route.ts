@@ -303,6 +303,7 @@ export async function POST(req: NextRequest) {
         shippingMethod: shippingMethod.label,
         shippingCost,
         paymentMethod: paymentMethodLabel,
+        platform: 'boutique',
         subtotal: parseFloat(subtotal.toFixed(2)),
         total: parseFloat(total.toFixed(2)),
         couponCode: appliedCouponCode,
@@ -315,6 +316,15 @@ export async function POST(req: NextRequest) {
         relayAddress: isRelayMethod ? String(relayAddress) : null,
       },
     })
+
+    // Link all Sales created in this checkout to the BoutiqueOrder.
+    // This way the parcels module can group multiple articles of the same order into 1 colis.
+    if (invoiceNumbers.length > 0) {
+      await db.sale.updateMany({
+        where: { invoiceNumber: { in: invoiceNumbers } },
+        data: { boutiqueOrderId: order.id },
+      })
+    }
 
     // If paidImmediately (Stripe payment already succeeded), add the paymentIntentId to notes
     if (paidImmediately && paymentIntentId) {

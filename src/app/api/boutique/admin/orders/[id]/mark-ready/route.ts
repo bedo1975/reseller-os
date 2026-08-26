@@ -43,6 +43,35 @@ export async function POST(
       data: { status: 'ready_to_ship' },
     })
 
+    // Update the parcelStatus of ALL Sales linked to this order.
+    // Multiple Sales = multiple articles in the same colis — they all move to PRET_EXPEDITION together.
+    // We update by boutiqueOrderId (preferred) + fallback by invoiceNumber match (legacy).
+    try {
+      // 1. Sales explicitly linked via the FK
+      const linkedByFk = await db.sale.updateMany({
+        where: { boutiqueOrderId: id },
+        data: { parcelStatus: 'PRET_EXPEDITION' },
+      })
+
+      // 2. Fallback for legacy Sales without boutiqueOrderId but with an invoiceNumber
+      // listed in this order's invoiceNumbers JSON array
+      let invoiceNumbersArr: string[] = []
+      try { invoiceNumbersArr = JSON.parse(order.invoiceNumbers) as string[] } catch {}
+      if (invoiceNumbersArr.length > 0) {
+        await db.sale.updateMany({
+          where: {
+            boutiqueOrderId: null,
+            invoiceNumber: { in: invoiceNumbersArr },
+          },
+          data: { parcelStatus: 'PRET_EXPEDITION', boutiqueOrderId: id },
+        })
+      }
+
+      console.log(`[mark-ready] Updated ${linkedByFk.count} sale(s) to PRET_EXPEDITION for order ${order.orderId}`)
+    } catch (syncErr) {
+      console.error('[mark-ready] Failed to update linked Sales parcelStatus:', syncErr)
+    }
+
     // Resolve client email + firstName (prefer BoutiqueClient, fallback to snapshot)
     let clientEmail: string | null = null
     let clientFirstName = 'Client'

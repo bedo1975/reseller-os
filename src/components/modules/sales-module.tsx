@@ -52,6 +52,8 @@ interface Sale {
   trackingNumber: string | null
   parcelStatus: string
   notes: string | null
+  // Lien optionnel vers la BoutiqueOrder — pour grouper plusieurs articles d'une même commande en 1 colis
+  boutiqueOrderId?: string | null
 }
 
 // Valeurs par défaut des frais par plateforme (au cas où l'utilisateur ne saisit rien)

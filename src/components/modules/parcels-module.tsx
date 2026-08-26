@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import {
   Package, MapPin, Truck, Printer, AlertCircle, CheckCircle2, Search,
-  ChevronRight, ExternalLink,
+  ChevronRight, ExternalLink, Layers,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -30,12 +30,22 @@ const ICONS: Record<string, React.ElementType> = {
   A_PREPARER: Package,
   A_IMPRIMER: Printer,
   A_DEPOSER: MapPin,
+  PRET_EXPEDITION: CheckCircle2,
   EN_TRANSIT: Truck,
   LIVRE: CheckCircle2,
   PROBLEME: AlertCircle,
 }
 
 const PAGE_SIZE = 10
+
+// A "colis" is either:
+// - a single Sale (no boutiqueOrderId — manual sale, marketplace, etc.)
+// - a group of Sales sharing the same boutiqueOrderId (multiple articles in one parcel)
+interface Colis {
+  key: string
+  boutiqueOrderId: string | null
+  sales: Sale[]
+}
 
 export function ParcelsModule() {
   const { data: sales, loading, refresh } = useFetch<Sale[]>('/api/sales')
@@ -44,13 +54,48 @@ export function ParcelsModule() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
 
-  const filtered = useMemo(() => {
+  // Build the list of "colis" — group sales by boutiqueOrderId.
+  // Sales without boutiqueOrderId stay as individual colis (1 article = 1 colis).
+  const colis = useMemo<Colis[]>(() => {
     if (!sales) return []
-    return sales.filter(s => {
-      if (statusFilter !== 'all' && s.parcelStatus !== statusFilter) return false
+    const groups = new Map<string, Sale[]>()
+    const singles: Sale[] = []
+    for (const s of sales) {
+      if (s.boutiqueOrderId) {
+        if (!groups.has(s.boutiqueOrderId)) groups.set(s.boutiqueOrderId, [])
+        groups.get(s.boutiqueOrderId)!.push(s)
+      } else {
+        singles.push(s)
+      }
+    }
+    const allColis: Colis[] = []
+    for (const [boutiqueOrderId, group] of groups.entries()) {
+      allColis.push({ key: `order-${boutiqueOrderId}`, boutiqueOrderId, sales: group })
+    }
+    for (const s of singles) {
+      allColis.push({ key: `sale-${s.id}`, boutiqueOrderId: null, sales: [s] })
+    }
+    // Sort by sale date (most recent first)
+    allColis.sort((a, b) => {
+      const aDate = new Date(a.sales[0].saleDate).getTime()
+      const bDate = new Date(b.sales[0].saleDate).getTime()
+      return bDate - aDate
+    })
+    return allColis
+  }, [sales])
+
+  // Apply filters
+  const filtered = useMemo(() => {
+    return colis.filter(c => {
+      // Status filter: a colis matches if ALL its sales have the same status
+      // (which is the normal case after mark-ready sets them all together).
+      // For mixed statuses, we use the first sale's status as the displayed value.
+      const colisStatus = c.sales[0].parcelStatus
+      if (statusFilter !== 'all' && colisStatus !== statusFilter) return false
       if (search) {
         const q = search.toLowerCase()
-        return (
+        // Search across all articles in the colis
+        return c.sales.some(s =>
           s.stockItem.sku.toLowerCase().includes(q) ||
           s.stockItem.brand.toLowerCase().includes(q) ||
           s.customerName?.toLowerCase().includes(q) ||
@@ -59,7 +104,7 @@ export function ParcelsModule() {
       }
       return true
     })
-  }, [sales, statusFilter, search])
+  }, [colis, statusFilter, search])
 
   // Reset page when filters change
   const filterKey = `${statusFilter}|${search}`
@@ -76,30 +121,42 @@ export function ParcelsModule() {
   // Compteur par statut pour la barre de filtres rapides
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {}
-    sales?.forEach(s => {
-      counts[s.parcelStatus] = (counts[s.parcelStatus] || 0) + 1
+    colis.forEach(c => {
+      const status = c.sales[0].parcelStatus
+      counts[status] = (counts[status] || 0) + 1
     })
     return counts
-  }, [sales])
+  }, [colis])
 
-  const updateStatus = async (saleId: string, newStatus: string) => {
-    const res = await fetch(`/api/sales/${saleId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parcelStatus: newStatus }),
-    })
-    if (res.ok) {
-      toast.success('Statut colis mis à jour')
+  // Update the parcelStatus of ALL sales in a colis at once.
+  // For grouped colis (multiple articles), we update each sale individually.
+  const updateStatus = async (colis: Colis, newStatus: string) => {
+    try {
+      const results = await Promise.all(
+        colis.sales.map(s =>
+          fetch(`/api/sales/${s.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parcelStatus: newStatus }),
+          })
+        )
+      )
+      const failed = results.filter(r => !r.ok).length
+      if (failed === 0) {
+        toast.success(`Statut colis mis à jour (${colis.sales.length} article${colis.sales.length > 1 ? 's' : ''})`)
+      } else {
+        toast.error(`${failed} article(s) n'ont pas pu être mis à jour`)
+      }
       refresh()
-    } else {
-      toast.error('Erreur')
+    } catch {
+      toast.error('Erreur réseau')
     }
   }
 
   return (
     <div className="space-y-4">
       {/* Stats résumé par statut */}
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
+      <div className="grid grid-cols-4 lg:grid-cols-7 gap-2">
         {PARCEL_STATUSES.map(s => {
           const Icon = ICONS[s.id] || Package
           const count = statusCounts[s.id] || 0
@@ -171,43 +228,63 @@ export function ParcelsModule() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/30">
-                    <TableHead>Article</TableHead>
+                    <TableHead>Article(s)</TableHead>
                     <TableHead className="hidden md:table-cell">Client</TableHead>
                     <TableHead>Plateforme</TableHead>
                     <TableHead className="hidden lg:table-cell">Transporteur</TableHead>
                     <TableHead className="hidden lg:table-cell">N° suivi</TableHead>
-                    <TableHead className="text-right hidden sm:table-cell">Prix</TableHead>
+                    <TableHead className="text-right hidden sm:table-cell">Total</TableHead>
                     <TableHead className="hidden xl:table-cell">Date vente</TableHead>
                     <TableHead>Statut colis</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginated.map(sale => {
+                  {paginated.map(colis => {
+                    const firstSale = colis.sales[0]
+                    const total = colis.sales.reduce((sum, s) => sum + s.salePrice, 0)
+                    const multiArticles = colis.sales.length > 1
                     return (
-                      <TableRow key={sale.id} className="hover:bg-muted/40">
+                      <TableRow key={colis.key} className={cn('hover:bg-muted/40', multiArticles && 'bg-muted/10')}>
                         <TableCell>
-                          <div className="font-medium">{sale.stockItem.brand}</div>
-                          <div className="font-mono text-[10px] text-muted-foreground">{sale.stockItem.sku}</div>
+                          {colis.sales.map((sale, idx) => (
+                            <div key={sale.id} className={cn(idx > 0 && 'mt-1 pt-1 border-t border-dashed border-border/40')}>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-medium">{sale.stockItem.brand}</span>
+                                {sale.stockItem.size && (
+                                  <span className="text-[10px] text-muted-foreground">· {sale.stockItem.size}</span>
+                                )}
+                                {sale.stockItem.color && (
+                                  <span className="text-[10px] text-muted-foreground">· {sale.stockItem.color}</span>
+                                )}
+                              </div>
+                              <div className="font-mono text-[10px] text-muted-foreground">{sale.stockItem.sku}</div>
+                            </div>
+                          ))}
+                          {multiArticles && (
+                            <Badge variant="secondary" className="mt-1 text-[9px] gap-1">
+                              <Layers className="h-2.5 w-2.5" /> Lot de {colis.sales.length} articles
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-xs">
-                          {sale.customerName || '—'}
+                          {firstSale.customerName || '—'}
                         </TableCell>
                         <TableCell>
-                          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full inline-block', getPlatformColor(sale.platform))}>
-                            {getPlatformLabel(sale.platform)}
+                          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full inline-block', getPlatformColor(firstSale.platform))}>
+                            {getPlatformLabel(firstSale.platform)}
                           </span>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-xs">
                           <div className="flex items-center gap-1.5">
                             <Truck className="h-3 w-3 text-muted-foreground" />
-                            {sale.carrier ? getCarrierLabel(sale.carrier) : '—'}
+                            {firstSale.carrier ? getCarrierLabel(firstSale.carrier) : '—'}
                           </div>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">
                           {(() => {
-                            if (!sale.trackingNumber) return '—'
-                            const trackingUrl = getTrackingUrl(sale.carrier, sale.trackingNumber)
+                            if (!firstSale.trackingNumber) return '—'
+                            const trackingUrl = getTrackingUrl(firstSale.carrier, firstSale.trackingNumber)
                             if (trackingUrl) {
                               return (
                                 <a
@@ -215,29 +292,38 @@ export function ParcelsModule() {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1 text-[10px] bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-950/50 px-1.5 py-0.5 rounded font-mono transition-colors"
-                                  title={`Suivre sur ${getCarrierLabel(sale.carrier)}`}
+                                  title={`Suivre sur ${getCarrierLabel(firstSale.carrier)}`}
                                 >
-                                  {sale.trackingNumber}
+                                  {firstSale.trackingNumber}
                                   <ExternalLink className="h-2.5 w-2.5" />
                                 </a>
                               )
                             }
-                            return <code className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono">{sale.trackingNumber}</code>
+                            return <code className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono">{firstSale.trackingNumber}</code>
                           })()}
                         </TableCell>
-                        <TableCell className="text-right hidden sm:table-cell">{formatEUR(sale.salePrice)}</TableCell>
+                        <TableCell className="text-right hidden sm:table-cell">
+                          {multiArticles ? (
+                            <div>
+                              <span className="font-semibold">{formatEUR(total)}</span>
+                              <p className="text-[9px] text-muted-foreground">Σ {colis.sales.length} articles</p>
+                            </div>
+                          ) : (
+                            formatEUR(firstSale.salePrice)
+                          )}
+                        </TableCell>
                         <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">
-                          {formatDateTime(sale.saleDate)}
+                          {formatDateTime(firstSale.saleDate)}
                         </TableCell>
                         <TableCell>
                           <Select
-                            value={sale.parcelStatus}
-                            onValueChange={(v) => updateStatus(sale.id, v)}
+                            value={firstSale.parcelStatus}
+                            onValueChange={(v) => updateStatus(colis, v)}
                           >
                             <SelectTrigger className="h-7 w-[140px] text-xs px-2">
                               <SelectValue>
-                                <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block', getParcelStatusColor(sale.parcelStatus))}>
-                                  {getParcelStatusLabel(sale.parcelStatus)}
+                                <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block', getParcelStatusColor(firstSale.parcelStatus))}>
+                                  {getParcelStatusLabel(firstSale.parcelStatus)}
                                 </span>
                               </SelectValue>
                             </SelectTrigger>
@@ -249,11 +335,10 @@ export function ParcelsModule() {
                           </Select>
                         </TableCell>
                         <TableCell className="text-right">
-                          {/* Bouton flèche pour avancer au statut suivant (sauf si déjà livré ou en problème) */}
+                          {/* Bouton flèche pour avancer au statut suivant */}
                           {(() => {
-                            const currentIdx = PARCEL_STATUSES.findIndex(s => s.id === sale.parcelStatus)
-                            // Ne pas proposer de "suivant" après Livré (idx 4) ou Problème (idx 5)
-                            const isFinal = currentIdx >= 4
+                            const currentIdx = PARCEL_STATUSES.findIndex(s => s.id === firstSale.parcelStatus)
+                            const isFinal = currentIdx >= 5  // LIVRE ou PROBLEME
                             if (isFinal) return null
                             const nextStatus = PARCEL_STATUSES[currentIdx + 1]
                             if (!nextStatus || nextStatus.id === 'PROBLEME') return null
@@ -263,8 +348,8 @@ export function ParcelsModule() {
                                 variant="outline"
                                 size="sm"
                                 className="h-7 text-xs"
-                                onClick={() => updateStatus(sale.id, nextStatus.id)}
-                                title={`Passer à : ${nextStatus.label}`}
+                                onClick={() => updateStatus(colis, nextStatus.id)}
+                                title={`Passer à : ${nextStatus.label}${multiArticles ? ` (${colis.sales.length} articles)` : ''}`}
                               >
                                 <Icon className="h-3 w-3 mr-1" /> {nextStatus.label}
                               </Button>

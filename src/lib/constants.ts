@@ -20,6 +20,7 @@ export const PARCEL_STATUSES = [
   { id: 'A_PREPARER', label: 'À préparer', color: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' },
   { id: 'A_IMPRIMER', label: 'À imprimer', color: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300' },
   { id: 'A_DEPOSER', label: 'À déposer', color: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' },
+  { id: 'PRET_EXPEDITION', label: 'Prêt expédition', color: 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300' },
   { id: 'EN_TRANSIT', label: 'En transit', color: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300' },
   { id: 'LIVRE', label: 'Livré', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' },
   { id: 'PROBLEME', label: 'Problème', color: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' },
