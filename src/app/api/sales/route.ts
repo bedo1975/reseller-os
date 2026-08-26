@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/session'
+import { CARRIERS } from '@/lib/constants'
 
 export async function GET() {
   try {
@@ -18,6 +19,35 @@ export async function GET() {
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
+}
+
+// Helper: derive a BoutiqueOrder status from a Sale's parcelStatus + trackingNumber.
+// Mapping:
+//   - LIVRE → delivered
+//   - EN_TRANSIT / A_DEPOSER (with tracking) → shipped
+//   - A_PREPARER / A_IMPRIMER → preparation
+//   - default → paid (the sale is recorded, money received)
+function deriveOrderStatus(parcelStatus: string | null | undefined, trackingNumber: string | null | undefined): string {
+  if (parcelStatus === 'LIVRE') return 'delivered'
+  if (parcelStatus === 'EN_TRANSIT' || parcelStatus === 'A_DEPOSER') return 'shipped'
+  if (trackingNumber) return 'shipped'
+  if (parcelStatus === 'A_PREPARER' || parcelStatus === 'A_IMPRIMER') return 'preparation'
+  return 'paid'
+}
+
+// Helper: convert a carrier code (e.g. "mondial_relay") to its human label (e.g. "Mondial Relay")
+function carrierLabel(code: string | null | undefined): string {
+  if (!code) return 'Standard'
+  const c = CARRIERS.find(x => x.id === code)
+  return c?.label || code
+}
+
+// Helper: split a customer name into first/last name for the customerSnapshot
+function splitCustomerName(fullName: string | null | undefined): { firstName: string; lastName: string } {
+  if (!fullName) return { firstName: 'Client', lastName: 'Marketplace' }
+  const parts = fullName.trim().split(/\s+/)
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') }
 }
 
 export async function POST(req: NextRequest) {
@@ -80,9 +110,11 @@ export async function POST(req: NextRequest) {
     })
 
     // Génère le numéro de facture séquentiel et l'attache à la vente
+    let invoiceNumber: string | null = null
     try {
       const { generateInvoiceNumber } = await import('@/lib/invoice')
-      const { number: invoiceNumber } = await generateInvoiceNumber(user.id)
+      const gen = await generateInvoiceNumber(user.id)
+      invoiceNumber = gen.number
       await db.sale.update({
         where: { id: sale.id },
         data: { invoiceNumber },
@@ -107,6 +139,66 @@ export async function POST(req: NextRequest) {
         ...(newQty <= 0 ? { platform, platforms: JSON.stringify([]) } : {}),
       },
     })
+
+    // ── Génère automatiquement une BoutiqueOrder liée à la vente ──
+    // Toutes les ventes manuelles (Vinted, Leboncoin, boutique, etc.) sont maintenant
+    // enregistrées dans Boutique Admin → Commandes, avec un orderId unique et la facture liée.
+    // En cas d'échec, on ne bloque pas la vente — on log l'erreur et on continue.
+    try {
+      // Try to match a BoutiqueClient by email (if customerContact looks like an email)
+      const emailMatch = customerContact && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerContact)
+      const matchedClient = emailMatch
+        ? await db.boutiqueClient.findFirst({ where: { email: customerContact.toLowerCase() } })
+        : null
+
+      const { firstName, lastName } = splitCustomerName(customerName)
+      const customerSnapshot = JSON.stringify({
+        firstName,
+        lastName,
+        email: customerContact || '',
+        phone: null,
+        address: '',
+        postalCode: '',
+        city: '',
+        country: 'France',
+      })
+
+      // Items: array of order line items (matching BoutiqueOrder.items JSON schema)
+      const orderItems = [{
+        sku: item.sku,
+        brand: item.brand,
+        category: item.category,
+        size: item.size || null,
+        color: item.color || null,
+        price: price,
+        qty: 1,
+      }]
+
+      const orderStatus = deriveOrderStatus(parcelStatus, trackingNumber)
+      const orderId = `CMD-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+
+      await db.boutiqueOrder.create({
+        data: {
+          orderId,
+          clientId: matchedClient?.id || null,
+          customerSnapshot,
+          items: JSON.stringify(orderItems),
+          shippingMethod: carrierLabel(carrier),
+          shippingCost: shipping,
+          paymentMethod: paymentMethod || null,
+          // The platform records where the sale happened (boutique / vinted / leboncoin / etc.)
+          platform: platform || 'boutique',
+          subtotal: parseFloat(price.toFixed(2)),
+          total: parseFloat(ca.toFixed(2)),
+          status: orderStatus,
+          invoiceNumbers: JSON.stringify(invoiceNumber ? [invoiceNumber] : []),
+          notes: notes || null,
+        },
+      })
+    } catch (orderErr) {
+      // Failure to create the linked BoutiqueOrder must NOT fail the sale itself.
+      console.error('[sales] Failed to create linked BoutiqueOrder:', orderErr)
+    }
 
     return NextResponse.json(sale)
   } catch (error) {

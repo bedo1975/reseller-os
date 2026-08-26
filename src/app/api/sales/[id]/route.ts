@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/session'
+import { CARRIERS } from '@/lib/constants'
 
 export async function PATCH(
   req: NextRequest,
@@ -67,6 +68,73 @@ export async function PATCH(
       include: { stockItem: true },
     })
 
+    // ── Sync the linked BoutiqueOrder (if any) ──
+    // When the user edits a sale (price, carrier, tracking, status, notes),
+    // we mirror the changes on the auto-generated BoutiqueOrder linked by invoiceNumber.
+    try {
+      if (sale.invoiceNumber) {
+        // Build the order update payload from the changed fields
+        const orderUpdate: Record<string, unknown> = {}
+        if ('salePrice' in updateData || 'shippingCost' in updateData) {
+          orderUpdate.subtotal = parseFloat(sale.salePrice.toFixed(2))
+          orderUpdate.total = parseFloat((sale.salePrice + sale.shippingCost).toFixed(2))
+          orderUpdate.shippingCost = sale.shippingCost
+          // Update items array with the new price
+          orderUpdate.items = JSON.stringify([{
+            sku: sale.stockItem.sku,
+            brand: sale.stockItem.brand,
+            category: sale.stockItem.category,
+            size: sale.stockItem.size || null,
+            color: sale.stockItem.color || null,
+            price: sale.salePrice,
+            qty: 1,
+          }])
+        }
+        if ('carrier' in updateData) {
+          // shippingMethod is the carrier's human label
+          const c = CARRIERS.find(x => x.id === sale.carrier)
+          orderUpdate.shippingMethod = c?.label || sale.carrier || 'Standard'
+        }
+        if ('paymentMethod' in updateData) {
+          orderUpdate.paymentMethod = sale.paymentMethod || null
+        }
+        if ('platform' in updateData) {
+          orderUpdate.platform = sale.platform || 'boutique'
+        }
+        if ('notes' in updateData) {
+          orderUpdate.notes = sale.notes || null
+        }
+        // Derive the new order status from the sale's parcelStatus + trackingNumber
+        if ('parcelStatus' in updateData || 'trackingNumber' in updateData) {
+          const ps = sale.parcelStatus
+          const tn = sale.trackingNumber
+          if (ps === 'LIVRE') orderUpdate.status = 'delivered'
+          else if (ps === 'EN_TRANSIT' || ps === 'A_DEPOSER') orderUpdate.status = 'shipped'
+          else if (tn) orderUpdate.status = 'shipped'
+          else if (ps === 'A_PREPARER' || ps === 'A_IMPRIMER') orderUpdate.status = 'preparation'
+          else orderUpdate.status = 'paid'
+        }
+
+        if (Object.keys(orderUpdate).length > 0) {
+          // Find the linked order by invoiceNumber (stored in invoiceNumbers JSON array)
+          // We use findFirst with a JSON contains check (SQLite-compatible via string match)
+          const allOrders = await db.boutiqueOrder.findMany({
+            where: { invoiceNumbers: { contains: sale.invoiceNumber } },
+          })
+          for (const o of allOrders) {
+            try {
+              const invs = JSON.parse(o.invoiceNumbers) as string[]
+              if (invs.includes(sale.invoiceNumber)) {
+                await db.boutiqueOrder.update({ where: { id: o.id }, data: orderUpdate })
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch (syncErr) {
+      console.error('[sales] Failed to sync linked BoutiqueOrder on PATCH:', syncErr)
+    }
+
     return NextResponse.json(sale)
   } catch (error) {
     console.error('PATCH /api/sales/[id] error:', error)
@@ -98,6 +166,31 @@ export async function DELETE(
         status: 'PUBLIE',
       },
     })
+
+    // ── Cancel/delete the linked BoutiqueOrder (if any) ──
+    // We don't actually delete the order (it's a record), we just mark it as "cancelled"
+    // so the user can see in Boutique Admin → Commandes that the sale was reverted.
+    try {
+      if (sale.invoiceNumber) {
+        const linkedOrders = await db.boutiqueOrder.findMany({
+          where: { invoiceNumbers: { contains: sale.invoiceNumber } },
+        })
+        for (const o of linkedOrders) {
+          try {
+            const invs = JSON.parse(o.invoiceNumbers) as string[]
+            if (invs.includes(sale.invoiceNumber)) {
+              await db.boutiqueOrder.update({
+                where: { id: o.id },
+                data: { status: 'cancelled' },
+              })
+            }
+          } catch {}
+        }
+      }
+    } catch (cancelErr) {
+      console.error('[sales] Failed to cancel linked BoutiqueOrder on DELETE:', cancelErr)
+    }
+
     await db.sale.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
