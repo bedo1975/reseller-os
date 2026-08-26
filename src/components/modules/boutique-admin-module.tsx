@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler, Calculator, CreditCard,
+  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler, Calculator, CreditCard, Calendar,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -165,6 +165,12 @@ function OrdersTab() {
   const [carrierFilter, setCarrierFilter] = useState<string>('all')
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('all')
   const [platformFilter, setPlatformFilter] = useState<string>('all')
+  // Date filters — year, month, day. All optional, combinable.
+  // Year: dynamic (built from order dates). Month: static (12 French months).
+  // Day: dynamic — derived from the orders matching the selected year+month.
+  const [yearFilter, setYearFilter] = useState<string>('all')
+  const [monthFilter, setMonthFilter] = useState<string>('all')
+  const [dayFilter, setDayFilter] = useState<string>('all')
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   const [editStatus, setEditStatus] = useState('')
   const [editTracking, setEditTracking] = useState('')
@@ -231,6 +237,58 @@ function OrdersTab() {
     }))
   }, [orders])
 
+  // ─── Date filters ────────────────────────────────────────────────────────
+  const MONTHS = [
+    { value: '01', label: 'Janvier' }, { value: '02', label: 'Février' },
+    { value: '03', label: 'Mars' }, { value: '04', label: 'Avril' },
+    { value: '05', label: 'Mai' }, { value: '06', label: 'Juin' },
+    { value: '07', label: 'Juillet' }, { value: '08', label: 'Août' },
+    { value: '09', label: 'Septembre' }, { value: '10', label: 'Octobre' },
+    { value: '11', label: 'Novembre' }, { value: '12', label: 'Décembre' },
+  ]
+
+  // Years — descending, derived from order creation dates
+  const availableYears = useMemo(() => {
+    const set = new Set<string>()
+    orders.forEach(o => {
+      const d = new Date(o.createdAt)
+      if (!isNaN(d.getTime())) set.add(String(d.getFullYear()))
+    })
+    return Array.from(set).sort((a, b) => Number(b) - Number(a))
+  }, [orders])
+
+  // Days — derived from orders matching the selected year + month.
+  // Only built when both year and month are selected (otherwise too many days).
+  const availableDays = useMemo(() => {
+    if (yearFilter === 'all' || monthFilter === 'all') return []
+    const set = new Map<string, number>()  // key: "DD" → count
+    orders.forEach(o => {
+      const d = new Date(o.createdAt)
+      if (isNaN(d.getTime())) return
+      if (String(d.getFullYear()) !== yearFilter) return
+      if (String(d.getMonth() + 1).padStart(2, '0') !== monthFilter) return
+      const day = String(d.getDate()).padStart(2, '0')
+      set.set(day, (set.get(day) || 0) + 1)
+    })
+    return Array.from(set.entries())
+      .map(([day, count]) => ({ day, count }))
+      .sort((a, b) => a.day.localeCompare(b.day))
+  }, [orders, yearFilter, monthFilter])
+
+  const hasDateFilter = yearFilter !== 'all' || monthFilter !== 'all' || dayFilter !== 'all'
+  const resetDateFilter = () => { setYearFilter('all'); setMonthFilter('all'); setDayFilter('all') }
+
+  // Test whether an order matches the current date filter
+  const matchesDateFilter = (o: Order): boolean => {
+    if (yearFilter === 'all' && monthFilter === 'all' && dayFilter === 'all') return true
+    const d = new Date(o.createdAt)
+    if (isNaN(d.getTime())) return false
+    if (yearFilter !== 'all' && String(d.getFullYear()) !== yearFilter) return false
+    if (monthFilter !== 'all' && String(d.getMonth() + 1).padStart(2, '0') !== monthFilter) return false
+    if (dayFilter !== 'all' && String(d.getDate()).padStart(2, '0') !== dayFilter) return false
+    return true
+  }
+
   // Build the platform dropdown — all configured platforms + any extras found in data
   const platformLabel = (code: string): string =>
     platforms.find(p => p.code === code)?.value || code
@@ -264,9 +322,10 @@ function OrdersTab() {
         if (pm !== paymentMethodFilter) return false
       }
       if (platformFilter !== 'all' && (o.platform || 'boutique') !== platformFilter) return false
+      if (!matchesDateFilter(o)) return false
       return true
     })
-  }, [orders, statusFilter, carrierFilter, paymentMethodFilter, platformFilter])
+  }, [orders, statusFilter, carrierFilter, paymentMethodFilter, platformFilter, yearFilter, monthFilter, dayFilter])
 
   const openEdit = (order: Order) => {
     setEditingOrder(order)
@@ -375,13 +434,61 @@ function OrdersTab() {
             </SelectContent>
           </Select>
         </div>
-        {(statusFilter !== 'all' || carrierFilter !== 'all' || paymentMethodFilter !== 'all' || platformFilter !== 'all') && (
+      </div>
+      {/* Date filters — separate row to keep the toolbar clean */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap flex items-center gap-1">
+            <Calendar className="h-3 w-3" /> Année :
+          </Label>
+          <Select
+            value={yearFilter}
+            onValueChange={v => { setYearFilter(v); if (v === 'all') { setMonthFilter('all'); setDayFilter('all') } }}
+          >
+            <SelectTrigger className="w-full sm:w-[120px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes</SelectItem>
+              {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Mois :</Label>
+          <Select
+            value={monthFilter}
+            onValueChange={v => { setMonthFilter(v); setDayFilter('all') }}
+            disabled={yearFilter === 'all'}
+          >
+            <SelectTrigger className="w-full sm:w-[150px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous</SelectItem>
+              {MONTHS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Jour :</Label>
+          <Select
+            value={dayFilter}
+            onValueChange={setDayFilter}
+            disabled={yearFilter === 'all' || monthFilter === 'all'}
+          >
+            <SelectTrigger className="w-full sm:w-[110px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous</SelectItem>
+              {availableDays.map(d => (
+                <SelectItem key={d.day} value={d.day}>{parseInt(d.day, 10)} ({d.count})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {(statusFilter !== 'all' || carrierFilter !== 'all' || paymentMethodFilter !== 'all' || platformFilter !== 'all' || hasDateFilter) && (
           <button
             type="button"
-            onClick={() => { setStatusFilter('all'); setCarrierFilter('all'); setPaymentMethodFilter('all'); setPlatformFilter('all') }}
-            className="text-xs text-muted-foreground hover:text-foreground underline"
+            onClick={() => { setStatusFilter('all'); setCarrierFilter('all'); setPaymentMethodFilter('all'); setPlatformFilter('all'); resetDateFilter() }}
+            className="text-xs text-muted-foreground hover:text-foreground underline ml-auto"
           >
-            Réinitialiser
+            Réinitialiser les filtres
           </button>
         )}
       </div>
