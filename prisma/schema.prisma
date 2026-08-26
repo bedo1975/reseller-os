@@ -292,6 +292,7 @@ model Sale {
   customerName  String?
   customerContact String?
   salePrice     Float
+  qty           Int      @default(1)        // quantité vendue (pour les commandes boutique multi-quantités)
   shippingCost  Float    @default(0)        // frais de port payés par le CLIENT (ce qui est facturé)
   carrierShippingCost Float @default(0)     // frais de port réels payés au TRANSPORTEUR (ce que le revendeur paie réellement)
   paymentFees   Float    @default(0)        // frais bancaires (Stripe, PayPal...) = feesFixed + (CA × feesPercent)

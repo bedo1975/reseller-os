@@ -242,7 +242,7 @@ export function ParcelsModule() {
                 <TableBody>
                   {paginated.map(colis => {
                     const firstSale = colis.sales[0]
-                    const total = colis.sales.reduce((sum, s) => sum + s.salePrice, 0)
+                    const total = colis.sales.reduce((sum, s) => sum + (s.salePrice * ((s as { qty?: number }).qty || 1)), 0)
                     const multiArticles = colis.sales.length > 1
                     return (
                       <TableRow key={colis.key} className={cn('hover:bg-muted/40', multiArticles && 'bg-muted/10')}>
@@ -309,7 +309,14 @@ export function ParcelsModule() {
                               <p className="text-[9px] text-muted-foreground">Σ {colis.sales.length} articles</p>
                             </div>
                           ) : (
-                            formatEUR(firstSale.salePrice)
+                            <div>
+                              <div>{formatEUR(firstSale.salePrice * ((firstSale as { qty?: number }).qty || 1))}</div>
+                              {((firstSale as { qty?: number }).qty || 1) > 1 && (
+                                <p className="text-[9px] text-muted-foreground">
+                                  {formatEUR(firstSale.salePrice)} × {(firstSale as { qty?: number }).qty}
+                                </p>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                         <TableCell className="hidden xl:table-cell text-xs text-muted-foreground">

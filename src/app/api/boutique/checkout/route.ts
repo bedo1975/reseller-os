@@ -189,22 +189,26 @@ export async function POST(req: NextRequest) {
         itemPaymentFees = itemFeesFixed + itemFeesPercent
       }
 
-      // CA brut = prix article + frais port facturés client
-      // Profit = CA brut - frais bancaires - coût achat - frais port réels transporteur
+      // CA brut = prix article × qty + frais port facturés client (part de cet article)
+      // salePrice is the UNIT price — we store it as-is on the Sale.
+      // profit is the LINE profit (unit profit × qty) so that sum(profit) in the
+      // taxes module correctly reflects the total profit for multi-qty items.
       const ca = salePrice + itemShipping
-      const profit = ca - itemPaymentFees - purchaseCost - itemCarrierShipping
-      const margin = ca > 0 ? (profit / ca) * 100 : 0
+      const unitProfit = ca - itemPaymentFees - purchaseCost - itemCarrierShipping
+      const lineProfit = unitProfit * qty  // multiply by qty for the line total
+      const margin = ca > 0 ? (unitProfit / ca) * 100 : 0  // margin is a ratio — same at unit or line level
 
       // Create one Sale per article — all sharing the SAME invoice number.
-      // The invoice PDF will fetch all Sales with this invoice number and
-      // display them on a single document.
+      // The Sale stores the UNIT price + qty so the invoice can render the line
+      // total correctly (unit price × qty) without ambiguity.
       await db.sale.create({
         data: {
           saleDate: new Date(),
-          salePrice,
-          shippingCost: itemShipping,
+          salePrice,                                  // UNIT price
+          qty,                                        // quantity ordered
+          shippingCost: itemShipping,                 // line shipping share
           carrierShippingCost: parseFloat(itemCarrierShipping.toFixed(2)),
-          paymentFees: parseFloat(itemPaymentFees.toFixed(2)),  // frais bancaires (déduits du CA)
+          paymentFees: parseFloat(itemPaymentFees.toFixed(2)),
           platformFees: 0,
           platformFixedFees: 0,
           platform: 'boutique',
@@ -218,7 +222,7 @@ export async function POST(req: NextRequest) {
           stockItemId: stockItem.id,
           userId: adminUser.id,
           invoiceNumber: sharedInvoiceNumber,
-          profit: parseFloat(profit.toFixed(2)),
+          profit: parseFloat(lineProfit.toFixed(2)),  // LINE profit (already × qty)
           margin: parseFloat(margin.toFixed(2)),
         },
       })

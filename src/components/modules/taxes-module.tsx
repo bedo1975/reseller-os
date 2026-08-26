@@ -154,7 +154,7 @@ function SyntheseTab({ year }: { year: number }) {
     return filtered.filter(p => new Date(p.date).getMonth() + 1 === parseInt(month))
   }, [purchases, year, month])
 
-  const totalCA = yearSales.reduce((s, x) => s + x.salePrice + (x.shippingCost || 0), 0)
+  const totalCA = yearSales.reduce((s, x) => s + (x.salePrice * ((x as { qty?: number }).qty || 1)) + (x.shippingCost || 0), 0)
   // Total purchases (for the "Achats" card — includes ALL items purchased in the period, sold or not)
   const totalHorsStockPurchases = yearPurchases.reduce((s, p) => s + (p.amount || 0), 0)
   const totalPurchases = achatsData?.total ?? (yearSales.reduce((s, x) => s + x.stockItem.purchaseCost * (x.stockItem.quantity || 1), 0) + totalHorsStockPurchases)
@@ -166,7 +166,7 @@ function SyntheseTab({ year }: { year: number }) {
   // Frais bancaires (Stripe, PayPal...) — déduits du CA (charge déductible)
   const totalPaymentFees = yearSales.reduce((s, x) => s + Math.max(0, x.paymentFees || 0), 0)
   // COGS = coût d'achat des articles VENDUS (pas tous les achats — les articles invendus restent en stock)
-  const totalCOGS = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost * (x.stockItem.quantity || 1), 0)
+  const totalCOGS = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost * ((x as { qty?: number }).qty || 1), 0)
   const totalOtherExpenses = yearExpenses.reduce((s, e) => s + e.amount, 0)
   const taxRate = taxSettings?.taxRate || 0
   const urssafCotisation = totalCA * taxRate / 100
@@ -203,7 +203,7 @@ function SyntheseTab({ year }: { year: number }) {
       rows.push([
         'Vente', formatDate(s.saleDate), s.platform, s.stockItem.sku,
         `${s.stockItem.brand} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim(),
-        (s.salePrice + (s.shippingCost || 0)).toFixed(2), s.stockItem.purchaseCost.toFixed(2),
+        (s.salePrice * ((s as { qty?: number }).qty || 1) + (s.shippingCost || 0)).toFixed(2), s.stockItem.purchaseCost.toFixed(2),
         ((s.platformFees || 0) + (s.platformFixedFees || 0)).toFixed(2),
         s.shippingCost.toFixed(2), (s.carrierShippingCost || 0).toFixed(2),
         s.profit.toFixed(2), s.margin.toString(),
@@ -236,7 +236,7 @@ function SyntheseTab({ year }: { year: number }) {
       rows.push([
         'Vente', formatDate(s.saleDate), s.platform, s.stockItem.sku,
         `${s.stockItem.brand} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim(),
-        (s.salePrice + (s.shippingCost || 0)).toFixed(2), s.stockItem.purchaseCost.toFixed(2),
+        (s.salePrice * ((s as { qty?: number }).qty || 1) + (s.shippingCost || 0)).toFixed(2), s.stockItem.purchaseCost.toFixed(2),
         ((s.platformFees || 0) + (s.platformFixedFees || 0)).toFixed(2),
         s.shippingCost.toFixed(2), (s.carrierShippingCost || 0).toFixed(2),
         s.profit.toFixed(2), s.margin.toString(),
@@ -304,7 +304,7 @@ function SyntheseTab({ year }: { year: number }) {
               <td>${formatDate(s.saleDate)}</td>
               <td>${s.platform}</td>
               <td>${s.stockItem.brand} (${s.stockItem.sku})</td>
-              <td>${formatEUR(s.salePrice + (s.shippingCost || 0))}</td>
+              <td>${formatEUR(s.salePrice * ((s as { qty?: number }).qty || 1) + (s.shippingCost || 0))}</td>
               <td>${formatEUR(s.stockItem.purchaseCost)}</td>
               <td>${formatEUR((s.platformFees || 0) + (s.carrierShippingCost || 0) + (s.platformFixedFees || 0))}</td>
               <td class="profit">${formatEUR(s.profit)}</td>

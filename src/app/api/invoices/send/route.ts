@@ -55,15 +55,25 @@ export async function POST(req: NextRequest) {
       include: { stockItem: true },
       orderBy: { stockItem: { sku: 'asc' } },
     })
-    const totalAmount = allInvoiceSales.reduce((sum, s) => sum + s.salePrice, 0)
-    const articlesListHtml = allInvoiceSales.length > 1
+    const totalAmount = allInvoiceSales.reduce((sum, s) => sum + (s.salePrice * ((s as { qty?: number }).qty || 1)), 0)
+    const totalArticleCount = allInvoiceSales.reduce((sum, s) => sum + ((s as { qty?: number }).qty || 1), 0)
+    const articlesListHtml = allInvoiceSales.length > 1 || totalArticleCount > 1
       ? `<ul style="margin:0 0 12px 0;padding-left:20px;font-size:13px;">
-          ${allInvoiceSales.map(s => `<li>${s.stockItem.brand} ${s.stockItem.title || s.stockItem.category} — <strong>${s.salePrice.toFixed(2)} €</strong></li>`).join('')}
+          ${allInvoiceSales.map(s => {
+            const q = (s as { qty?: number }).qty || 1
+            const lineTotal = s.salePrice * q
+            const qtyLabel = q > 1 ? ` ×${q}` : ''
+            return `<li>${s.stockItem.brand} ${s.stockItem.title || s.stockItem.category}${qtyLabel} — <strong>${lineTotal.toFixed(2)} €</strong></li>`
+          }).join('')}
         </ul>`
       : `<p style="margin:0 0 12px 0;font-weight:600;">${sale.stockItem.brand} ${sale.stockItem.title || sale.stockItem.category}</p>`
 
     const subject = `Votre facture ${invoiceNumber} — ${logoText}`
-    const text = `Bonjour,\n\nVeuillez trouver ci-joint la facture correspondante à votre achat en date du ${formattedDate}.\n\nFacture n° ${invoiceNumber}\n${allInvoiceSales.length > 1 ? `${allInvoiceSales.length} articles :\n` + allInvoiceSales.map(s => `  - ${s.stockItem.brand} ${s.stockItem.title || s.stockItem.category} — ${s.salePrice.toFixed(2)} €`).join('\n') : `Article : ${sale.stockItem.brand} ${sale.stockItem.title || sale.stockItem.category}`}\nMontant total : ${totalAmount.toFixed(2)} €\n\nMerci de votre confiance.\n\nÀ bientôt sur ${logoText} !`
+    const text = `Bonjour,\n\nVeuillez trouver ci-joint la facture correspondante à votre achat en date du ${formattedDate}.\n\nFacture n° ${invoiceNumber}\n${totalArticleCount > 1 ? `${totalArticleCount} articles :\n` + allInvoiceSales.map(s => {
+      const q = (s as { qty?: number }).qty || 1
+      const qtyLabel = q > 1 ? ` ×${q}` : ''
+      return `  - ${s.stockItem.brand} ${s.stockItem.title || s.stockItem.category}${qtyLabel} — ${(s.salePrice * q).toFixed(2)} €`
+    }).join('\n') : `Article : ${sale.stockItem.brand} ${sale.stockItem.title || sale.stockItem.category}`}\nMontant total : ${totalAmount.toFixed(2)} €\n\nMerci de votre confiance.\n\nÀ bientôt sur ${logoText} !`
 
     // Build HTML body using the same template as other emails
     const bodyHtml = `
@@ -71,7 +81,7 @@ export async function POST(req: NextRequest) {
 <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">
   <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Numéro de facture</p>
   <p style="margin:0 0 12px 0;font-family:monospace;font-weight:600;font-size:15px;">${invoiceNumber}</p>
-  <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">${allInvoiceSales.length > 1 ? 'Articles' : 'Article'}</p>
+  <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">${totalArticleCount > 1 ? `Articles (${totalArticleCount})` : 'Article'}</p>
   ${articlesListHtml}
   <p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Montant total</p>
   <p style="margin:0;font-size:20px;font-weight:700;color:#007bff;">${totalAmount.toFixed(2)} €</p>

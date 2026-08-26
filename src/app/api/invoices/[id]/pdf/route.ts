@@ -129,9 +129,9 @@ export async function GET(
     const lineItems: LineItem[] = allSales.map(s => {
       const unitPriceTTC = s.salePrice
       const unitPriceHT = settings.vatEnabled ? unitPriceTTC / (1 + vatRate / 100) : unitPriceTTC
-      // For boutique orders, qty is always 1 (the checkout creates 1 Sale per article).
-      // For manual sales, also 1. We use s.stockItem.quantity only as a fallback (shouldn't be needed).
-      const qty = 1
+      // Use the Sale's qty field (defaults to 1 for legacy Sales created before this field existed).
+      // This correctly handles multi-qty items (e.g. 2× the same SKU ordered in one checkout).
+      const qty = (s as { qty?: number }).qty || 1
       return {
         designation: `${s.stockItem.brand} ${s.stockItem.category} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim().replace(/\s+/g, ' '),
         description: stripHtml(s.stockItem.description || ''),

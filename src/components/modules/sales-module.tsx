@@ -41,6 +41,7 @@ interface Sale {
   customerName: string | null
   customerContact: string | null
   salePrice: number
+  qty?: number  // quantité vendue (pour les commandes boutique multi-quantités)
   shippingCost: number
   carrierShippingCost?: number
   paymentFees?: number
@@ -125,7 +126,7 @@ export function SalesModule() {
     })
   }, [sales, search, platformFilter, yearFilter, monthFilter])
 
-  const totalCA = filtered.reduce((s, x) => s + x.salePrice, 0)
+  const totalCA = filtered.reduce((s, x) => s + (x.salePrice * ((x as { qty?: number }).qty || 1)), 0)
   const totalProfit = filtered.reduce((s, x) => s + x.profit, 0)
   const avgMargin = totalCA > 0 ? (totalProfit / totalCA) * 100 : 0
 
@@ -344,7 +345,7 @@ export function SalesModule() {
                   {grouped.map(group => {
                     const first = group.sales[0]
                     const isMulti = group.sales.length > 1
-                    const groupTotal = group.sales.reduce((s, x) => s + x.salePrice, 0)
+                    const groupTotal = group.sales.reduce((s, x) => s + (x.salePrice * ((x as { qty?: number }).qty || 1)), 0)
                     const groupProfit = group.sales.reduce((s, x) => s + x.profit, 0)
                     const groupFees = group.sales.reduce((s, x) => s + (x.platformFees || 0) + (x.platformFixedFees || 0), 0)
                     const groupMargin = groupTotal > 0 ? (groupProfit / groupTotal) * 100 : 0
@@ -410,7 +411,16 @@ export function SalesModule() {
                               <div>{formatEUR(groupTotal)}</div>
                               <p className="text-[9px] text-muted-foreground">Σ {group.sales.length} articles</p>
                             </div>
-                          ) : formatEUR(first.salePrice)}
+                          ) : (
+                            <div>
+                              <div>{formatEUR(first.salePrice * ((first as { qty?: number }).qty || 1))}</div>
+                              {((first as { qty?: number }).qty || 1) > 1 && (
+                                <p className="text-[9px] text-muted-foreground">
+                                  {formatEUR(first.salePrice)} × {(first as { qty?: number }).qty}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 text-right text-xs text-rose-600 hidden lg:table-cell">
                           -{formatEUR(groupFees)}
