@@ -540,6 +540,175 @@ export async function notifyOrderReady(opts: {
   }
 }
 
+/**
+ * notifyOfferAccepted — sent to the client when their Make an Offer submission is accepted.
+ * Uses templateOfferAccepted from EmailSettings (same template system as other emails).
+ *
+ * Variables: {firstName}, {brand}, {sku}, {originalPrice}, {offeredPrice}, {discountAmount}, {cartUrl}, {cartExpiresAt}
+ */
+export async function notifyOfferAccepted(opts: {
+  clientEmail: string
+  clientFirstName: string
+  offerId: string
+  sku: string
+  brand: string
+  originalPrice: number
+  offeredPrice: number
+  discountAmount: number
+  cartUrl: string
+  cartExpiresAt: Date
+}) {
+  try {
+    console.log('[email] notifyOfferAccepted triggered:', opts.offerId, 'to', opts.clientEmail)
+    const {
+      clientEmail, clientFirstName, offerId, sku, brand,
+      originalPrice, offeredPrice, discountAmount, cartUrl, cartExpiresAt,
+    } = opts
+
+    const config = await getEmailConfig()
+    const template = config?.templateOfferAccepted || null
+    const bs = await getBoutiqueSettings()
+    const siteUrl = bs.shareSiteUrl || ''
+    const logoText = bs.logoText || 'Boutique'
+
+    const expiresStr = cartExpiresAt.toLocaleDateString('fr-FR', {
+      day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    })
+
+    const defaultText = `Bonjour ${clientFirstName},\n\nBonne nouvelle ! Votre offre de ${offeredPrice.toFixed(2)} € pour l'article ${brand} (SKU : ${sku}) a été acceptée.\n\nPrix original : ${originalPrice.toFixed(2)} €\nVotre prix : ${offeredPrice.toFixed(2)} €\nRéduction : -${discountAmount.toFixed(2)} €\n\nVotre panier à prix réduit est disponible jusqu'au ${expiresStr} :\n${cartUrl}\n\nMerci pour votre achat !`
+
+    const vars: Record<string, string> = {
+      firstName: clientFirstName,
+      brand,
+      sku,
+      originalPrice: originalPrice.toFixed(2),
+      offeredPrice: offeredPrice.toFixed(2),
+      discountAmount: discountAmount.toFixed(2),
+      cartUrl,
+      cartExpiresAt: expiresStr,
+    }
+
+    const text = applyTemplate(template, defaultText, vars)
+
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      let processed = template
+      for (const [key, value] of Object.entries(vars)) {
+        processed = processed.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      html = migrateRelativeUrls(processed, siteUrl)
+    } else {
+      const bodyHtml = `
+<p style="margin:0 0 12px 0;">Bonne nouvelle ! Votre offre a été <strong style="color:#10b981;">acceptée</strong>.</p>
+<div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:16px;margin:12px 0;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Article</p>
+<p style="margin:0 0 12px 0;font-weight:600;">${escapeHtml(brand)} <span style="font-family:monospace;font-size:11px;color:#666;">${escapeHtml(sku)}</span></p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Prix original</p>
+<p style="margin:0 0 4px 0;font-size:14px;text-decoration:line-through;color:#999;">${originalPrice.toFixed(2)} €</p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Votre prix</p>
+<p style="margin:0 0 12px 0;font-size:22px;font-weight:700;color:#10b981;">${offeredPrice.toFixed(2)} € <span style="font-size:14px;color:#065f46;">(−${discountAmount.toFixed(2)} €)</span></p>
+<p style="margin:0;font-size:12px;color:#065f46;">⏰ Valable jusqu'au ${expiresStr}</p>
+</div>
+<a href="${cartUrl}" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:600;font-size:15px;margin-top:8px;">Accéder à mon panier →</a>`
+
+      const result = buildEmailTemplate({
+        title: 'Offre acceptée ✓',
+        headerColor: '#10b981',
+        firstName: clientFirstName,
+        bodyHtml,
+        siteUrl,
+        logoText,
+      })
+      html = result.html
+    }
+
+    await sendEmail({
+      to: clientEmail,
+      subject: `Votre offre pour ${brand} a été acceptée !`,
+      text,
+      html,
+    })
+  } catch (e: any) {
+    console.error('[email] notifyOfferAccepted error:', e?.message)
+  }
+}
+
+/**
+ * notifyOfferRejected — sent to the client when their Make an Offer submission is rejected.
+ * Uses templateOfferRejected from EmailSettings.
+ *
+ * Variables: {firstName}, {brand}, {sku}, {offeredPrice}, {reason}
+ */
+export async function notifyOfferRejected(opts: {
+  clientEmail: string
+  clientFirstName: string
+  sku: string
+  brand: string
+  offeredPrice: number
+  reason: string
+}) {
+  try {
+    console.log('[email] notifyOfferRejected triggered:', opts.sku, 'to', opts.clientEmail)
+    const { clientEmail, clientFirstName, sku, brand, offeredPrice, reason } = opts
+
+    const config = await getEmailConfig()
+    const template = config?.templateOfferRejected || null
+    const bs = await getBoutiqueSettings()
+    const siteUrl = bs.shareSiteUrl || ''
+    const logoText = bs.logoText || 'Boutique'
+
+    const defaultText = `Bonjour ${clientFirstName},\n\nNous vous remercions pour votre offre de ${offeredPrice.toFixed(2)} € pour l'article ${brand} (SKU : ${sku}).\n\nMalheureusement, nous ne pouvons pas donner suite à cette offre pour le motif suivant :\n${reason}\n\nL'article reste disponible à son prix original sur notre boutique.\n\nMerci de votre compréhension.`
+
+    const vars: Record<string, string> = {
+      firstName: clientFirstName,
+      brand,
+      sku,
+      offeredPrice: offeredPrice.toFixed(2),
+      reason,
+    }
+
+    const text = applyTemplate(template, defaultText, vars)
+
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      let processed = template
+      for (const [key, value] of Object.entries(vars)) {
+        processed = processed.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      html = migrateRelativeUrls(processed, siteUrl)
+    } else {
+      const bodyHtml = `
+<p style="margin:0 0 12px 0;">Nous vous remercions pour votre offre pour l'article <strong>${escapeHtml(brand)}</strong> <span style="font-family:monospace;font-size:11px;color:#666;">${escapeHtml(sku)}</span>.</p>
+<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:16px;margin:12px 0;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#991b1b;text-transform:uppercase;">Votre offre</p>
+<p style="margin:0 0 12px 0;font-size:18px;font-weight:600;">${offeredPrice.toFixed(2)} €</p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#991b1b;text-transform:uppercase;">Motif du refus</p>
+<p style="margin:0;font-size:14px;">${escapeHtml(reason)}</p>
+</div>
+<p style="margin:0 0 8px 0;">L'article reste disponible à son prix original sur notre boutique.</p>`
+
+      const result = buildEmailTemplate({
+        title: 'Votre offre n\'a pas pu être acceptée',
+        headerColor: '#ef4444',
+        firstName: clientFirstName,
+        bodyHtml,
+        siteUrl,
+        logoText,
+      })
+      html = result.html
+    }
+
+    await sendEmail({
+      to: clientEmail,
+      subject: `Votre offre pour ${brand}`,
+      text,
+      html,
+    })
+  } catch (e: any) {
+    console.error('[email] notifyOfferRejected error:', e?.message)
+  }
+}
+
 export async function notifyClientRegistration(clientEmail: string, clientFirstName: string) {
   try {
     console.log('[email] notifyClientRegistration triggered:', clientEmail)

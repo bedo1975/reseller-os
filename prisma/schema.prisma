@@ -274,8 +274,13 @@ model StockItem {
   isLot         Boolean  @default(false)
   lotItems      String?  // JSON: [{ stockItemId, sku, brand, title, size, color, quantity, unitPrice }]
 
+  // Make an Offer — si activé, les clients peuvent proposer un prix réduit
+  makeOfferEnabled Boolean @default(false)
+
   // 1 StockItem peut avoir plusieurs Sales (utile pour quantité > 1)
   sales         Sale[]
+  // Make an Offer — offres reçues pour cet article
+  offers        Offer[]
 }
 
 // ─────────────────────────────────────────────
@@ -964,6 +969,7 @@ model BoutiqueClient {
 
   orders       BoutiqueOrder[]
   messages     BoutiqueMessage[]
+  offers       Offer[]
 }
 
 // Commande boutique (groupe plusieurs articles / ventes)
@@ -1020,6 +1026,43 @@ model BoutiqueMessage {
   @@index([createdAt])
 }
 
+// ─────────────────────────────────────────────
+// Make an Offer — offres de prix proposées par les clients
+// ─────────────────────────────────────────────
+model Offer {
+  id            String   @id @default(cuid())
+  // Article ciblé par l'offre
+  stockItemId   String
+  stockItem     StockItem @relation(fields: [stockItemId], references: [id])
+  sku           String              // snapshot du SKU (au cas où l'article est supprimé)
+  brand         String              // snapshot marque
+  title         String?             // snapshot titre
+  // Client (invité ou connecté)
+  clientId      String?             // null si invité
+  client        BoutiqueClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientEmail   String              // email (saisi par l'invité ou récupéré du compte)
+  clientName    String?             // nom du client (si connecté)
+  // Détails de l'offre
+  originalPrice Float               // prix affiché au moment de l'offre
+  offeredPrice  Float               // prix proposé par le client
+  discountAmount Float              // originalPrice - offeredPrice
+  // Statut: pending | accepted | rejected | expired
+  status        String   @default("pending")
+  // Si accepted : crée un panier temporaire avec un code unique
+  cartToken     String?             // token unique pour accéder au panier réduit
+  cartExpiresAt DateTime?           // date d'expiration du panier
+  rejectionReason String?           // motif du refus (si rejected)
+  // Emails envoyés
+  acceptedEmailSent  Boolean @default(false)
+  rejectedEmailSent  Boolean @default(false)
+  // Métadonnées
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([stockItemId])
+  @@index([clientId])
+  @@index([status])
+}
+
 // Mode de paiement (CRUD admin — Stripe, PayPal, CB, virement, etc.)
 model PaymentMethod {
   id          String   @id @default(cuid())
@@ -1069,7 +1112,12 @@ model EmailSettings {
   templateAdminOrder       String?  // nouvelle commande (envoyé à l'admin)
   templateBackInStock      String?  // alerte retour en stock (envoyé au visiteur inscrit)
   templateOrderReady       String?  // commande prête pour l'expédition (envoyé au client)
-  
+  templateOfferAccepted    String?  // offre acceptée — envoi du lien panier réduit
+  templateOfferRejected    String?  // offre refusée — motif du refus
+  // Make an Offer — configuration des réductions prédéfinies (JSON: [1,2,3] pour -1€, -2€, -3€)
+  makeOfferDiscounts       String   @default("[1,2,3]")  // JSON array of discount amounts in €
+  makeOfferAllowFreeOffer  Boolean  @default(true)        // si true, le client peut saisir un montant libre
+  makeOfferCartDurationHours Int    @default(24)          // durée de validité du panier réduit (en heures)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
