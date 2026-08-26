@@ -167,6 +167,21 @@ function SyntheseTab({ year }: { year: number }) {
   const totalPaymentFees = yearSales.reduce((s, x) => s + Math.max(0, x.paymentFees || 0), 0)
   // COGS = coût d'achat des articles VENDUS (pas tous les achats — les articles invendus restent en stock)
   const totalCOGS = yearSales.reduce((s, x) => s + x.stockItem.purchaseCost * ((x as { qty?: number }).qty || 1), 0)
+  // Count distinct orders (grouped by boutiqueOrderId) — not individual Sales.
+  // A multi-article order = 1 order, not N.
+  const orderCount = useMemo(() => {
+    const seen = new Set<string>()
+    let singles = 0
+    for (const s of yearSales) {
+      const orderId = (s as { boutiqueOrderId?: string | null }).boutiqueOrderId
+      if (orderId) {
+        seen.add(orderId)
+      } else {
+        singles++
+      }
+    }
+    return seen.size + singles
+  }, [yearSales])
   const totalOtherExpenses = yearExpenses.reduce((s, e) => s + e.amount, 0)
   const taxRate = taxSettings?.taxRate || 0
   const urssafCotisation = totalCA * taxRate / 100
@@ -294,7 +309,7 @@ function SyntheseTab({ year }: { year: number }) {
           <div><div class="label">Autres dépenses</div><div class="value">${formatEUR(totalOtherExpenses)}</div></div>
           <div><div class="label">Bénéfice net</div><div class="value profit">${formatEUR(totalProfit)}</div></div>
           <div><div class="label">Marge</div><div class="value">${totalCA > 0 ? ((totalProfit / totalCA) * 100).toFixed(1) : 0}%</div></div>
-          <div><div class="label">Nb ventes</div><div class="value">${yearSales.length}</div></div>
+          <div><div class="label">Nb ventes</div><div class="value">${orderCount}</div></div>
         </div>
         <h2>Ventes</h2>
         <table><thead><tr><th>Date</th><th>Plateforme</th><th>Article</th><th>CA</th><th>Coût</th><th>Frais</th><th>Profit</th></tr></thead>
@@ -497,7 +512,7 @@ function SyntheseTab({ year }: { year: number }) {
           <SummaryCard label="Bénéfice net (exploitation)" value={totalProfit} highlight hint="CA - COGS - dépenses - frais - URSSAF" />
           <SummaryCard label="Marge nette" value={totalCA > 0 ? parseFloat(((totalProfit / totalCA) * 100).toFixed(1)) : 0} suffix="%" hint="Bénéfice net / CA" />
           <SummaryCard label="Trésorerie nette (fiscale)" value={totalCashProfit} hint="CA - tous les achats (y compris stock invendu) - frais - URSSAF" />
-          <SummaryCard label="Nb ventes" value={yearSales.length} />
+          <SummaryCard label="Nb ventes" value={orderCount} hint="Commandes groupées (pas articles individuels)" />
         </div>
       )}
 

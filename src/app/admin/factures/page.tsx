@@ -15,10 +15,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table'
-import { FileText, Mail, ExternalLink, Search, Link as LinkIcon, Send, Calendar, X } from 'lucide-react'
+import { FileText, Mail, ExternalLink, Search, Link as LinkIcon, Send, Calendar, X, Layers } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatEUR, formatDate } from '@/lib/constants'
 
@@ -30,6 +27,7 @@ interface SaleWithInvoice {
   customerName: string | null
   customerContact: string | null
   salePrice: number
+  qty?: number | null
   stockItem: {
     brand: string
     title: string | null
@@ -38,15 +36,41 @@ interface SaleWithInvoice {
   }
 }
 
+// Parse customerContact which may be a JSON string like {"email":"...","phone":"..."}
+// or plain text (legacy sales). Returns the extracted email or the raw string.
+function extractEmail(customerContact: string | null | undefined): string {
+  if (!customerContact) return ''
+  const trimmed = customerContact.trim()
+  // Try JSON parse (boutique orders store it as JSON)
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (parsed && typeof parsed.email === 'string') return parsed.email
+  } catch {
+    // Not JSON — it's plain text (legacy sales or a raw email)
+  }
+  // If it looks like an email, return as-is
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return trimmed
+  return trimmed
+}
+
+// A grouped invoice = 1 or more Sales sharing the same invoiceNumber
+interface GroupedInvoice {
+  invoiceNumber: string
+  sales: SaleWithInvoice[]
+  // Aggregated fields for display
+  customerName: string | null
+  email: string
+  saleDate: string
+  platform: string
+  totalAmount: number
+  articleCount: number
+}
+
 export default function FacturesPage() {
   const { data: sales, loading } = useFetch<SaleWithInvoice[]>('/api/sales')
   const { getByType, getLabel: getAttrLabel } = useSettings()
 
-  // Platforms come from the user's settings (Paramètres → Plateformes), not a hardcoded list.
-  // This way, if the user adds/edits/removes platforms in settings, the filter follows.
   const platformAttrs = getByType('platform')
-
-  // Resolve a platform code to its display label (falls back to the raw code if not found).
   const platformLabel = (code: string): string =>
     platformAttrs.find(p => p.code === code)?.value || getAttrLabel('platform', code) || code
 
@@ -57,9 +81,8 @@ export default function FacturesPage() {
   const [sending, setSending] = useState<string | null>(null)
   const [copying, setCopying] = useState<string | null>(null)
 
-  // Email popup state — when customerContact is empty, the user can enter an email
   const [emailDialogOpen, setEmailDialogOpen] = useState(false)
-  const [emailDialogSale, setEmailDialogSale] = useState<SaleWithInvoice | null>(null)
+  const [emailDialogInvoice, setEmailDialogInvoice] = useState<GroupedInvoice | null>(null)
   const [emailDialogValue, setEmailDialogValue] = useState('')
 
   // Filter sales that have an invoice number
@@ -68,73 +91,90 @@ export default function FacturesPage() {
     return sales.filter(s => s.invoiceNumber)
   }, [sales])
 
+  // Group sales by invoiceNumber — 1 row per invoice (not 1 per Sale).
+  // A multi-article order shares one invoice number → 1 grouped invoice.
+  const groupedInvoices = useMemo<GroupedInvoice[]>(() => {
+    const map = new Map<string, SaleWithInvoice[]>()
+    for (const s of salesWithInvoices) {
+      if (!s.invoiceNumber) continue
+      if (!map.has(s.invoiceNumber)) map.set(s.invoiceNumber, [])
+      map.get(s.invoiceNumber)!.push(s)
+    }
+    const result: GroupedInvoice[] = []
+    for (const [invoiceNumber, group] of map.entries()) {
+      const first = group[0]
+      const totalAmount = group.reduce((sum, s) => sum + (s.salePrice * (s.qty || 1)), 0)
+      const articleCount = group.reduce((sum, s) => sum + (s.qty || 1), 0)
+      result.push({
+        invoiceNumber,
+        sales: group.sort((a, b) => a.stockItem.sku.localeCompare(b.stockItem.sku)),
+        customerName: first.customerName,
+        email: extractEmail(first.customerContact),
+        saleDate: first.saleDate,
+        platform: first.platform,
+        totalAmount,
+        articleCount,
+      })
+    }
+    // Sort by date descending
+    result.sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
+    return result
+  }, [salesWithInvoices])
+
+  // Apply filters on grouped invoices
   const filtered = useMemo(() => {
-    return salesWithInvoices.filter(s => {
-      if (platformFilter !== 'all' && s.platform !== platformFilter) return false
-      // Year + month filters — based on saleDate
+    return groupedInvoices.filter(inv => {
+      if (platformFilter !== 'all' && inv.platform !== platformFilter) return false
       if (yearFilter !== 'all' || monthFilter !== 'all') {
-        const d = new Date(s.saleDate)
+        const d = new Date(inv.saleDate)
         if (isNaN(d.getTime())) return false
         if (yearFilter !== 'all' && String(d.getFullYear()) !== yearFilter) return false
         if (monthFilter !== 'all' && String(d.getMonth() + 1).padStart(2, '0') !== monthFilter) return false
       }
       if (search) {
         const q = search.toLowerCase()
+        // Search across all articles in the invoice
         return (
-          s.invoiceNumber?.toLowerCase().includes(q) ||
-          s.customerName?.toLowerCase().includes(q) ||
-          s.customerContact?.toLowerCase().includes(q) ||
-          s.stockItem.brand.toLowerCase().includes(q) ||
-          s.stockItem.sku.toLowerCase().includes(q)
+          inv.invoiceNumber?.toLowerCase().includes(q) ||
+          inv.customerName?.toLowerCase().includes(q) ||
+          inv.email?.toLowerCase().includes(q) ||
+          inv.sales.some(s =>
+            s.stockItem.brand.toLowerCase().includes(q) ||
+            s.stockItem.sku.toLowerCase().includes(q)
+          )
         )
       }
       return true
     })
-  }, [salesWithInvoices, search, platformFilter, yearFilter, monthFilter])
+  }, [groupedInvoices, search, platformFilter, yearFilter, monthFilter])
 
-  // Available years — descending, derived from sales dates (only years that have at least one sale)
   const years = useMemo(() => {
     const set = new Set<string>()
-    salesWithInvoices.forEach(s => {
-      const d = new Date(s.saleDate)
+    groupedInvoices.forEach(inv => {
+      const d = new Date(inv.saleDate)
       if (!isNaN(d.getTime())) set.add(String(d.getFullYear()))
     })
     return Array.from(set).sort((a, b) => Number(b) - Number(a))
-  }, [salesWithInvoices])
+  }, [groupedInvoices])
 
-  // Reset month when year changes (months are dependent on year for the data subset)
-  // Note: we keep the month list static so the user can pick any month; the filter just yields no rows if that month has no sales in the selected year.
   const MONTHS = [
-    { value: '01', label: 'Janvier' },
-    { value: '02', label: 'Février' },
-    { value: '03', label: 'Mars' },
-    { value: '04', label: 'Avril' },
-    { value: '05', label: 'Mai' },
-    { value: '06', label: 'Juin' },
-    { value: '07', label: 'Juillet' },
-    { value: '08', label: 'Août' },
-    { value: '09', label: 'Septembre' },
-    { value: '10', label: 'Octobre' },
-    { value: '11', label: 'Novembre' },
-    { value: '12', label: 'Décembre' },
+    { value: '01', label: 'Janvier' }, { value: '02', label: 'Février' },
+    { value: '03', label: 'Mars' }, { value: '04', label: 'Avril' },
+    { value: '05', label: 'Mai' }, { value: '06', label: 'Juin' },
+    { value: '07', label: 'Juillet' }, { value: '08', label: 'Août' },
+    { value: '09', label: 'Septembre' }, { value: '10', label: 'Octobre' },
+    { value: '11', label: 'Novembre' }, { value: '12', label: 'Décembre' },
   ]
-
   const hasDateFilter = yearFilter !== 'all' || monthFilter !== 'all'
-  const resetDateFilter = () => {
-    setYearFilter('all')
-    setMonthFilter('all')
-  }
+  const resetDateFilter = () => { setYearFilter('all'); setMonthFilter('all') }
 
-  // Build the platform dropdown — platforms from settings + any extras found in the data
-  // (extras can happen if a platform was deleted from settings but old sales still reference it)
   const platforms = useMemo(() => {
     const fromSettings = platformAttrs.map(p => p.code)
-    const extras = Array.from(new Set(salesWithInvoices.map(s => s.platform)))
+    const extras = Array.from(new Set(groupedInvoices.map(inv => inv.platform)))
       .filter(p => !fromSettings.includes(p))
     return [...fromSettings, ...extras]
-  }, [platformAttrs, salesWithInvoices])
+  }, [platformAttrs, groupedInvoices])
 
-  // Build the public PDF URL — uses window.location.origin so it works even without shareSiteUrl
   const buildInvoiceUrl = (invoiceNumber: string): string => {
     if (typeof window === 'undefined') return ''
     const origin = window.location.origin
@@ -142,7 +182,7 @@ export default function FacturesPage() {
   }
 
   const doSend = async (saleId: string, email: string, invoiceNumber: string, saleDate: string) => {
-    setSending(saleId)
+    setSending(invoiceNumber)
     try {
       const res = await fetch('/api/invoices/send', {
         method: 'POST',
@@ -159,38 +199,37 @@ export default function FacturesPage() {
     }
   }
 
-  const handleSendClick = (sale: SaleWithInvoice) => {
-    const email = sale.customerContact?.trim() || ''
+  const handleSendClick = (inv: GroupedInvoice) => {
+    const email = inv.email.trim()
     if (!email) {
-      // No email on file → open the dialog to ask for one
-      setEmailDialogSale(sale)
+      setEmailDialogInvoice(inv)
       setEmailDialogValue('')
       setEmailDialogOpen(true)
       return
     }
-    doSend(sale.id, email, sale.invoiceNumber || '', sale.saleDate)
+    // Use the first Sale's id as the anchor for the send API
+    doSend(inv.sales[0].id, email, inv.invoiceNumber, inv.saleDate)
   }
 
   const confirmSendFromDialog = async () => {
-    if (!emailDialogSale) return
+    if (!emailDialogInvoice) return
     const email = emailDialogValue.trim()
     if (!email) {
       toast.error('Veuillez saisir une adresse email')
       return
     }
-    // Basic email format check
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       toast.error('Adresse email invalide')
       return
     }
     setEmailDialogOpen(false)
     await doSend(
-      emailDialogSale.id,
+      emailDialogInvoice.sales[0].id,
       email,
-      emailDialogSale.invoiceNumber || '',
-      emailDialogSale.saleDate,
+      emailDialogInvoice.invoiceNumber,
+      emailDialogInvoice.saleDate,
     )
-    setEmailDialogSale(null)
+    setEmailDialogInvoice(null)
     setEmailDialogValue('')
   }
 
@@ -198,11 +237,10 @@ export default function FacturesPage() {
     window.open(`/api/invoices/${saleId}/pdf`, '_blank')
   }
 
-  const copyInvoiceLink = async (sale: SaleWithInvoice) => {
-    if (!sale.invoiceNumber) return
-    setCopying(sale.id)
+  const copyInvoiceLink = async (inv: GroupedInvoice) => {
+    setCopying(inv.invoiceNumber)
     try {
-      const url = buildInvoiceUrl(sale.invoiceNumber)
+      const url = buildInvoiceUrl(inv.invoiceNumber)
       await navigator.clipboard.writeText(url)
       toast.success('Lien de la facture copié dans le presse-papier')
     } catch {
@@ -229,13 +267,13 @@ export default function FacturesPage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground uppercase">Total factures</p>
-            <p className="text-2xl font-bold mt-1">{salesWithInvoices.length}</p>
+            <p className="text-2xl font-bold mt-1">{groupedInvoices.length}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground uppercase">CA facturé</p>
-            <p className="text-2xl font-bold mt-1">{formatEUR(filtered.reduce((s, x) => s + x.salePrice, 0))}</p>
+            <p className="text-2xl font-bold mt-1">{formatEUR(filtered.reduce((s, inv) => s + inv.totalAmount, 0))}</p>
           </CardContent>
         </Card>
         <Card>
@@ -247,7 +285,7 @@ export default function FacturesPage() {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground uppercase">Avec email client</p>
-            <p className="text-2xl font-bold mt-1">{filtered.filter(s => s.customerContact).length}</p>
+            <p className="text-2xl font-bold mt-1">{filtered.filter(inv => inv.email).length}</p>
           </CardContent>
         </Card>
       </div>
@@ -351,44 +389,57 @@ export default function FacturesPage() {
                     <th className="px-3 py-2.5 font-medium">Date</th>
                     <th className="px-3 py-2.5 font-medium">Client</th>
                     <th className="px-3 py-2.5 font-medium">Email</th>
-                    <th className="px-3 py-2.5 font-medium">Article</th>
+                    <th className="px-3 py-2.5 font-medium">Article(s)</th>
                     <th className="px-3 py-2.5 font-medium">Plateforme</th>
                     <th className="px-3 py-2.5 font-medium text-right">Montant</th>
                     <th className="px-3 py-2.5 font-medium text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(s => {
-                    const hasEmail = !!s.customerContact?.trim()
+                  {filtered.map(inv => {
+                    const hasEmail = !!inv.email.trim()
+                    const isMulti = inv.sales.length > 1
                     return (
-                      <tr key={s.id} className="border-b last:border-0 hover:bg-muted/30">
+                      <tr key={inv.invoiceNumber} className={`border-b last:border-0 hover:bg-muted/30 ${isMulti ? 'bg-muted/5' : ''}`}>
                         <td className="px-3 py-2.5">
                           <code className="text-xs bg-sky-50 dark:bg-sky-950/30 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded font-mono font-semibold">
-                            {s.invoiceNumber}
+                            {inv.invoiceNumber}
                           </code>
                         </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">{formatDate(s.saleDate)}</td>
-                        <td className="px-3 py-2.5">{s.customerName || '—'}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">{formatDate(inv.saleDate)}</td>
+                        <td className="px-3 py-2.5">{inv.customerName || '—'}</td>
                         <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                          {s.customerContact || <span className="italic text-amber-600 dark:text-amber-400">à saisir</span>}
+                          {hasEmail ? inv.email : <span className="italic text-amber-600 dark:text-amber-400">à saisir</span>}
                         </td>
                         <td className="px-3 py-2.5">
-                          <div>
-                            <p className="font-medium">{s.stockItem.brand}</p>
-                            <p className="text-[10px] text-muted-foreground font-mono">{s.stockItem.sku}</p>
-                          </div>
+                          {inv.sales.map((s, idx) => (
+                            <div key={s.id} className={idx > 0 ? 'mt-1 pt-1 border-t border-dashed border-border/40' : ''}>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-medium">{s.stockItem.brand}</span>
+                                {(s.qty || 1) > 1 && (
+                                  <span className="text-[10px] text-muted-foreground">×{s.qty}</span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-muted-foreground font-mono">{s.stockItem.sku}</p>
+                            </div>
+                          ))}
+                          {isMulti && (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+                              <Layers className="h-2.5 w-2.5" /> {inv.articleCount} articles
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2.5">
-                          <Badge variant="outline">{platformLabel(s.platform)}</Badge>
+                          <Badge variant="outline">{platformLabel(inv.platform)}</Badge>
                         </td>
-                        <td className="px-3 py-2.5 text-right font-semibold">{formatEUR(s.salePrice)}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold">{formatEUR(inv.totalAmount)}</td>
                         <td className="px-3 py-2.5">
                           <div className="flex items-center justify-center gap-1">
                             <Button
                               size="sm"
                               variant="ghost"
                               className="h-8 w-8 p-0"
-                              onClick={() => previewInvoice(s.id)}
+                              onClick={() => previewInvoice(inv.sales[0].id)}
                               title="Aperçu PDF"
                             >
                               <ExternalLink className="h-3.5 w-3.5" />
@@ -397,11 +448,11 @@ export default function FacturesPage() {
                               size="sm"
                               variant="ghost"
                               className="h-8 w-8 p-0"
-                              onClick={() => handleSendClick(s)}
-                              disabled={sending === s.id}
+                              onClick={() => handleSendClick(inv)}
+                              disabled={sending === inv.invoiceNumber}
                               title={hasEmail ? 'Envoyer par email' : 'Saisir l\'email puis envoyer'}
                             >
-                              {sending === s.id ? (
+                              {sending === inv.invoiceNumber ? (
                                 <span className="h-3.5 w-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                               ) : (
                                 <Mail className="h-3.5 w-3.5" />
@@ -411,11 +462,11 @@ export default function FacturesPage() {
                               size="sm"
                               variant="ghost"
                               className="h-8 w-8 p-0"
-                              onClick={() => copyInvoiceLink(s)}
-                              disabled={copying === s.id}
+                              onClick={() => copyInvoiceLink(inv)}
+                              disabled={copying === inv.invoiceNumber}
                               title="Copier le lien de téléchargement direct"
                             >
-                              {copying === s.id ? (
+                              {copying === inv.invoiceNumber ? (
                                 <span className="h-3.5 w-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                               ) : (
                                 <LinkIcon className="h-3.5 w-3.5" />
@@ -442,10 +493,10 @@ export default function FacturesPage() {
               Envoyer la facture par email
             </DialogTitle>
             <DialogDescription>
-              {emailDialogSale && (
+              {emailDialogInvoice && (
                 <>
                   Aucun email n'est enregistré pour cette vente. Saisissez l'adresse du destinataire
-                  pour lui envoyer la facture <strong className="font-mono">{emailDialogSale.invoiceNumber}</strong>.
+                  pour lui envoyer la facture <strong className="font-mono">{emailDialogInvoice.invoiceNumber}</strong>.
                 </>
               )}
             </DialogDescription>
@@ -462,11 +513,11 @@ export default function FacturesPage() {
               }}
               autoFocus
             />
-            {emailDialogSale && (
+            {emailDialogInvoice && (
               <div className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
-                <div><strong>Client :</strong> {emailDialogSale.customerName || '—'}</div>
-                <div><strong>Article :</strong> {emailDialogSale.stockItem.brand} {emailDialogSale.stockItem.title || emailDialogSale.stockItem.category}</div>
-                <div><strong>Montant :</strong> {formatEUR(emailDialogSale.salePrice)}</div>
+                <div><strong>Client :</strong> {emailDialogInvoice.customerName || '—'}</div>
+                <div><strong>Articles :</strong> {emailDialogInvoice.sales.map(s => `${s.stockItem.brand}${(s.qty || 1) > 1 ? ` ×${s.qty}` : ''}`).join(', ')}</div>
+                <div><strong>Montant :</strong> {formatEUR(emailDialogInvoice.totalAmount)}</div>
               </div>
             )}
           </div>
