@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler, Calculator,
+  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler, Calculator, CreditCard,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -160,6 +160,8 @@ function OrdersTab() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [carrierFilter, setCarrierFilter] = useState<string>('all')
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('all')
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   const [editStatus, setEditStatus] = useState('')
   const [editTracking, setEditTracking] = useState('')
@@ -181,7 +183,61 @@ function OrdersTab() {
 
   useEffect(() => { fetchOrders() }, [fetchOrders])
 
-  const filtered = statusFilter === 'all' ? orders : orders.filter(o => o.status === statusFilter)
+  // Helper: derive the carrier code (e.g. "mondial_relay") from the shippingMethod string.
+  // shippingMethod is stored as a label like "Point relais (Mondial Relay)" — we match
+  // against the carriers list (from Settings → Transporteurs) by checking if either the
+  // carrier code or the carrier value appears in the shippingMethod string.
+  const orderCarrier = (order: Order): string => {
+    const sm = (order.shippingMethod || '').toLowerCase()
+    const match = carriers.find(c => {
+      const code = (c.code || '').toLowerCase()
+      const value = (c.value || '').toLowerCase()
+      // Skip empty codes/values to avoid false positives
+      if (!code && !value) return false
+      return (code && sm.includes(code)) || (value && sm.includes(value))
+    })
+    return match?.code || 'autre'
+  }
+
+  // Build dropdown options from the actual data found in orders
+  const availableCarriers = useMemo(() => {
+    const set = new Map<string, number>()
+    orders.forEach(o => {
+      const c = orderCarrier(o)
+      set.set(c, (set.get(c) || 0) + 1)
+    })
+    // Always include all configured carriers (even with 0 orders), then add "autre"
+    const configured = carriers.map(c => ({ code: c.code, label: c.value, count: set.get(c.code) || 0 }))
+    const extras = Array.from(set.entries())
+      .filter(([code]) => !carriers.some(c => c.code === code))
+      .map(([code, count]) => ({ code, label: code, count }))
+    return [...configured, ...extras].sort((a, b) => b.count - a.count)
+  }, [orders, carriers])
+
+  const availablePaymentMethods = useMemo(() => {
+    const set = new Map<string, number>()
+    orders.forEach(o => {
+      const pm = o.paymentMethod || '__none__'
+      set.set(pm, (set.get(pm) || 0) + 1)
+    })
+    return Array.from(set.entries()).map(([code, count]) => ({
+      code,
+      label: code === '__none__' ? 'Aucun' : code,
+      count,
+    }))
+  }, [orders])
+
+  const filtered = useMemo(() => {
+    return orders.filter(o => {
+      if (statusFilter !== 'all' && o.status !== statusFilter) return false
+      if (carrierFilter !== 'all' && orderCarrier(o) !== carrierFilter) return false
+      if (paymentMethodFilter !== 'all') {
+        const pm = o.paymentMethod || '__none__'
+        if (pm !== paymentMethodFilter) return false
+      }
+      return true
+    })
+  }, [orders, statusFilter, carrierFilter, paymentMethodFilter])
 
   const openEdit = (order: Order) => {
     setEditingOrder(order)
@@ -236,19 +292,54 @@ function OrdersTab() {
 
   return (
     <div className="space-y-4">
-      {/* Filter */}
-      <div className="flex items-center gap-3">
-        <Label className="text-xs text-muted-foreground">Filtrer par statut :</Label>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Toutes ({orders.length})</SelectItem>
-            {STATUS_OPTIONS.map(s => {
-              const count = orders.filter(o => o.status === s.value).length
-              return <SelectItem key={s.value} value={s.value}>{s.label} ({count})</SelectItem>
-            })}
-          </SelectContent>
-        </Select>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Statut :</Label>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-[180px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes ({orders.length})</SelectItem>
+              {STATUS_OPTIONS.map(s => {
+                const count = orders.filter(o => o.status === s.value).length
+                return <SelectItem key={s.value} value={s.value}>{s.label} ({count})</SelectItem>
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Transporteur :</Label>
+          <Select value={carrierFilter} onValueChange={setCarrierFilter}>
+            <SelectTrigger className="w-full sm:w-[200px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous ({orders.length})</SelectItem>
+              {availableCarriers.map(c => (
+                <SelectItem key={c.code} value={c.code}>{c.label} ({c.count})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Plateforme :</Label>
+          <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
+            <SelectTrigger className="w-full sm:w-[180px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes ({orders.length})</SelectItem>
+              {availablePaymentMethods.map(m => (
+                <SelectItem key={m.code} value={m.code}>{m.label} ({m.count})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {(statusFilter !== 'all' || carrierFilter !== 'all' || paymentMethodFilter !== 'all') && (
+          <button
+            type="button"
+            onClick={() => { setStatusFilter('all'); setCarrierFilter('all'); setPaymentMethodFilter('all') }}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Réinitialiser
+          </button>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -314,6 +405,24 @@ function OrdersTab() {
                       <span>Total</span>
                       <span>{formatEUR(order.total)}</span>
                     </div>
+                  </div>
+
+                  {/* Carrier + payment badges — quick visual indicators */}
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {(() => {
+                      const c = orderCarrier(order)
+                      const carrierLabel = c === 'autre'
+                        ? 'Transporteur inconnu'
+                        : (carriers.find(x => x.code === c)?.value || c)
+                      return (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300" title={`Transporteur : ${carrierLabel}`}>
+                          <Truck className="h-3 w-3" /> {carrierLabel}
+                        </span>
+                      )
+                    })()}
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" title={`Plateforme de paiement : ${order.paymentMethod || 'Aucune'}`}>
+                      <CreditCard className="h-3 w-3" /> {order.paymentMethod || 'Aucune'}
+                    </span>
                   </div>
 
                   {/* Invoices */}
