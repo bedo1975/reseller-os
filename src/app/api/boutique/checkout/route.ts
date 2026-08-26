@@ -374,7 +374,9 @@ export async function POST(req: NextRequest) {
         lastName: customer.lastName,
         email: customer.email,
       },
-      itemCount: invoiceNumbers.length,
+      // itemCount = total physical articles in the cart (sum of qty across all line items)
+      // This is what the customer expects to see ("3 articles" for a 2× + 1× order)
+      itemCount: orderItems.reduce((sum, it) => sum + (it.qty || 1), 0),
     })
   } catch (error) {
     console.error('POST /api/boutique/checkout error:', error)

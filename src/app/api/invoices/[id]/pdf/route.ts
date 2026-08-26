@@ -281,7 +281,12 @@ export async function GET(
       <div class="invoice-title">FACTURE</div>
       <div class="invoice-number">N° ${escapeHtml(invoiceNumber)}</div>
       <div class="invoice-date">Date : ${formattedDate}</div>
-      ${allSales.length > 1 ? `<div style="font-size:10px; color:#888; margin-top:4px;">${allSales.length} articles</div>` : ''}
+      ${(() => {
+        const totalArticleCount = allSales.reduce((sum, s) => sum + ((s as { qty?: number }).qty || 1), 0)
+        return totalArticleCount > 1
+          ? `<div style="font-size:10px; color:#888; margin-top:4px;">${totalArticleCount} articles</div>`
+          : ''
+      })()}
     </div>
   </div>
 

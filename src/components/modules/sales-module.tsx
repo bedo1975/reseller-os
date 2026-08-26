@@ -191,7 +191,10 @@ export function SalesModule() {
               <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
               <p className="text-xs text-muted-foreground uppercase">Ventes</p>
             </div>
-            <p className="text-2xl font-bold">{filtered.length}</p>
+            <p className="text-2xl font-bold">{grouped.length}</p>
+            {filtered.length !== grouped.length && (
+              <p className="text-[9px] text-muted-foreground mt-0.5">{filtered.length} articles</p>
+            )}
           </CardContent>
         </Card>
         <Card>
