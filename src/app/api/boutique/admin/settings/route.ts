@@ -50,6 +50,7 @@ export async function PUT(req: NextRequest) {
       shareEnabled, shareColor, shareCollectEmails, shareSiteUrl, shareSubject, shareMessage, shareButtonText,
       newsletterEnabled, newsletterTitle, newsletterSubtitle, newsletterButtonText, newsletterPlaceholder, newsletterSuccessMessage, newsletterColor,
       preparationSlipSubtitle, invoiceFooterText,
+      makeOfferDiscounts, makeOfferAllowFreeOffer, makeOfferCartDurationHours,
     } = body
 
     const data: any = {}
@@ -162,6 +163,10 @@ export async function PUT(req: NextRequest) {
     // Documents
     if (typeof preparationSlipSubtitle === 'string') data.preparationSlipSubtitle = preparationSlipSubtitle
     if (typeof invoiceFooterText === 'string') data.invoiceFooterText = invoiceFooterText || null
+    // Make an Offer configuration
+    if (typeof makeOfferDiscounts === 'string') data.makeOfferDiscounts = makeOfferDiscounts
+    if (typeof makeOfferAllowFreeOffer === 'boolean') data.makeOfferAllowFreeOffer = makeOfferAllowFreeOffer
+    if (typeof makeOfferCartDurationHours === 'number') data.makeOfferCartDurationHours = Math.max(1, Math.min(168, makeOfferCartDurationHours))
 
     const settings = await db.boutiqueSettings.upsert({
       where: { id: 'default' },

@@ -38,6 +38,7 @@ interface CartItem {
   size?: string | null
   color?: string | null
   price: number | null
+  offerPrice?: number | null  // Make an Offer — prix réduit accepté
   mainPhoto?: string | null
   qty: number
 }
@@ -185,7 +186,7 @@ export default function CheckoutPage() {
       .catch(() => {})
   }, [router])
 
-  const subtotal = cart.reduce((s, i) => s + (i.price || 0) * i.qty, 0)
+  const subtotal = cart.reduce((s, i) => s + ((i.offerPrice ?? i.price) || 0) * i.qty, 0)
   const discountAmount = appliedCoupon?.discountAmount || 0
   const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount)
   const rawShipping = shippingOptions.find(s => s.code === shippingMethod)?.price || 0
@@ -328,7 +329,7 @@ export default function CheckoutPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer: form,
-          items: cart.map(i => ({ sku: i.sku, qty: i.qty, price: i.price })),
+          items: cart.map(i => ({ sku: i.sku, qty: i.qty, price: i.offerPrice ?? i.price })),
           shippingMethodCode: shippingMethod,
           shippingCost: shipping,
           paymentMethodCode: paymentMethod,
@@ -375,7 +376,7 @@ export default function CheckoutPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer: form,
-          items: cart.map(i => ({ sku: i.sku, qty: i.qty, price: i.price })),
+          items: cart.map(i => ({ sku: i.sku, qty: i.qty, price: i.offerPrice ?? i.price })),
           shippingMethodCode: shippingMethod,
           shippingCost: shipping,
           paymentMethodCode: paymentMethod,
@@ -617,7 +618,11 @@ export default function CheckoutPage() {
                     <p className="text-xs text-gray-500">Quantité : {item.qty}</p>
                   </div>
                   <span className="text-sm font-medium">
-                    {item.price != null ? `${(item.price * item.qty).toFixed(2)} €` : '—'}
+                    {item.offerPrice != null
+                      ? <span className="text-amber-600">{(item.offerPrice * item.qty).toFixed(2)} €</span>
+                      : item.price != null
+                        ? `${(item.price * item.qty).toFixed(2)} €`
+                        : '—'}
                   </span>
                 </div>
               ))}

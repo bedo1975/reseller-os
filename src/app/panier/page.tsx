@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, Package, AlertCircle } from 'lucide-react'
+import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, Package, AlertCircle, Tag } from 'lucide-react'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 
 interface CartItem {
@@ -17,6 +17,7 @@ interface CartItem {
   mainPhoto?: string | null
   qty: number
   maxQty?: number // stock quantity available
+  offerPrice?: number | null  // prix réduit si une offre a été acceptée (Make an Offer)
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -27,21 +28,90 @@ const CATEGORY_LABELS: Record<string, string> = {
   maison: 'Maison',
 }
 
-export default function CartPage() {
+export default function CartPageWrapper() {
+  return (
+    <Suspense fallback={null}>
+      <CartPage />
+    </Suspense>
+  )
+}
+
+function CartPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const settings = useBoutiqueSettings()
   const [cart, setCart] = useState<CartItem[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [offerApplied, setOfferApplied] = useState<{ sku: string; offeredPrice: number; brand: string } | null>(null)
+  const [offerError, setOfferError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Load cart from localStorage
+    let c: CartItem[] = []
     try {
-      const c = JSON.parse(localStorage.getItem('boutique_cart') || '[]')
-      setCart(c)
+      c = JSON.parse(localStorage.getItem('boutique_cart') || '[]')
     } catch {
-      setCart([])
+      c = []
     }
-    setLoaded(true)
-  }, [])
+
+    // Check for Make an Offer token in the URL (?offer=TOKEN)
+    const offerToken = searchParams.get('offer')
+    if (offerToken) {
+      // Fetch the offer by token (public endpoint)
+      fetch(`/api/boutique/offers/by-token?token=${encodeURIComponent(offerToken)}`)
+        .then(r => {
+          if (!r.ok) throw new Error('not found')
+          return r.json()
+        })
+        .then(data => {
+          if (!data || data.status !== 'accepted') {
+            setOfferError('Cette offre n\'est plus valide ou a expiré.')
+            setCart(c)
+            setLoaded(true)
+            return
+          }
+          // Check expiration
+          if (data.cartExpiresAt && new Date(data.cartExpiresAt) < new Date()) {
+            setOfferError('Le délai de cette offre a expiré. L\'article est disponible à son prix original.')
+            setCart(c)
+            setLoaded(true)
+            return
+          }
+          // Apply the offered price to the matching item in the cart
+          const updatedCart = c.map(item => {
+            if (item.sku === data.sku) {
+              return { ...item, offerPrice: data.offeredPrice, qty: 1 }
+            }
+            return item
+          })
+          // If the item is not in the cart yet, add it
+          if (!updatedCart.find(i => i.sku === data.sku)) {
+            updatedCart.push({
+              sku: data.sku,
+              brand: data.brand,
+              category: data.category || 'vetements',
+              price: data.originalPrice,
+              offerPrice: data.offeredPrice,
+              qty: 1,
+              mainPhoto: null,
+            })
+          }
+          setCart(updatedCart)
+          localStorage.setItem('boutique_cart', JSON.stringify(updatedCart))
+          window.dispatchEvent(new Event('cart-updated'))
+          setOfferApplied({ sku: data.sku, offeredPrice: data.offeredPrice, brand: data.brand })
+          setLoaded(true)
+        })
+        .catch(() => {
+          setOfferError('Offre introuvable. Le lien n\'est peut-être plus valide.')
+          setCart(c)
+          setLoaded(true)
+        })
+    } else {
+      setCart(c)
+      setLoaded(true)
+    }
+  }, [searchParams])
 
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart)
@@ -72,7 +142,7 @@ export default function CartPage() {
     saveCart([])
   }
 
-  const subtotal = cart.reduce((s, i) => s + (i.price || 0) * i.qty, 0)
+  const subtotal = cart.reduce((s, i) => s + ((i.offerPrice ?? i.price) || 0) * i.qty, 0)
   const freeShipEnabled = settings.freeShippingEnabled === true
   const freeShipThreshold = settings.freeShippingThreshold || 50
   const isFreeShipping = freeShipEnabled && subtotal >= freeShipThreshold && subtotal > 0
@@ -99,6 +169,25 @@ export default function CartPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Mon panier ({cart.length})</h1>
+
+      {/* Make an Offer — success banner */}
+      {offerApplied && (
+        <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm flex items-start gap-2">
+          <Tag className="h-5 w-5 shrink-0 mt-0.5 text-emerald-600" />
+          <span>
+            Votre offre a été acceptée ! <strong>{offerApplied.brand}</strong> est à <strong>{offerApplied.offeredPrice.toFixed(2)} €</strong> dans votre panier.
+            Profitez-en, ce prix est valable pour une durée limitée.
+          </span>
+        </div>
+      )}
+
+      {/* Make an Offer — error banner */}
+      {offerError && (
+        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 text-red-800 px-4 py-3 text-sm flex items-start gap-2">
+          <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+          <span>{offerError}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Items */}
@@ -131,7 +220,19 @@ export default function CartPage() {
                 </Link>
                 {item.color && <p className="text-xs text-gray-500 mt-0.5">{item.color}</p>}
                 <p className="text-sm font-bold text-[#007bff] mt-1">
-                  {item.price != null ? `${item.price.toFixed(2)} €` : '—'}
+                  {item.offerPrice != null ? (
+                    <span className="flex items-center gap-2">
+                      <span className="text-amber-600">{item.offerPrice.toFixed(2)} €</span>
+                      {item.price != null && (
+                        <span className="text-xs text-gray-400 line-through">{item.price.toFixed(2)} €</span>
+                      )}
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                        <Tag className="h-2.5 w-2.5" /> Offre
+                      </span>
+                    </span>
+                  ) : (
+                    item.price != null ? `${item.price.toFixed(2)} €` : '—'
+                  )}
                 </p>
 
                 {/* Qty controls */}
@@ -169,7 +270,9 @@ export default function CartPage() {
               {/* Total item */}
               <div className="text-right shrink-0">
                 <p className="text-sm font-semibold text-gray-900">
-                  {item.price != null ? `${(item.price * item.qty).toFixed(2)} €` : '—'}
+                  {((item.offerPrice ?? item.price) || 0) * item.qty !== 0
+                    ? `${(((item.offerPrice ?? item.price) || 0) * item.qty).toFixed(2)} €`
+                    : '—'}
                 </p>
               </div>
             </div>

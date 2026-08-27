@@ -6339,6 +6339,59 @@ function OffersTab() {
   const [acceptDuration, setAcceptDuration] = useState('24')
   const [saving, setSaving] = useState(false)
 
+  // Make an Offer configuration (discounts, free offer, cart duration)
+  const [offerDiscounts, setOfferDiscounts] = useState('[1,2,3]')
+  const [offerAllowFree, setOfferAllowFree] = useState(true)
+  const [offerCartHours, setOfferCartHours] = useState(24)
+  const [configSaving, setConfigSaving] = useState(false)
+  const [configLoaded, setConfigLoaded] = useState(false)
+
+  // Fetch offer config from the public endpoint (same data the storefront uses)
+  useEffect(() => {
+    fetch('/api/boutique/offers/config')
+      .then(r => r.json())
+      .then(d => {
+        if (d.discounts) setOfferDiscounts(JSON.stringify(d.discounts))
+        setOfferAllowFree(d.allowFreeOffer !== false)
+        if (d.cartDurationHours) setOfferCartHours(d.cartDurationHours)
+        setConfigLoaded(true)
+      })
+      .catch(() => setConfigLoaded(true))
+  }, [])
+
+  const saveOfferConfig = async () => {
+    setConfigSaving(true)
+    try {
+      // Validate the discounts JSON
+      let parsed: number[]
+      try {
+        parsed = JSON.parse(offerDiscounts)
+        if (!Array.isArray(parsed)) throw new Error()
+        parsed = parsed.map(v => Number(v)).filter(v => !Number.isNaN(v) && v > 0)
+        if (parsed.length === 0) throw new Error()
+      } catch {
+        toast.error('Réductions invalides — format attendu: [1,2,3]')
+        setConfigSaving(false)
+        return
+      }
+      const res = await fetch('/api/boutique/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          makeOfferDiscounts: JSON.stringify(parsed),
+          makeOfferAllowFreeOffer: offerAllowFree,
+          makeOfferCartDurationHours: offerCartHours,
+        }),
+      })
+      if (!res.ok) throw new Error('Erreur')
+      toast.success('Configuration Make an Offer enregistrée')
+    } catch {
+      toast.error('Erreur lors de la sauvegarde')
+    } finally {
+      setConfigSaving(false)
+    }
+  }
+
   const fetchOffers = useCallback(async () => {
     setLoading(true)
     try {
@@ -6418,6 +6471,60 @@ function OffersTab() {
 
   return (
     <div className="space-y-4">
+      {/* Configuration Make an Offer */}
+      {configLoaded && (
+        <Card className="border-amber-200 dark:border-amber-900 bg-amber-50/30 dark:bg-amber-950/10">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Tag className="h-4 w-4 text-amber-600" />
+              <p className="text-sm font-semibold">Configuration Make an Offer</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Réductions prédéfinies (€)</Label>
+                <Input
+                  value={offerDiscounts}
+                  onChange={e => setOfferDiscounts(e.target.value)}
+                  placeholder="[1,2,3]"
+                  className="font-mono text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">Montants en €, format JSON. Ex: [1,2,5] pour -1€, -2€, -5€</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Durée du panier réduit (heures)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={168}
+                  value={offerCartHours}
+                  onChange={e => setOfferCartHours(parseInt(e.target.value) || 24)}
+                />
+                <p className="text-[10px] text-muted-foreground">Le panier expire automatiquement après ce délai (1 à 168h)</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Offre libre (prix saisi par le client)</Label>
+                <label className="flex items-center gap-2 p-2 rounded-md border cursor-pointer hover:bg-muted/30">
+                  <input
+                    type="checkbox"
+                    checked={offerAllowFree}
+                    onChange={e => setOfferAllowFree(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span className="text-xs">Autoriser le client à saisir un prix libre</span>
+                </label>
+                <p className="text-[10px] text-muted-foreground">Si activé, un champ de saisie libre s'affiche en plus des cards</p>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button size="sm" onClick={saveOfferConfig} disabled={configSaving} className="gap-2">
+                {configSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Enregistrer la configuration
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Toolbar */}
       <div className="flex items-center gap-3">
         <Label className="text-xs text-muted-foreground">Filtrer :</Label>
