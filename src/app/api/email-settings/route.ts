@@ -31,6 +31,7 @@ export async function PUT(req: NextRequest) {
       fromEmail, fromName,
       templateRegister, templateValidate, templatePasswordLost, templatePasswordChanged, templateOrder, templateOrderStatus,
       templateAdminOrder, templateBackInStock, templateOrderReady,
+      templateOfferAccepted, templateOfferRejected, templateAdminOffer,
     } = body
 
     const data: any = {}
@@ -50,6 +51,9 @@ export async function PUT(req: NextRequest) {
     if (typeof templateAdminOrder === 'string') data.templateAdminOrder = templateAdminOrder || null
     if (typeof templateBackInStock === 'string') data.templateBackInStock = templateBackInStock || null
     if (typeof templateOrderReady === 'string') data.templateOrderReady = templateOrderReady || null
+    if (typeof templateOfferAccepted === 'string') data.templateOfferAccepted = templateOfferAccepted || null
+    if (typeof templateOfferRejected === 'string') data.templateOfferRejected = templateOfferRejected || null
+    if (typeof templateAdminOffer === 'string') data.templateAdminOffer = templateAdminOffer || null
 
     const settings = await db.emailSettings.upsert({
       where: { userId: user.id },

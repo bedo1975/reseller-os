@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       purchaseInvoiceNumber, supplierOrderNumber, purchasePaymentMethod,
       warehouse, rack, shelf, bin, weight, quantity,
       description, suggestedPrice, salePrice, saleActive, photos, barcode, measurements,
-      status, platform, salePlatform, platforms, stockType,
+      status, platform, salePlatform, platforms, stockType, makeOfferEnabled,
     } = body
 
     if (!sku || !brand) {
@@ -105,6 +105,8 @@ export async function POST(req: NextRequest) {
         platforms: platforms || JSON.stringify([]),
         // stockType: "boutique" (default) or "plateforme" (not visible on online store)
         stockType: stockType === 'plateforme' ? 'plateforme' : 'boutique',
+        // Make an Offer — allows clients to propose a reduced price
+        makeOfferEnabled: makeOfferEnabled === true,
         userId: user.id,
       },
       include: { supplier: true },

@@ -709,6 +709,99 @@ export async function notifyOfferRejected(opts: {
   }
 }
 
+/**
+ * notifyAdminNewOffer — sent to the admin when a client submits a new Make an Offer request.
+ * Uses templateAdminOffer from EmailSettings if defined, otherwise a default HTML template.
+ *
+ * Variables: {clientEmail}, {clientName}, {brand}, {sku}, {originalPrice}, {offeredPrice}, {discountAmount}, {adminUrl}
+ */
+export async function notifyAdminNewOffer(opts: {
+  clientEmail: string
+  clientName: string | null
+  sku: string
+  brand: string
+  originalPrice: number
+  offeredPrice: number
+  discountAmount: number
+  offerId: string
+}) {
+  try {
+    console.log('[email] notifyAdminNewOffer triggered for offer:', opts.offerId)
+    const { clientEmail, clientName, sku, brand, originalPrice, offeredPrice, discountAmount, offerId } = opts
+
+    const adminUser = await db.user.findFirst({ where: { role: 'admin' } })
+    const adminEmail = adminUser?.email || null
+    if (!adminEmail) {
+      console.log('[email] notifyAdminNewOffer: no admin email found, skipping')
+      return
+    }
+
+    const config = await getEmailConfig()
+    const template = config?.templateAdminOffer || null
+    const bs = await getBoutiqueSettings()
+    const siteUrl = bs.shareSiteUrl || ''
+    const logoText = bs.logoText || 'Boutique'
+    const adminUrl = siteUrl ? `${siteUrl.replace(/\/+$/, '')}/admin` : '/admin'
+
+    const defaultText = `Nouvelle offre reçue !\n\nClient : ${clientName || 'Invité'} (${clientEmail})\nArticle : ${brand} (SKU : ${sku})\nPrix original : ${originalPrice.toFixed(2)} €\nOffre proposée : ${offeredPrice.toFixed(2)} €\nRéduction demandée : -${discountAmount.toFixed(2)} €\n\nConnectez-vous au back-office pour traiter cette offre.`
+
+    const vars: Record<string, string> = {
+      clientEmail,
+      clientName: clientName || 'Invité',
+      brand,
+      sku,
+      originalPrice: originalPrice.toFixed(2),
+      offeredPrice: offeredPrice.toFixed(2),
+      discountAmount: discountAmount.toFixed(2),
+      adminUrl,
+    }
+
+    const text = applyTemplate(template, defaultText, vars)
+
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      let processed = template
+      for (const [key, value] of Object.entries(vars)) {
+        processed = processed.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      html = migrateRelativeUrls(processed, siteUrl)
+    } else {
+      const bodyHtml = `
+<p style="margin:0 0 12px 0;">Une nouvelle offre vient d'être soumise par un client.</p>
+<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;text-align:left;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Client</p>
+<p style="margin:0 0 12px 0;font-weight:600;">${escapeHtml(clientName || 'Invité')} <span style="font-size:12px;color:#666;font-weight:normal;">(${escapeHtml(clientEmail)})</span></p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Article</p>
+<p style="margin:0 0 12px 0;font-weight:600;">${escapeHtml(brand)} <span style="font-family:monospace;font-size:11px;color:#666;">${escapeHtml(sku)}</span></p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Prix original</p>
+<p style="margin:0 0 4px 0;font-size:14px;text-decoration:line-through;color:#999;">${originalPrice.toFixed(2)} €</p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Offre proposée</p>
+<p style="margin:0;font-size:22px;font-weight:700;color:#f59e0b;">${offeredPrice.toFixed(2)} € <span style="font-size:14px;color:#92400e;">(−${discountAmount.toFixed(2)} €)</span></p>
+</div>
+<a href="${adminUrl}" style="display:inline-block;background:#007bff;color:#fff;text-decoration:none;padding:10px 24px;border-radius:6px;font-weight:600;font-size:14px;margin-top:8px;">Traiter l'offre →</a>`
+
+      const result = buildEmailTemplate({
+        title: '🛒 Nouvelle offre reçue',
+        headerColor: '#f59e0b',
+        firstName: 'Admin',
+        bodyHtml,
+        siteUrl,
+        logoText,
+      })
+      html = result.html
+    }
+
+    await sendEmail({
+      to: adminEmail,
+      subject: `Nouvelle offre : ${brand} — ${offeredPrice.toFixed(2)} € (au lieu de ${originalPrice.toFixed(2)} €)`,
+      text,
+      html,
+    })
+  } catch (e: any) {
+    console.error('[email] notifyAdminNewOffer error:', e?.message)
+  }
+}
+
 export async function notifyClientRegistration(clientEmail: string, clientFirstName: string) {
   try {
     console.log('[email] notifyClientRegistration triggered:', clientEmail)

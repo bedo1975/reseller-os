@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
-import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2, BellRing, Loader2, Ruler } from 'lucide-react'
+import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2, BellRing, Loader2, Ruler, Tag, Mail, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShareModal } from '@/components/boutique/share-modal'
 import { ReviewsSection } from '@/components/boutique/reviews-section'
@@ -54,6 +54,7 @@ interface Product {
   createdAt: string
   isLot?: boolean
   lotItems?: { brand: string; title?: string | null; size?: string | null; color?: string | null; quantity: number; unitPrice: number; photo?: string | null }[]
+  makeOfferEnabled?: boolean
 }
 
 // Grade → couleur + libellé (Grade A = vert, B = jaune, C = orange)
@@ -84,6 +85,97 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
   const [alertSubmitting, setAlertSubmitting] = useState(false)
   const [alertDone, setAlertDone] = useState(false)
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false)
+
+  // Make an Offer states
+  const [offerOpen, setOfferOpen] = useState(false)
+  const [offerDiscounts, setOfferDiscounts] = useState<number[]>([1, 2, 3])
+  const [offerAllowFree, setOfferAllowFree] = useState(true)
+  const [offerSelectedDiscount, setOfferSelectedDiscount] = useState<number | null>(null)
+  const [offerFreeAmount, setOfferFreeAmount] = useState('')
+  const [offerEmail, setOfferEmail] = useState('')
+  const [offerSubmitting, setOfferSubmitting] = useState(false)
+  const [offerDone, setOfferDone] = useState(false)
+  const [clientLoggedIn, setClientLoggedIn] = useState(false)
+  const [clientInfo, setClientInfo] = useState<{ firstName: string; email: string } | null>(null)
+
+  // Fetch offer config + client login status
+  useEffect(() => {
+    fetch('/api/boutique/offers/config')
+      .then(r => r.json())
+      .then(d => {
+        if (d.discounts) setOfferDiscounts(d.discounts)
+        setOfferAllowFree(d.allowFreeOffer !== false)
+      })
+      .catch(() => {})
+    fetch('/api/boutique/client/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) {
+          setClientLoggedIn(true)
+          setClientInfo({ firstName: d.firstName, email: d.email })
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const openOfferDialog = () => {
+    setOfferSelectedDiscount(null)
+    setOfferFreeAmount('')
+    setOfferDone(false)
+    if (clientInfo) setOfferEmail(clientInfo.email)
+    else setOfferEmail('')
+    setOfferOpen(true)
+  }
+
+  const submitOffer = async () => {
+    if (!product?.price) return
+    // Determine the offered price
+    let offeredPrice: number | null = null
+    if (offerSelectedDiscount !== null) {
+      offeredPrice = product.price - offerSelectedDiscount
+    } else if (offerAllowFree && offerFreeAmount) {
+      offeredPrice = parseFloat(offerFreeAmount)
+    }
+    if (offeredPrice === null || Number.isNaN(offeredPrice) || offeredPrice <= 0) {
+      toast.error('Veuillez sélectionner ou saisir une offre')
+      return
+    }
+    if (offeredPrice >= product.price) {
+      toast.error('L\'offre doit être inférieure au prix original')
+      return
+    }
+    // Email required for guests
+    if (!clientLoggedIn && !offerEmail.trim()) {
+      toast.error('Veuillez saisir votre adresse email')
+      return
+    }
+    if (!clientLoggedIn && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(offerEmail)) {
+      toast.error('Adresse email invalide')
+      return
+    }
+    setOfferSubmitting(true)
+    try {
+      const res = await fetch('/api/boutique/offers/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sku: product.sku,
+          clientEmail: offerEmail.trim().toLowerCase(),
+          clientName: clientInfo?.firstName || null,
+          offeredPrice,
+          originalPrice: product.price,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erreur')
+      setOfferDone(true)
+      toast.success('Votre offre a été envoyée ! Nous vous répondrons par email.')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setOfferSubmitting(false)
+    }
+  }
 
   const product = data?.product
   const variants = data?.variants || []
@@ -580,21 +672,32 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
               </span>
             </div>
           ) : product.quantity != null && product.quantity > 0 ? (
-            <div className="flex gap-3 mb-3">
-              <Button
-                onClick={addToCart}
-                disabled={adding}
-                className="flex-1 h-12 bg-white border-2 border-[#007bff] text-[#007bff] hover:bg-blue-50"
-              >
-                {adding ? <><Check className="h-5 w-5 mr-2" /> Ajouté !</> : <><ShoppingCart className="h-5 w-5 mr-2" /> Ajouter au panier</>}
-              </Button>
-              <Button
-                onClick={buyNow}
-                className="flex-1 h-12 bg-[#007bff] hover:bg-[#0056b3]"
-              >
-                Acheter maintenant
-              </Button>
-            </div>
+            <>
+              <div className="flex gap-3 mb-3">
+                <Button
+                  onClick={addToCart}
+                  disabled={adding}
+                  className="flex-1 h-12 bg-white border-2 border-[#007bff] text-[#007bff] hover:bg-blue-50"
+                >
+                  {adding ? <><Check className="h-5 w-5 mr-2" /> Ajouté !</> : <><ShoppingCart className="h-5 w-5 mr-2" /> Ajouter au panier</>}
+                </Button>
+                <Button
+                  onClick={buyNow}
+                  className="flex-1 h-12 bg-[#007bff] hover:bg-[#0056b3]"
+                >
+                  Acheter maintenant
+                </Button>
+              </div>
+              {product.makeOfferEnabled && product.price && (
+                <Button
+                  onClick={openOfferDialog}
+                  variant="outline"
+                  className="w-full h-11 mb-3 border-2 border-amber-400 text-amber-700 hover:bg-amber-50 gap-2"
+                >
+                  <Tag className="h-4 w-4" /> Faire une offre
+                </Button>
+              )}
+            </>
           ) : (
             <div className="mb-6 space-y-3">
               <div className="rounded-lg border border-red-300 bg-red-50 text-red-800 px-4 py-3 text-sm flex items-start gap-2">
@@ -740,6 +843,134 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
                       ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enregistrement…</>
                       : <><BellRing className="h-4 w-4 mr-2" /> M'alerter</>
                     }
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Make an Offer dialog */}
+      {product && product.price && (
+        <Dialog open={offerOpen} onOpenChange={(o) => !o && setOfferOpen(false)}>
+          <DialogContent className="max-w-md">
+            {offerDone ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-emerald-600">
+                    <Check className="h-5 w-5" /> Offre envoyée !
+                  </DialogTitle>
+                  <DialogDescription>
+                    Merci pour votre offre. Nous l'examinons et vous répondrons par email dans les plus brefs délais.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-4 text-sm">
+                  <p className="font-semibold mb-1">Récapitulatif</p>
+                  <p>Article : {product.brand} {product.title || product.category}</p>
+                  <p>Prix original : {product.price.toFixed(2)} €</p>
+                  <p>Votre offre : {(offerSelectedDiscount !== null ? product.price - offerSelectedDiscount : parseFloat(offerFreeAmount) || 0).toFixed(2)} €</p>
+                </div>
+                <DialogFooter>
+                  <Button onClick={() => setOfferOpen(false)}>Fermer</Button>
+                </DialogFooter>
+              </>
+            ) : (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Tag className="h-5 w-5 text-amber-600" /> Faire une offre
+                  </DialogTitle>
+                  <DialogDescription>
+                    Proposez votre prix pour : <strong>{product.brand} {product.title || product.category}</strong>
+                    <br />Prix actuel : <strong>{product.price.toFixed(2)} €</strong>
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  {/* Discount cards */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Choisissez une réduction</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {offerDiscounts.map(d => {
+                        const offeredPrice = product.price! - d
+                        const isSelected = offerSelectedDiscount === d
+                        return (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => { setOfferSelectedDiscount(d); setOfferFreeAmount('') }}
+                            className={`rounded-lg border-2 p-3 text-center transition-all ${
+                              isSelected
+                                ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30 shadow-sm'
+                                : 'border-gray-200 hover:border-amber-300 dark:border-gray-800'
+                            }`}
+                          >
+                            <p className="text-lg font-bold text-amber-600">-{d}€</p>
+                            <p className="text-[10px] text-muted-foreground">{offeredPrice.toFixed(2)} €</p>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  {/* Free offer input */}
+                  {offerAllowFree && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Ou votre prix libre</p>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={offerFreeAmount}
+                          onChange={(e) => { setOfferFreeAmount(e.target.value); setOfferSelectedDiscount(null) }}
+                          placeholder={product.price!.toFixed(2)}
+                          className="flex-1"
+                        />
+                        <span className="text-sm text-muted-foreground">€</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">Minimum 10% du prix original ({(product.price! * 0.1).toFixed(2)} €)</p>
+                    </div>
+                  )}
+                  {/* Email field for guests */}
+                  {!clientLoggedIn && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                        <Mail className="h-3 w-3" /> Votre email (pour recevoir la réponse)
+                      </p>
+                      <Input
+                        type="email"
+                        value={offerEmail}
+                        onChange={(e) => setOfferEmail(e.target.value)}
+                        placeholder="vous@exemple.fr"
+                      />
+                    </div>
+                  )}
+                  {/* Summary */}
+                  {(() => {
+                    const offeredPrice = offerSelectedDiscount !== null
+                      ? product.price! - offerSelectedDiscount
+                      : offerFreeAmount ? parseFloat(offerFreeAmount) : null
+                    if (offeredPrice === null || Number.isNaN(offeredPrice)) return null
+                    return (
+                      <div className="rounded-lg bg-muted/50 p-3 text-sm flex items-center justify-between">
+                        <span className="text-muted-foreground">Votre offre</span>
+                        <span className="text-xl font-bold text-amber-600">{offeredPrice.toFixed(2)} €</span>
+                      </div>
+                    )
+                  })()}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setOfferOpen(false)}>Annuler</Button>
+                  <Button
+                    onClick={submitOffer}
+                    disabled={offerSubmitting}
+                    className="bg-amber-500 hover:bg-amber-600 text-white gap-2"
+                  >
+                    {offerSubmitting ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Envoi…</>
+                    ) : (
+                      <><Send className="h-4 w-4" /> Envoyer l'offre</>
+                    )}
                   </Button>
                 </DialogFooter>
               </>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { notifyAdminNewOffer } from '@/lib/email'
 
 /**
  * POST /api/boutique/offers/submit
@@ -71,6 +72,22 @@ export async function POST(req: NextRequest) {
         status: 'pending',
       },
     })
+
+    // Send a notification email to the admin (best-effort — does not block the response)
+    try {
+      await notifyAdminNewOffer({
+        clientEmail: email,
+        clientName: clientName || (matchedClient ? `${matchedClient.firstName} ${matchedClient.lastName}`.trim() : null),
+        sku: item.sku,
+        brand: item.brand,
+        originalPrice: original,
+        offeredPrice: offered,
+        discountAmount: parseFloat(discountAmount.toFixed(2)),
+        offerId: offer.id,
+      })
+    } catch (emailErr) {
+      console.error('[offers/submit] Failed to send admin notification email:', emailErr)
+    }
 
     return NextResponse.json({ ok: true, offerId: offer.id })
   } catch (error) {

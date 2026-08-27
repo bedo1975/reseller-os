@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler, Calculator, CreditCard, Calendar, PackageCheck,
+  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler, Calculator, CreditCard, Calendar, PackageCheck, Tag,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils'
 import { usePermissions } from '@/hooks/use-permissions'
 import { formatEUR, formatDate } from '@/lib/constants'
 
-type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter' | 'stock-alerts' | 'size-guide' | 'price-calculator'
+type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter' | 'stock-alerts' | 'size-guide' | 'price-calculator' | 'offers'
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'orders', label: 'Commandes', icon: Package },
@@ -45,6 +45,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'stock-alerts', label: 'Alertes stock', icon: BellRing },
   { id: 'size-guide', label: 'Guide tailles', icon: Ruler },
   { id: 'price-calculator', label: 'Prix auto', icon: Calculator },
+  { id: 'offers', label: 'Offres', icon: Tag },
 ]
 
 export function BoutiqueAdminModule() {
@@ -102,6 +103,7 @@ export function BoutiqueAdminModule() {
       {tab === 'stock-alerts' && <StockAlertsTab />}
       {tab === 'size-guide' && <SizeGuideTab />}
       {tab === 'price-calculator' && <PriceCalculatorTab />}
+      {tab === 'offers' && <OffersTab />}
     </div>
   )
 }
@@ -6286,6 +6288,290 @@ function PriceCalculatorTab() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET — OFFRES (Make an Offer)
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface OfferRow {
+  id: string
+  sku: string
+  brand: string
+  title: string | null
+  clientEmail: string
+  clientName: string | null
+  originalPrice: number
+  offeredPrice: number
+  discountAmount: number
+  status: string
+  rejectionReason: string | null
+  cartToken: string | null
+  cartExpiresAt: string | null
+  createdAt: string
+  stockItem?: {
+    sku: string
+    brand: string
+    title: string | null
+    category: string
+    photos: string
+    suggestedPrice: number | null
+    quantity: number
+  } | null
+}
+
+const OFFER_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  pending: { label: 'En attente', color: 'bg-amber-100 text-amber-700' },
+  accepted: { label: 'Acceptée', color: 'bg-emerald-100 text-emerald-700' },
+  rejected: { label: 'Refusée', color: 'bg-red-100 text-red-700' },
+  expired: { label: 'Expirée', color: 'bg-gray-100 text-gray-500' },
+}
+
+function OffersTab() {
+  const [offers, setOffers] = useState<OfferRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [actionOffer, setActionOffer] = useState<OfferRow | null>(null)
+  const [actionType, setActionType] = useState<'accept' | 'reject' | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [acceptDuration, setAcceptDuration] = useState('24')
+  const [saving, setSaving] = useState(false)
+
+  const fetchOffers = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/boutique/admin/offers?status=${statusFilter}`)
+      const data = await res.json()
+      setOffers(data.offers || [])
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setLoading(false)
+    }
+  }, [statusFilter])
+
+  useEffect(() => { fetchOffers() }, [fetchOffers])
+
+  const openAccept = (offer: OfferRow) => {
+    setActionOffer(offer)
+    setActionType('accept')
+    setAcceptDuration('24')
+  }
+
+  const openReject = (offer: OfferRow) => {
+    setActionOffer(offer)
+    setActionType('reject')
+    setRejectReason('')
+  }
+
+  const doAccept = async () => {
+    if (!actionOffer) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/boutique/admin/offers/${actionOffer.id}/accept`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ durationHours: parseInt(acceptDuration) || 24 }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Erreur')
+      }
+      toast.success('Offre acceptée — email envoyé au client')
+      setActionOffer(null)
+      fetchOffers()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const doReject = async () => {
+    if (!actionOffer) return
+    if (!rejectReason.trim()) {
+      toast.error('Le motif du refus est requis')
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/boutique/admin/offers/${actionOffer.id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: rejectReason.trim() }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Erreur')
+      }
+      toast.success('Offre refusée — email envoyé au client')
+      setActionOffer(null)
+      fetchOffers()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex items-center gap-3">
+        <Label className="text-xs text-muted-foreground">Filtrer :</Label>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes</SelectItem>
+            <SelectItem value="pending">En attente</SelectItem>
+            <SelectItem value="accepted">Acceptées</SelectItem>
+            <SelectItem value="rejected">Refusées</SelectItem>
+            <SelectItem value="expired">Expirées</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>
+      ) : offers.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <Tag className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+            <p className="text-sm font-medium">Aucune offre</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Les offres soumises par les clients apparaîtront ici.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {offers.map(offer => {
+            const st = OFFER_STATUS_CONFIG[offer.status] || OFFER_STATUS_CONFIG.pending
+            return (
+              <Card key={offer.id}>
+                <CardContent className="p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge className={st.color}>{st.label}</Badge>
+                        <span className="text-[10px] text-muted-foreground">{formatDate(offer.createdAt)}</span>
+                      </div>
+                      <p className="text-sm font-medium">{offer.brand} {offer.title || ''}</p>
+                      <p className="text-xs text-muted-foreground font-mono">SKU : {offer.sku}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Client : {offer.clientName || 'Invité'} ({offer.clientEmail})
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-muted-foreground line-through">{offer.originalPrice.toFixed(2)} €</p>
+                      <p className="text-2xl font-bold text-amber-600">{offer.offeredPrice.toFixed(2)} €</p>
+                      <p className="text-[10px] text-rose-600">−{offer.discountAmount.toFixed(2)} €</p>
+                    </div>
+                  </div>
+
+                  {/* Actions for pending offers */}
+                  {offer.status === 'pending' && (
+                    <div className="flex gap-2 flex-wrap">
+                      <Button size="sm" onClick={() => openAccept(offer)} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
+                        <Check className="h-3.5 w-3.5" /> Accepter
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openReject(offer)} className="border-red-300 text-red-600 hover:bg-red-50 gap-1">
+                        <X className="h-3.5 w-3.5" /> Refuser
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Accepted offer — show cart link + expiry */}
+                  {offer.status === 'accepted' && offer.cartToken && (
+                    <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-2 text-xs">
+                      <p className="text-emerald-700 dark:text-emerald-300">
+                        ✓ Panier réduit créé — Valable jusqu'au {offer.cartExpiresAt ? new Date(offer.cartExpiresAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </p>
+                      <code className="text-[10px] font-mono text-muted-foreground">Token : {offer.cartToken}</code>
+                    </div>
+                  )}
+
+                  {/* Rejected offer — show reason */}
+                  {offer.status === 'rejected' && offer.rejectionReason && (
+                    <div className="rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-2 text-xs">
+                      <p className="text-red-700 dark:text-red-300"><strong>Motif du refus :</strong> {offer.rejectionReason}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Accept dialog */}
+      <Dialog open={!!actionOffer && actionType === 'accept'} onOpenChange={(o) => !o && setActionOffer(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+              <Check className="h-5 w-5" /> Accepter l'offre
+            </DialogTitle>
+            <DialogDescription>
+              {actionOffer && (
+                <>Valider l'offre de <strong>{actionOffer.offeredPrice.toFixed(2)} €</strong> pour {actionOffer.brand} ?
+                Un panier à prix réduit sera créé et un email sera envoyé au client.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Durée de validité du panier (heures)</Label>
+              <Input type="number" min="1" value={acceptDuration} onChange={e => setAcceptDuration(e.target.value)} />
+              <p className="text-[10px] text-muted-foreground">Après ce délai, le panier expirera automatiquement.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActionOffer(null)}>Annuler</Button>
+            <Button onClick={doAccept} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Valider et envoyer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject dialog */}
+      <Dialog open={!!actionOffer && actionType === 'reject'} onOpenChange={(o) => !o && setActionOffer(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <X className="h-5 w-5" /> Refuser l'offre
+            </DialogTitle>
+            <DialogDescription>
+              {actionOffer && (
+                <>Refuser l'offre de <strong>{actionOffer.offeredPrice.toFixed(2)} €</strong> pour {actionOffer.brand}.
+                Un email sera envoyé au client avec le motif.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Motif du refus *</Label>
+              <textarea
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+                placeholder="Ex: Le prix proposé est inférieur à notre prix d'achat..."
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActionOffer(null)}>Annuler</Button>
+            <Button onClick={doReject} disabled={saving} variant="destructive" className="gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+              Refuser et envoyer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

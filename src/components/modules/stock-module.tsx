@@ -1011,6 +1011,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', supplierOrderNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
     barcode: '',
     stockType: 'boutique',
+    makeOfferEnabled: false,
   })
   // Multi-variant mode
   const [multiVariant, setMultiVariant] = useState(false)
@@ -1045,6 +1046,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         status: item.status,
         barcode: item.barcode || '',
         stockType: (item as { stockType?: string }).stockType || 'boutique',
+        makeOfferEnabled: (item as { makeOfferEnabled?: boolean }).makeOfferEnabled === true,
       })
       try { setPhotos(JSON.parse(item.photos) || []) } catch { setPhotos([]) }
     } else if (open) {
@@ -2003,6 +2005,35 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                   </label>
                 </div>
               </div>
+              {/* Make an Offer toggle — only visible for boutique items */}
+              {form.stockType !== 'plateforme' && (
+                <div className="space-y-1.5 md:col-span-3">
+                  <label className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/20 cursor-pointer hover:bg-amber-50/60 dark:hover:bg-amber-950/30 transition-colors">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={form.makeOfferEnabled}
+                      onClick={() => setForm(f => ({ ...f, makeOfferEnabled: !f.makeOfferEnabled }))}
+                      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                        form.makeOfferEnabled ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-700'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        form.makeOfferEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium flex items-center gap-1.5">
+                        <Tag className="h-3.5 w-3.5 text-amber-600" /> Make an Offer
+                        {form.makeOfferEnabled && <span className="text-[10px] text-amber-600 font-semibold">— Activé</span>}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Permet aux clients de proposer un prix réduit sur la page produit. Les offres sont envoyées dans Boutique Admin → Offres pour validation.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              )}
               <div className="space-y-1.5 md:col-span-3">
                 <Label className="text-xs">Plateforme(s) de publication</Label>
                 <div className="border rounded-md p-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">

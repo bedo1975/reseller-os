@@ -40,7 +40,7 @@ export async function PATCH(
       'purchaseInvoiceNumber', 'supplierOrderNumber', 'purchasePaymentMethod',
       'warehouse', 'rack', 'shelf', 'bin', 'weight', 'quantity',
       'description', 'suggestedPrice', 'salePrice', 'saleActive', 'photos', 'barcode', 'measurements',
-      'status', 'platform', 'salePlatform', 'platforms', 'stockType',
+      'status', 'platform', 'salePlatform', 'platforms', 'stockType', 'makeOfferEnabled',
       'invoicePath', 'invoiceName',
     ]
     for (const key of allowed) {
@@ -49,6 +49,10 @@ export async function PATCH(
     // Normalize stockType: only "boutique" or "plateforme" allowed (default to "boutique")
     if ('stockType' in updateData) {
       updateData.stockType = updateData.stockType === 'plateforme' ? 'plateforme' : 'boutique'
+    }
+    // Normalize makeOfferEnabled to a boolean
+    if ('makeOfferEnabled' in updateData) {
+      updateData.makeOfferEnabled = updateData.makeOfferEnabled === true || updateData.makeOfferEnabled === 'true'
     }
     // Handle purchaseCost: allow empty string → 0, otherwise parse
     if ('purchaseCost' in updateData) {
