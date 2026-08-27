@@ -724,6 +724,11 @@ model BoutiqueSettings {
   preparationSlipSubtitle  String   @default("DBoxPro Boutique")  // sous-titre du bon de préparation
   invoiceFooterText        String?  // texte personnalisé du footer de facture (avant la date). Si null → texte par défaut.
 
+  // ── Make an Offer — configuration ──
+  makeOfferDiscounts       String   @default("[1,2,3]")  // JSON array of discount amounts in €
+  makeOfferAllowFreeOffer  Boolean  @default(true)        // si true, le client peut saisir un montant libre
+  makeOfferCartDurationHours Int    @default(24)          // durée de validité du panier réduit (en heures)
+
   updatedAt       DateTime @updatedAt
 }
 
@@ -1115,10 +1120,6 @@ model EmailSettings {
   templateOfferAccepted    String?  // offre acceptée — envoi du lien panier réduit
   templateOfferRejected    String?  // offre refusée — motif du refus
   templateAdminOffer       String?  // nouvelle offre reçue (envoyé à l'admin)
-  // Make an Offer — configuration des réductions prédéfinies (JSON: [1,2,3] pour -1€, -2€, -3€)
-  makeOfferDiscounts       String   @default("[1,2,3]")  // JSON array of discount amounts in €
-  makeOfferAllowFreeOffer  Boolean  @default(true)        // si true, le client peut saisir un montant libre
-  makeOfferCartDurationHours Int    @default(24)          // durée de validité du panier réduit (en heures)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
