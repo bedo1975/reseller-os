@@ -173,11 +173,15 @@ export async function PUT(req: NextRequest) {
       if (!Number.isNaN(hours)) data.makeOfferCartDurationHours = Math.max(1, Math.min(168, hours))
     }
 
-    const settings = await db.boutiqueSettings.upsert({
-      where: { id: 'default' },
-      create: { id: 'default', ...data },
-      update: data,
-    })
+    // Use update (not upsert) — the row is guaranteed to exist (created by getBoutiqueSettings on first access).
+    // upsert fails because the create clause would need all required fields (companyName, address, city, etc.).
+    let settings = await db.boutiqueSettings.findUnique({ where: { id: 'default' } })
+    if (!settings) {
+      // Fallback: create with defaults if missing (shouldn't happen in practice)
+      settings = await db.boutiqueSettings.create({ data: { id: 'default', ...data } })
+    } else {
+      settings = await db.boutiqueSettings.update({ where: { id: 'default' }, data })
+    }
 
     return NextResponse.json(settings)
   } catch (error: any) {
