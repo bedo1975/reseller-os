@@ -2557,6 +2557,9 @@ interface EmailSettingsData {
   templateAdminOrder: string | null
   templateBackInStock: string | null
   templateOrderReady: string | null
+  templateOfferAccepted: string | null
+  templateOfferRejected: string | null
+  templateAdminOffer: string | null
 }
 
 // Modern HTML preset generator for email templates.
@@ -2655,6 +2658,25 @@ ${footerBlock}
         '<p>Bonjour {firstName},</p><p>Votre commande <strong>{orderId}</strong> a été préparée avec soin et est maintenant <strong style="color:#10b981;">prête pour l\'expédition</strong>.</p><div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:16px;margin:12px 0;"><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Commande</p><p style="margin:0;font-family:monospace;font-weight:600;font-size:15px;">{orderId}</p><p style="margin:8px 0 0 0;font-size:13px;color:#065f46;">📦 Tous les articles ont été vérifiés et le colis est en attente de remise au transporteur.</p></div><p>Nous vous tiendrons informé(e) dès que le colis sera expédié.</p>',
         'Suivre ma commande',
         '{ordersUrl}',
+      )
+    case 'templateOfferAccepted':
+      return wrap(
+        'Offre acceptée ✓',
+        '<p>Bonjour {firstName},</p><p>Bonne nouvelle ! Votre offre pour l\'article <strong>{brand}</strong> a été <strong style="color:#10b981;">acceptée</strong>.</p><div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:16px;margin:12px 0;"><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Prix original</p><p style="margin:0 0 4px 0;font-size:14px;text-decoration:line-through;color:#999;">{originalPrice} €</p><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Votre prix</p><p style="margin:0;font-size:22px;font-weight:700;color:#10b981;">{offeredPrice} € <span style="font-size:14px;color:#065f46;">(−{discountAmount} €)</span></p><p style="margin:8px 0 0 0;font-size:12px;color:#065f46;">⏰ Valable jusqu\'au {cartExpiresAt}</p></div>',
+        'Accéder à mon panier',
+        '{cartUrl}',
+      )
+    case 'templateOfferRejected':
+      return wrap(
+        'Votre offre',
+        '<p>Bonjour {firstName},</p><p>Nous vous remercions pour votre offre de <strong>{offeredPrice} €</strong> pour l\'article <strong>{brand}</strong>.</p><p>Malheureusement, nous ne pouvons pas donner suite à cette offre :</p><div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:16px;margin:12px 0;"><p style="margin:0;font-size:14px;">{reason}</p></div><p>L\'article reste disponible à son prix original sur notre boutique.</p>',
+      )
+    case 'templateAdminOffer':
+      return wrap(
+        '🛒 Nouvelle offre reçue',
+        '<p>Une nouvelle offre vient d\'être soumise.</p><div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;text-align:left;"><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Client</p><p style="margin:0 0 12px 0;font-weight:600;">{clientName} ({clientEmail})</p><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Article</p><p style="margin:0 0 12px 0;font-weight:600;">{brand} <span style="font-family:monospace;font-size:11px;color:#666;">{sku}</span></p><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Offre</p><p style="margin:0;font-size:22px;font-weight:700;color:#f59e0b;">{offeredPrice} € <span style="font-size:14px;color:#92400e;">(au lieu de {originalPrice} €)</span></p></div>',
+        'Traiter l\'offre',
+        '{adminUrl}',
       )
     default:
       return wrap('Bonjour {firstName}', '<p>Votre message ici.</p>')
@@ -2855,6 +2877,9 @@ function EmailSection() {
             { key: 'templateAdminOrder' as const, label: 'Nouvelle commande (admin)', placeholder: 'Nouvelle commande reçue. Client : {clientFirstName}, commande : {orderId}, montant : {total}.' },
             { key: 'templateBackInStock' as const, label: 'Retour en stock', placeholder: 'Bonjour, l\'article {brand} (SKU : {sku}) que vous attendiez est de nouveau disponible.' },
             { key: 'templateOrderReady' as const, label: 'Commande prête pour l\'expédition', placeholder: 'Bonjour {firstName}, votre commande {orderId} est prête pour l\'expédition.' },
+            { key: 'templateOfferAccepted' as const, label: 'Offre acceptée (client)', placeholder: 'Bonjour {firstName}, votre offre de {offeredPrice}€ pour {brand} a été acceptée !' },
+            { key: 'templateOfferRejected' as const, label: 'Offre refusée (client)', placeholder: 'Bonjour {firstName}, nous ne pouvons pas accepter votre offre pour {brand}. Motif : {reason}.' },
+            { key: 'templateAdminOffer' as const, label: 'Nouvelle offre (admin)', placeholder: 'Nouvelle offre : {clientName} propose {offeredPrice}€ pour {brand} (SKU : {sku}).' },
           ].map(t => (
             <div key={t.key} className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
