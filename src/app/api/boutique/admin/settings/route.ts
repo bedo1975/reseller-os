@@ -165,8 +165,13 @@ export async function PUT(req: NextRequest) {
     if (typeof invoiceFooterText === 'string') data.invoiceFooterText = invoiceFooterText || null
     // Make an Offer configuration
     if (typeof makeOfferDiscounts === 'string') data.makeOfferDiscounts = makeOfferDiscounts
-    if (typeof makeOfferAllowFreeOffer === 'boolean') data.makeOfferAllowFreeOffer = makeOfferAllowFreeOffer
-    if (typeof makeOfferCartDurationHours === 'number') data.makeOfferCartDurationHours = Math.max(1, Math.min(168, makeOfferCartDurationHours))
+    if (makeOfferAllowFreeOffer !== undefined && makeOfferAllowFreeOffer !== null) {
+      data.makeOfferAllowFreeOffer = makeOfferAllowFreeOffer === true || makeOfferAllowFreeOffer === 'true'
+    }
+    if (makeOfferCartDurationHours !== undefined && makeOfferCartDurationHours !== null) {
+      const hours = typeof makeOfferCartDurationHours === 'string' ? parseInt(makeOfferCartDurationHours) : makeOfferCartDurationHours
+      if (!Number.isNaN(hours)) data.makeOfferCartDurationHours = Math.max(1, Math.min(168, hours))
+    }
 
     const settings = await db.boutiqueSettings.upsert({
       where: { id: 'default' },
@@ -175,11 +180,17 @@ export async function PUT(req: NextRequest) {
     })
 
     return NextResponse.json(settings)
-  } catch (error) {
+  } catch (error: any) {
     console.error('PUT /api/boutique/admin/settings error:', error)
     if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+    // Return detailed error for debugging (field name, Prisma code, etc.)
+    return NextResponse.json({
+      error: 'Erreur serveur',
+      details: error?.message || 'Erreur inconnue',
+      code: error?.code,
+      meta: error?.meta,
+    }, { status: 500 })
   }
 }

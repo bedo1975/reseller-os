@@ -6380,13 +6380,16 @@ function OffersTab() {
         body: JSON.stringify({
           makeOfferDiscounts: JSON.stringify(parsed),
           makeOfferAllowFreeOffer: offerAllowFree,
-          makeOfferCartDurationHours: offerCartHours,
+          makeOfferCartDurationHours: Number(offerCartHours),
         }),
       })
-      if (!res.ok) throw new Error('Erreur')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.details || err.error || 'Erreur')
+      }
       toast.success('Configuration Make an Offer enregistrée')
-    } catch {
-      toast.error('Erreur lors de la sauvegarde')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur lors de la sauvegarde')
     } finally {
       setConfigSaving(false)
     }
