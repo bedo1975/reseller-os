@@ -70,8 +70,8 @@ async function generateWithOpenAICompat(baseUrl: string, apiKey: string, model: 
         // Groq's GPT-OSS models return reasoning + content. We want the content only.
         // Some providers ignore this field, so it's safe to always send it.
         ...(baseUrl.includes('groq') ? { reasoning_format: 'parsed' } : {}),
-        // NVIDIA NIM: enable streaming=false explicitly + top_p for faster generation
-        ...(isNvidia ? { stream: false, top_p: 0.9 } : {}),
+        // NVIDIA NIM: explicit streaming=false (some models require it)
+        ...(isNvidia ? { stream: false } : {}),
       }),
       signal: controller.signal,
     })
@@ -85,6 +85,7 @@ async function generateWithOpenAICompat(baseUrl: string, apiKey: string, model: 
         errMsg = errText.slice(0, 300)
       }
       if (res.status === 401) throw new Error('Clé API invalide. Vérifiez votre clé dans Paramètres → IA.')
+      if (res.status === 410) throw new Error(`Le modèle "${model}" n'est plus disponible sur NVIDIA NIM (fin de vie). Allez dans Paramètres → IA et sélectionnez un autre modèle (ex: deepseek-ai/deepseek-v4-flash-0731).`)
       if (res.status === 429) throw new Error('Quota dépassé. Attendez quelques instants.')
       if (res.status === 404) throw new Error(`Modèle "${model}" introuvable sur ce fournisseur. ${errMsg ? `Détail: ${errMsg}` : ''} Allez dans Paramètres → IA pour changer de modèle.`)
       throw new Error(`Erreur API (${res.status}): ${errMsg || errText.slice(0, 200)}`)
