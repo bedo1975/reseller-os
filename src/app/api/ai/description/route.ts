@@ -177,8 +177,13 @@ export async function POST(req: NextRequest) {
       description = await generateWithGemini(config.apiKey, model, userPrompt)
     } else {
       // openai_compat — fonctionne pour Groq, OpenRouter, NVIDIA, Kimi, Cerebras, DeepSeek, Mistral, OpenAI
-      if (!config.apiKey) throw new Error(`Clé API ${providerConfig.label} requise. Configurez-la dans Paramètres → IA.`)
-      description = await generateWithOpenAICompat(providerConfig.baseUrl, config.apiKey, model, SYSTEM_PROMPT, userPrompt)
+      // For NVIDIA, fall back to nvidiaApiKey if apiKey is not set
+      let apiKey = config.apiKey
+      if (provider === 'nvidia' && !apiKey && config.nvidiaApiKey) {
+        apiKey = config.nvidiaApiKey
+      }
+      if (!apiKey) throw new Error(`Clé API ${providerConfig.label} requise. Configurez-la dans Paramètres → IA.`)
+      description = await generateWithOpenAICompat(providerConfig.baseUrl, apiKey, model, SYSTEM_PROMPT, userPrompt)
     }
 
     return NextResponse.json({ description, provider })

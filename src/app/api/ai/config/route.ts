@@ -28,10 +28,18 @@ export const AI_PROVIDERS = {
     vision: true,
   },
   nvidia: {
-    label: 'NVIDIA AI',
-    description: 'Gratuit — NIM API, modèles Llama et Mistral',
-    defaultModel: 'meta/llama-3.3-70b-instruct',
-    models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'mistralai/mistral-small-24b-instruct'],
+    label: 'NVIDIA NIM',
+    description: 'Gratuit — DeepSeek V4, Qwen, Llama, Nemotron (build.nvidia.com)',
+    defaultModel: 'deepseek-ai/deepseek-v4-flash-0731',
+    models: [
+      'deepseek-ai/deepseek-v4-flash-0731',
+      'deepseek-ai/deepseek-v4-pro-0813',
+      'qwen/qwen3.5-27b-instruct',
+      'meta/llama-3.3-70b-instruct',
+      'nvidia/llama-3.1-nemotron-70b-instruct-hf',
+      'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+      'moonshotai/kimi-k3',
+    ],
     apiKeyUrl: 'https://build.nvidia.com/',
     free: true,
     type: 'openai_compat',
@@ -132,6 +140,7 @@ export async function GET() {
       hasApiKey: !!config.apiKey,
       hasReplicateApiKey: !!config.replicateApiKey,
       hasFashnApiKey: !!config.fashnApiKey,
+      hasNvidiaApiKey: !!config.nvidiaApiKey,
       vtonProvider: config.vtonProvider || 'replicate',
       providers: AI_PROVIDERS,
     })
@@ -148,7 +157,7 @@ export async function PUT(req: NextRequest) {
   try {
     const user = await requireAuth()
     const body = await req.json()
-    const { provider, apiKey, model, replicateApiKey: repKey, fashnApiKey: fashnKey, vtonProvider: vton } = body
+    const { provider, apiKey, model, replicateApiKey: repKey, fashnApiKey: fashnKey, vtonProvider: vton, nvidiaApiKey: nvKey } = body
 
     if (!provider || !AI_PROVIDERS[provider as keyof typeof AI_PROVIDERS]) {
       return NextResponse.json({ error: 'Fournisseur invalide' }, { status: 400 })
@@ -162,6 +171,7 @@ export async function PUT(req: NextRequest) {
           apiKey: apiKey || null,
           model: model || null,
           replicateApiKey: repKey || null,
+          nvidiaApiKey: nvKey || null,
         },
       })
     } else {
@@ -180,6 +190,9 @@ export async function PUT(req: NextRequest) {
       }
       if (fashnKey && !fashnKey.startsWith('••••')) {
         (updateData as any).fashnApiKey = fashnKey
+      }
+      if (nvKey && !nvKey.startsWith('••••')) {
+        (updateData as any).nvidiaApiKey = nvKey
       }
       if (vton && ['replicate', 'fashn', 'gemini'].includes(vton)) {
         (updateData as any).vtonProvider = vton

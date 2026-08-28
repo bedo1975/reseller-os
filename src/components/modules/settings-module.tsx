@@ -1356,6 +1356,7 @@ function AISection() {
   const [replicateApiKey, setReplicateApiKey] = useState<string>('')
   const [fashnApiKey, setFashnApiKey] = useState<string>('')
   const [vtonProvider, setVtonProvider] = useState<string>('replicate')
+  const [nvidiaApiKey, setNvidiaApiKey] = useState<string>('')
   const [model, setModel] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -1399,6 +1400,9 @@ function AISection() {
       }
       if (fashnApiKey && !fashnApiKey.startsWith('••••')) {
         (body as any).fashnApiKey = fashnApiKey
+      }
+      if (nvidiaApiKey && !nvidiaApiKey.startsWith('••••')) {
+        (body as any).nvidiaApiKey = nvidiaApiKey
       }
       ;(body as any).vtonProvider = vtonProvider
       const res = await fetch('/api/ai/config', {
@@ -1675,6 +1679,21 @@ function AISection() {
             />
             <p className="text-[10px] text-muted-foreground">
               Créez un compte sur <a href="https://fashn.ai" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline">fashn.ai</a> → 10 crédits gratuits sans carte bancaire
+            </p>
+          </div>
+
+          {/* NVIDIA NIM key */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Clé API NVIDIA NIM (build.nvidia.com)</Label>
+            <Input
+              type="password"
+              value={nvidiaApiKey}
+              onChange={e => setNvidiaApiKey(e.target.value)}
+              placeholder={(data as any)?.hasNvidiaApiKey ? '•••••••••••• (clé enregistrée)' : 'nvapi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+              className="font-mono text-sm"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Créez un compte sur <a href="https://build.nvidia.com" target="_blank" rel="noopener noreferrer" className="text-green-600 underline">build.nvidia.com</a> → Account → API Keys. Endpoints gratuits (DeepSeek V4, Qwen, Llama, Nemotron).
             </p>
           </div>
         </CardContent>
