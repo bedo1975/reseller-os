@@ -44,53 +44,71 @@ const DEPRECATED_MODELS: Record<string, string> = {
 }
 
 async function generateWithOpenAICompat(baseUrl: string, apiKey: string, model: string, systemPrompt: string, userPrompt: string): Promise<string> {
-  const res = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      // OpenRouter recommande ces headers
-      ...(baseUrl.includes('openrouter') ? { 'HTTP-Referer': 'https://reseller-os.local', 'X-Title': 'Reseller OS' } : {}),
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 400,
-      // Groq's GPT-OSS models return reasoning + content. We want the content only.
-      // Some providers ignore this field, so it's safe to always send it.
-      ...(baseUrl.includes('groq') ? { reasoning_format: 'parsed' } : {}),
-    }),
-  })
-  if (!res.ok) {
-    const errText = await res.text()
-    let errMsg = ''
-    try {
-      const errJson = JSON.parse(errText)
-      errMsg = errJson?.error?.message || errJson?.message || errJson?.error || ''
-    } catch {
-      errMsg = errText.slice(0, 300)
+  const isNvidia = baseUrl.includes('integrate.api.nvidia.com')
+  const controller = new AbortController()
+  // NVIDIA NIM free endpoints can be slow (30-60s) — give them 90s before aborting.
+  // Other providers are typically fast (10s).
+  const timeout = setTimeout(() => controller.abort(), isNvidia ? 90000 : 30000)
+
+  try {
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        // OpenRouter recommande ces headers
+        ...(baseUrl.includes('openrouter') ? { 'HTTP-Referer': 'https://reseller-os.local', 'X-Title': 'Reseller OS' } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 400,
+        // Groq's GPT-OSS models return reasoning + content. We want the content only.
+        // Some providers ignore this field, so it's safe to always send it.
+        ...(baseUrl.includes('groq') ? { reasoning_format: 'parsed' } : {}),
+        // NVIDIA NIM: enable streaming=false explicitly + top_p for faster generation
+        ...(isNvidia ? { stream: false, top_p: 0.9 } : {}),
+      }),
+      signal: controller.signal,
+    })
+    if (!res.ok) {
+      const errText = await res.text()
+      let errMsg = ''
+      try {
+        const errJson = JSON.parse(errText)
+        errMsg = errJson?.error?.message || errJson?.message || errJson?.error || ''
+      } catch {
+        errMsg = errText.slice(0, 300)
+      }
+      if (res.status === 401) throw new Error('Clé API invalide. Vérifiez votre clé dans Paramètres → IA.')
+      if (res.status === 429) throw new Error('Quota dépassé. Attendez quelques instants.')
+      if (res.status === 404) throw new Error(`Modèle "${model}" introuvable sur ce fournisseur. ${errMsg ? `Détail: ${errMsg}` : ''} Allez dans Paramètres → IA pour changer de modèle.`)
+      throw new Error(`Erreur API (${res.status}): ${errMsg || errText.slice(0, 200)}`)
     }
-    if (res.status === 401) throw new Error('Clé API invalide. Vérifiez votre clé dans Paramètres → IA.')
-    if (res.status === 429) throw new Error('Quota dépassé. Attendez quelques instants.')
-    if (res.status === 404) throw new Error(`Modèle "${model}" introuvable sur ce fournisseur. ${errMsg ? `Détail: ${errMsg}` : ''} Allez dans Paramètres → IA pour changer de modèle.`)
-    throw new Error(`Erreur API (${res.status}): ${errMsg || errText.slice(0, 200)}`)
+    const data = await res.json()
+    // Try standard OpenAI format first, then fallback to alternative fields
+    const text = data?.choices?.[0]?.message?.content
+      || data?.choices?.[0]?.message?.reasoning
+      || data?.choices?.[0]?.text
+      || data?.output
+      || data?.output_text
+    if (!text) {
+      console.error('[ai/description] Empty response from API:', JSON.stringify(data).slice(0, 500))
+      throw new Error('Réponse vide — le modèle n\'a rien généré. Essayez un autre modèle dans Paramètres → IA.')
+    }
+    return text.trim()
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Le serveur IA met trop de temps à répondre (timeout). Les endpoints gratuits NVIDIA peuvent être lents — réessayez, ou choisissez un modèle plus léger comme "meta/llama-3.3-70b-instruct".')
+    }
+    throw err
+  } finally {
+    clearTimeout(timeout)
   }
-  const data = await res.json()
-  // Try standard OpenAI format first, then fallback to alternative fields
-  const text = data?.choices?.[0]?.message?.content
-    || data?.choices?.[0]?.message?.reasoning
-    || data?.choices?.[0]?.text
-    || data?.output
-    || data?.output_text
-  if (!text) {
-    console.error('[ai/description] Empty response from API:', JSON.stringify(data).slice(0, 500))
-    throw new Error('Réponse vide — le modèle n\'a rien généré. Essayez un autre modèle dans Paramètres → IA.')
-  }
-  return text.trim()
 }
 
 async function generateWithGemini(apiKey: string, model: string, userPrompt: string): Promise<string> {

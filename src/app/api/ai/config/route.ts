@@ -30,14 +30,13 @@ export const AI_PROVIDERS = {
   nvidia: {
     label: 'NVIDIA NIM',
     description: 'Gratuit — DeepSeek V4, Qwen, Llama, Nemotron (build.nvidia.com)',
-    defaultModel: 'deepseek-ai/deepseek-v4-flash-0731',
+    defaultModel: 'meta/llama-3.3-70b-instruct',
     models: [
+      'meta/llama-3.3-70b-instruct',
       'deepseek-ai/deepseek-v4-flash-0731',
       'deepseek-ai/deepseek-v4-pro-0813',
       'qwen/qwen3.5-27b-instruct',
-      'meta/llama-3.3-70b-instruct',
       'nvidia/llama-3.1-nemotron-70b-instruct-hf',
-      'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
       'moonshotai/kimi-k3',
     ],
     apiKeyUrl: 'https://build.nvidia.com/',
