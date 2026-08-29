@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
     let region: string | null = null
 
     if (!isLocalIp && ipAddress) {
-      const geo = lookupGeoIp(ipAddress)
+      const geo = await lookupGeoIp(ipAddress)
       if (geo) {
         country = geo.country
         countryCode = geo.countryCode

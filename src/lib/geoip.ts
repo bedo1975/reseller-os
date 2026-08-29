@@ -1,35 +1,36 @@
-import maxmind from 'maxmind'
+import maxmind, { type CityResponse } from 'maxmind'
 import path from 'path'
 import fs from 'fs'
 
-let lookupCache: any = null
+let lookupPromise: Promise<maxmind.Reader<CityResponse> | null> | null = null
 
 /**
- * Returns the MaxMind GeoLite2-City lookup instance.
+ * Returns the MaxMind GeoLite2-City lookup instance (async — v2+ API).
  * The .mmdb file is loaded once and cached for the lifetime of the process.
  *
- * Path: /home/z/my-project/data/GeoLite2-City.mmdb
+ * Path: {project_root}/data/GeoLite2-City.mmdb
  */
-function getLookup(): any {
-  if (lookupCache) return lookupCache
+async function getLookup(): Promise<maxmind.Reader<CityResponse> | null> {
+  if (lookupPromise) return lookupPromise
 
-  const dbPath = path.join(process.cwd(), 'data', 'GeoLite2-City.mmdb')
-  if (!fs.existsSync(dbPath)) {
-    console.warn('[geoip] GeoLite2-City.mmdb not found at', dbPath)
-    return null
-  }
+  lookupPromise = (async () => {
+    const dbPath = path.join(process.cwd(), 'data', 'GeoLite2-City.mmdb')
+    if (!fs.existsSync(dbPath)) {
+      console.warn('[geoip] GeoLite2-City.mmdb not found at', dbPath)
+      return null
+    }
 
-  try {
-    lookupCache = maxmind.openSync(dbPath, {
-      // Watch for file changes (auto-reload if the file is updated)
-      watchForUpdates: true,
-    })
-    console.log('[geoip] GeoLite2-City.mmdb loaded successfully')
-    return lookupCache
-  } catch (err) {
-    console.error('[geoip] Failed to load GeoLite2-City.mmdb:', err)
-    return null
-  }
+    try {
+      const reader = await maxmind.open<CityResponse>(dbPath)
+      console.log('[geoip] GeoLite2-City.mmdb loaded successfully')
+      return reader
+    } catch (err) {
+      console.error('[geoip] Failed to load GeoLite2-City.mmdb:', err)
+      return null
+    }
+  })()
+
+  return lookupPromise
 }
 
 export interface GeoIpResult {
@@ -62,9 +63,11 @@ const COUNTRY_FR: Record<string, string> = {
  * Returns null if the IP is not found or the database is not available.
  *
  * This is a LOCAL lookup (no external API call) — it's instant, free, and unlimited.
+ *
+ * NOTE: This function is async because maxmind v2+ uses an async API.
  */
-export function lookupGeoIp(ip: string): GeoIpResult | null {
-  const lookup = getLookup()
+export async function lookupGeoIp(ip: string): Promise<GeoIpResult | null> {
+  const lookup = await getLookup()
   if (!lookup) return null
 
   // Clean IPv6-mapped IPv4 (::ffff:1.2.3.4 → 1.2.3.4)
@@ -75,11 +78,13 @@ export function lookupGeoIp(ip: string): GeoIpResult | null {
     if (!result) return null
 
     const countryCode = result?.country?.iso_code || null
-    const country = countryCode ? (COUNTRY_FR[countryCode] || result?.country?.names?.en || countryCode) : null
+    const country = countryCode
+      ? (COUNTRY_FR[countryCode] || result?.country?.names?.en || countryCode)
+      : null
     const city = result?.city?.names?.en || null
     const region = result?.subdivisions?.[0]?.names?.en || null
-    const latitude = result?.location?.latitude || null
-    const longitude = result?.location?.longitude || null
+    const latitude = result?.location?.latitude ?? null
+    const longitude = result?.location?.longitude ?? null
 
     return { country, countryCode, city, region, latitude, longitude }
   } catch (err) {

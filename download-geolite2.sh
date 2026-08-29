@@ -3,12 +3,10 @@
 # This script downloads the .mmdb file used by the maxmind npm package for IP geolocation.
 set -e
 
-DEST_DIR="/home/z/my-project/data"
+DEST_DIR="$(cd "$(dirname "$0")" && pwd)/data"
 DEST_FILE="${DEST_DIR}/GeoLite2-City.mmdb"
-TMP_DIR="/tmp/geolite2-download"
 
 mkdir -p "$DEST_DIR"
-mkdir -p "$TMP_DIR"
 
 # Check if the file already exists and is younger than 30 days
 if [ -f "$DEST_FILE" ]; then
