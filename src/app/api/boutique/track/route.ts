@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { lookupGeoIp } from '@/lib/geoip'
 
 /**
  * POST /api/boutique/track
@@ -123,37 +124,19 @@ export async function POST(req: NextRequest) {
       else if (/Linux/i.test(userAgent)) os = 'linux'
     }
 
-    // ── Geo-IP via ipinfo.io (HTTPS, free, 50k req/month, no API key) ──
+    // ── Geo-IP via MaxMind GeoLite2 (local database, instant, free, unlimited) ──
     let country: string | null = null
     let countryCode: string | null = null
     let city: string | null = null
     let region: string | null = null
 
     if (!isLocalIp && ipAddress) {
-      try {
-        const geoRes = await fetch(`https://ipinfo.io/${ipAddress}/json`, {
-          signal: AbortSignal.timeout(5000),
-        })
-        if (geoRes.ok) {
-          const geo = await geoRes.json()
-          if (geo && !geo.error && geo.country) {
-            country = geo.country_name || null
-            countryCode = geo.country || null
-            city = geo.city || null
-            region = geo.region || null
-            // If country_name is missing, use a mapping from country code
-            if (!country && countryCode) {
-              const countryMap: Record<string, string> = {
-                FR: 'France', BE: 'Belgique', CH: 'Suisse', DE: 'Allemagne',
-                ES: 'Espagne', IT: 'Italie', GB: 'Royaume-Uni', PT: 'Portugal',
-                NL: 'Pays-Bas', LU: 'Luxembourg', US: 'États-Unis', CA: 'Canada',
-              }
-              country = countryMap[countryCode] || countryCode
-            }
-          }
-        }
-      } catch {
-        // Geo-IP failed — IP is still stored, just without geo data
+      const geo = lookupGeoIp(ipAddress)
+      if (geo) {
+        country = geo.country
+        countryCode = geo.countryCode
+        city = geo.city
+        region = geo.region
       }
     }
 
