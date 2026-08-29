@@ -284,6 +284,8 @@ model StockItem {
   sales         Sale[]
   // Make an Offer — offres reçues pour cet article
   offers        Offer[]
+  // Enchères — auctions liées à cet article
+  auctions      Auction[]
 }
 
 // ─────────────────────────────────────────────
@@ -732,6 +734,11 @@ model BoutiqueSettings {
   makeOfferAllowFreeOffer  Boolean  @default(true)        // si true, le client peut saisir un montant libre
   makeOfferCartDurationHours Int    @default(24)          // durée de validité du panier réduit (en heures)
 
+  // ── Enchères (Auction) — configuration ──
+  auctionIncrements        String   @default("[0.5,1,2,5]")  // JSON array of bid increments in €
+  auctionStartPrice        Float    @default(1)               // prix de départ par défaut (€)
+  auctionDurationHours     Int      @default(48)               // durée par défaut d'une enchère (heures)
+
   updatedAt       DateTime @updatedAt
 }
 
@@ -978,6 +985,7 @@ model BoutiqueClient {
   orders       BoutiqueOrder[]
   messages     BoutiqueMessage[]
   offers       Offer[]
+  bids         Bid[]
 }
 
 // Commande boutique (groupe plusieurs articles / ventes)
@@ -1032,6 +1040,71 @@ model BoutiqueMessage {
 
   @@index([clientId, read])
   @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────
+// Enchères (Auction) — ventes aux enchères
+// ─────────────────────────────────────────────
+model Auction {
+  id            String   @id @default(cuid())
+  // Article mis aux enchères
+  stockItemId   String
+  stockItem     StockItem @relation(fields: [stockItemId], references: [id])
+  sku           String              // snapshot SKU
+  brand         String              // snapshot marque
+  title         String?             // snapshot titre
+  category      String              // snapshot catégorie
+  // Snapshot de la photo principale (pour l'affichage sans re-fetch)
+  mainPhoto     String?
+  // Prix
+  startPrice    Float               // prix de départ (€)
+  currentPrice  Float               // prix actuel (dernière enchère ou prix de départ)
+  reservePrice  Float?              // prix de réserve (optionnel — l'enchère n'est pas vendue en dessous)
+  // Dates
+  startsAt      DateTime            // début de l'enchère
+  endsAt        DateTime            // fin de l'enchère
+  // Statut: scheduled | active | ended | won | cancelled | archived
+  status        String   @default("scheduled")
+  // Gagnant (rempli quand l'enchère est remportée)
+  winnerEmail   String?             // email du gagnant
+  winnerBidId   String?             // ID de l'enchère gagnante
+  // Panier généré (comme Make an Offer)
+  cartToken     String?             // token unique pour le panier au prix gagnant
+  cartExpiresAt DateTime?
+  // Email envoyé
+  winnerEmailSent Boolean @default(false)
+  // Incréments spécifiques à cette enchère (JSON: [0.5,1,2,5]) — si null, utilise la config globale
+  increments    String?
+  // Métadonnées
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  bids          Bid[]
+
+  @@index([stockItemId])
+  @@index([status])
+  @@index([endsAt])
+}
+
+model Bid {
+  id            String   @id @default(cuid())
+  auctionId     String
+  auction       Auction  @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  // Client (invité ou connecté)
+  clientId      String?
+  client        BoutiqueClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  bidderEmail   String              // email du enchérisseur
+  bidderName    String?             // nom (si connecté)
+  // Montant
+  amount        Float               // montant de l'enchère (€)
+  isWinning     Boolean @default(false)  // true si c'est l'enchère gagnante
+  // Métadonnées
+  ipAddress     String?
+  createdAt     DateTime @default(now())
+
+  @@index([auctionId])
+  @@index([bidderEmail])
 }
 
 // ─────────────────────────────────────────────
@@ -1123,6 +1196,7 @@ model EmailSettings {
   templateOfferAccepted    String?  // offre acceptée — envoi du lien panier réduit
   templateOfferRejected    String?  // offre refusée — motif du refus
   templateAdminOffer       String?  // nouvelle offre reçue (envoyé à l'admin)
+  templateAuctionWon       String?  // enchère remportée — envoi du lien panier
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

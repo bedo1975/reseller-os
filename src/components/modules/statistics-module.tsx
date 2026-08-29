@@ -10,6 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import {
   Globe, Users, Eye, ShoppingCart, Star, TrendingUp, MapPin, Monitor, MousePointerClick,
   FileText, Package, Award, ExternalLink, Trash2, ChevronLeft, ChevronRight, Filter, X,
+  Loader2, RefreshCw,
 } from 'lucide-react'
 import { formatEUR } from '@/lib/constants'
 import { toast } from 'sonner'
@@ -127,6 +128,7 @@ export function StatisticsModule() {
   // Available filter options (countries + cities) loaded from /api/admin/stats/locations
   const [availableCountries, setAvailableCountries] = useState<{ country: string; count: number }[]>([])
   const [availableCities, setAvailableCities] = useState<{ city: string; country: string; count: number }[]>([])
+  const [geoipUpdating, setGeoipUpdating] = useState(false)
 
   // Fetch main stats data whenever period, country, or city changes
   useEffect(() => {
@@ -266,6 +268,30 @@ export function StatisticsModule() {
               <X className="h-4 w-4" />
             </Button>
           )}
+          {/* GeoIP update button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                setGeoipUpdating(true)
+                const res = await fetch('/api/admin/geoip-update', { method: 'POST' })
+                const data = await res.json()
+                if (!res.ok) throw new Error(data.error || 'Erreur')
+                toast.success(data.message || 'Base GeoIP mise à jour')
+              } catch (e: unknown) {
+                toast.error(e instanceof Error ? e.message : 'Erreur')
+              } finally {
+                setGeoipUpdating(false)
+              }
+            }}
+            disabled={geoipUpdating}
+            title="Télécharger / mettre à jour la base de données GeoLite2"
+            className="gap-2"
+          >
+            {geoipUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {geoipUpdating ? 'Mise à jour...' : 'GeoIP'}
+          </Button>
         </div>
       </div>
 

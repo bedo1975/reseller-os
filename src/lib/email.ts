@@ -802,6 +802,92 @@ export async function notifyAdminNewOffer(opts: {
   }
 }
 
+/**
+ * notifyAuctionWon — sent to the winner when an auction ends.
+ * Uses templateAuctionWon from EmailSettings.
+ *
+ * Variables: {firstName}, {brand}, {sku}, {winningBid}, {cartUrl}, {cartExpiresAt}
+ */
+export async function notifyAuctionWon(opts: {
+  clientEmail: string
+  clientFirstName: string
+  sku: string
+  brand: string
+  title: string | null
+  winningBid: number
+  cartUrl: string
+  cartExpiresAt: Date
+  endsAt: Date
+}) {
+  try {
+    console.log('[email] notifyAuctionWon triggered for SKU:', opts.sku, 'to', opts.clientEmail)
+    const { clientEmail, clientFirstName, sku, brand, title, winningBid, cartUrl, cartExpiresAt } = opts
+
+    const config = await getEmailConfig()
+    const template = config?.templateAuctionWon || null
+    const bs = await getBoutiqueSettings()
+    const siteUrl = bs.shareSiteUrl || ''
+    const logoText = bs.logoText || 'Boutique'
+
+    const expiresStr = cartExpiresAt.toLocaleDateString('fr-FR', {
+      day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    })
+
+    const defaultText = `Bonjour ${clientFirstName},\n\nFélicitations ! Vous avez remporté l'enchère pour l'article ${brand} ${title || ''} (SKU : ${sku}) avec une enchère de ${winningBid.toFixed(2)} €.\n\nVotre panier est disponible jusqu'au ${expiresStr} :\n${cartUrl}\n\nFélicitations et merci pour votre participation !`
+
+    const vars: Record<string, string> = {
+      firstName: clientFirstName,
+      brand,
+      sku,
+      title: title || '',
+      winningBid: winningBid.toFixed(2),
+      cartUrl,
+      cartExpiresAt: expiresStr,
+    }
+
+    const text = applyTemplate(template, defaultText, vars)
+
+    let html: string
+    if (template && /<[a-z][\s\S]*>/i.test(template)) {
+      let processed = template
+      for (const [key, value] of Object.entries(vars)) {
+        processed = processed.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+      }
+      html = migrateRelativeUrls(processed, siteUrl)
+    } else {
+      const bodyHtml = `
+<p style="margin:0 0 12px 0;">Félicitations ! Vous avez <strong style="color:#10b981;">remporté l'enchère</strong> !</p>
+<div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:16px;margin:12px 0;">
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Article</p>
+<p style="margin:0 0 12px 0;font-weight:600;">${escapeHtml(brand)} ${escapeHtml(title || '')} <span style="font-family:monospace;font-size:11px;color:#666;">${escapeHtml(sku)}</span></p>
+<p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Votre enchère gagnante</p>
+<p style="margin:0;font-size:28px;font-weight:700;color:#10b981;">${winningBid.toFixed(2)} €</p>
+<p style="margin:8px 0 0 0;font-size:12px;color:#065f46;">⏰ Valable jusqu'au ${expiresStr}</p>
+</div>
+<a href="${cartUrl}" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:600;font-size:15px;margin-top:8px;">Accéder à mon panier →</a>`
+
+      const result = buildEmailTemplate({
+        title: '🎉 Enchère remportée !',
+        headerColor: '#10b981',
+        firstName: clientFirstName,
+        bodyHtml,
+        siteUrl,
+        logoText,
+      })
+      html = result.html
+    }
+
+    await sendEmail({
+      to: clientEmail,
+      subject: `Vous avez remporté l'enchère — ${brand} ${title || ''}`,
+      text,
+      html,
+    })
+  } catch (e: any) {
+    console.error('[email] notifyAuctionWon error:', e?.message)
+  }
+}
+
 export async function notifyClientRegistration(clientEmail: string, clientFirstName: string) {
   try {
     console.log('[email] notifyClientRegistration triggered:', clientEmail)
