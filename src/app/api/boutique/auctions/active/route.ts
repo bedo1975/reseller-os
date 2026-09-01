@@ -1,23 +1,120 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getBoutiqueSettings } from '@/lib/boutique-settings'
+import { notifyAuctionWon } from '@/lib/email'
+import { randomBytes } from 'crypto'
 
 /**
  * GET /api/boutique/auctions/active
  * Public — returns the currently active auction (or the most recent scheduled/active one).
  * Used by the /enchere page on the boutique.
+ *
+ * Also auto-processes expired auctions:
+ * - Activates scheduled auctions whose startsAt has passed
+ * - Ends active auctions whose endsAt has passed (determines winner, sends email, updates stock)
  */
 export async function GET() {
   try {
     const now = new Date()
 
-    // Find active auctions (startsAt <= now AND endsAt > now AND status = active)
-    // Also auto-activate scheduled auctions whose startsAt has passed
+    // 1. Auto-activate scheduled auctions whose startsAt has passed
     const scheduled = await db.auction.findMany({
       where: { status: 'scheduled', startsAt: { lte: now } },
     })
     for (const a of scheduled) {
       await db.auction.update({ where: { id: a.id }, data: { status: 'active' } })
+    }
+
+    // 2. Auto-end active auctions whose endsAt has passed
+    const expired = await db.auction.findMany({
+      where: { status: 'active', endsAt: { lte: now } },
+      include: { bids: { orderBy: { amount: 'desc' }, take: 1 } },
+    })
+
+    for (const auction of expired) {
+      const winningBid = auction.bids[0]
+      const reserveMet = !auction.reservePrice || (winningBid && winningBid.amount >= auction.reservePrice)
+
+      // Collect all item IDs (main + lot)
+      const allItemIds = [auction.stockItemId]
+      if (auction.lotItems) {
+        try {
+          const lot = JSON.parse(auction.lotItems)
+          for (const li of lot) allItemIds.push(li.stockItemId)
+        } catch {}
+      }
+
+      if (!winningBid || !reserveMet) {
+        // No winner — restore stock
+        for (const itemId of allItemIds) {
+          const si = await db.stockItem.findUnique({ where: { id: itemId }, select: { quantity: true, status: true } })
+          if (!si) continue
+          if (si.status === 'RESERVE') {
+            await db.stockItem.update({ where: { id: itemId }, data: { status: 'PUBLIE' } })
+          } else {
+            await db.stockItem.update({ where: { id: itemId }, data: { quantity: { increment: 1 } } })
+          }
+        }
+        await db.auction.update({ where: { id: auction.id }, data: { status: 'ended' } })
+      } else {
+        // Won — generate cart + send email + mark items as sold
+        const bs = await getBoutiqueSettings()
+        const durationHours = bs.makeOfferCartDurationHours || 24
+        const cartToken = randomBytes(16).toString('hex')
+        const cartExpiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000)
+
+        await db.bid.update({ where: { id: winningBid.id }, data: { isWinning: true } })
+
+        await db.auction.update({
+          where: { id: auction.id },
+          data: {
+            status: 'won',
+            winnerEmail: winningBid.bidderEmail,
+            winnerBidId: winningBid.id,
+            cartToken,
+            cartExpiresAt,
+          },
+        })
+
+        // Mark items as sold
+        for (const itemId of allItemIds) {
+          const si = await db.stockItem.findUnique({ where: { id: itemId }, select: { quantity: true, status: true } })
+          if (!si) continue
+          if (si.status === 'RESERVE') {
+            await db.stockItem.update({
+              where: { id: itemId },
+              data: { status: 'VENDU', quantity: 0, soldCount: { increment: 1 } },
+            })
+          } else {
+            await db.stockItem.update({
+              where: { id: itemId },
+              data: { soldCount: { increment: 1 } },
+            })
+          }
+        }
+
+        // Send winner email (best-effort)
+        const siteUrl = bs.shareSiteUrl || ''
+        const cartUrl = siteUrl
+          ? `${siteUrl.replace(/\/+$/, '')}/panier?offer=${cartToken}`
+          : `/panier?offer=${cartToken}`
+        try {
+          await notifyAuctionWon({
+            clientEmail: winningBid.bidderEmail,
+            clientFirstName: winningBid.bidderName?.split(' ')[0] || 'Client',
+            sku: auction.sku,
+            brand: auction.brand,
+            title: auction.title,
+            winningBid: winningBid.amount,
+            cartUrl,
+            cartExpiresAt,
+            endsAt: auction.endsAt,
+          })
+          await db.auction.update({ where: { id: auction.id }, data: { winnerEmailSent: true } })
+        } catch (emailErr) {
+          console.error('[auctions/active] Auto-end: failed to send winner email:', emailErr)
+        }
+      }
     }
 
     // Find the active auction
