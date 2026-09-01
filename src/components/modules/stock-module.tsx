@@ -211,11 +211,13 @@ export function StockModule() {
   const safePage = Math.min(page, totalPages)
   const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
-  // Sépare les articles en stock (non vendus) des articles vendus
+  // Sépare les articles en stock (non vendus ET quantité > 0) des articles vendus
+  // Les articles à quantity = 0 ne sont plus physiquement en stock → exclus de la valeur
   const inStockItems = filtered.filter(i => i.status !== 'VENDU')
   const soldItems = filtered.filter(i => i.status === 'VENDU')
-  const totalStockValue = inStockItems.reduce((sum, i) => sum + i.purchaseCost, 0)
-  const totalSuggestedValue = inStockItems.reduce((sum, i) => sum + (i.suggestedPrice || 0), 0)
+  const physicallyInStock = inStockItems.filter(i => (i.quantity || 0) > 0)
+  const totalStockValue = physicallyInStock.reduce((sum, i) => sum + i.purchaseCost * (i.quantity || 1), 0)
+  const totalSuggestedValue = physicallyInStock.reduce((sum, i) => sum + (i.suggestedPrice || 0) * (i.quantity || 1), 0)
   const totalSoldValue = soldItems.reduce((sum, i) => sum + (i.sales?.reduce((ss, sl) => ss + sl.salePrice, 0) || 0), 0)
 
   // ─── Gestion des cards cliquables ───
