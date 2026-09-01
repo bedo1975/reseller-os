@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -35,8 +37,31 @@ interface ActiveAuction {
   } | null
 }
 
-export default function AuctionPage() {
+interface AuctionSummary {
+  id: string
+  sku: string
+  brand: string
+  title: string | null
+  mainPhoto: string | null
+  startPrice: number
+  currentPrice: number
+  endsAt: string
+  bidCount: number
+}
+
+export default function AuctionPageWrapper() {
+  return (
+    <Suspense fallback={<div className="max-w-5xl mx-auto px-4 py-8"><Skeleton className="h-96 w-full" /></div>}>
+      <AuctionPage />
+    </Suspense>
+  )
+}
+
+function AuctionPage() {
+  const searchParams = useSearchParams()
+  const selectedId = searchParams.get('id')
   const [auction, setAuction] = useState<ActiveAuction | null>(null)
+  const [auctionList, setAuctionList] = useState<AuctionSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -49,15 +74,19 @@ export default function AuctionPage() {
   // Fetch auction data
   const fetchAuction = useCallback(async () => {
     try {
-      const res = await fetch('/api/boutique/auctions/active')
+      const url = selectedId
+        ? `/api/boutique/auctions/active?id=${encodeURIComponent(selectedId)}`
+        : '/api/boutique/auctions/active'
+      const res = await fetch(url)
       const data = await res.json()
       setAuction(data.auction || null)
+      setAuctionList(data.auctions || [])
     } catch {
       // silent fail
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [selectedId])
 
   useEffect(() => { fetchAuction() }, [fetchAuction])
 
@@ -140,13 +169,63 @@ export default function AuctionPage() {
     )
   }
 
-  if (!auction) {
+  if (!auction && auctionList.length === 0) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-16 text-center">
         <Gavel className="h-16 w-16 text-gray-300 mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Aucune enchère en cours</h1>
         <p className="text-gray-500 mb-6">Revenez bientôt pour participer à nos prochaines enchères !</p>
         <Link href="/" className="text-[#007bff] hover:underline">← Retour à la boutique</Link>
+      </div>
+    )
+  }
+
+  // Multiple auctions — show selection list
+  if (!auction && auctionList.length > 0) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <div className="text-center mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-2">
+            <Gavel className="h-7 w-7 text-amber-600" /> Enchères en cours
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">{auctionList.length} enchère{auctionList.length > 1 ? 's' : ''} disponible{auctionList.length > 1 ? 's' : ''}</p>
+        </div>
+        <div className="space-y-3">
+          {auctionList.map(a => {
+            const endsAtMs = new Date(a.endsAt).getTime()
+            const tl = Math.max(0, endsAtMs - now)
+            const h = Math.floor(tl / (1000 * 60 * 60))
+            const m = Math.floor((tl % (1000 * 60 * 60)) / (1000 * 60))
+            const s = Math.floor((tl % (1000 * 60)) / 1000)
+            return (
+              <Link
+                key={a.id}
+                href={`/enchere?id=${a.id}`}
+                className="flex items-center gap-4 bg-white border border-gray-200 rounded-lg p-3 hover:border-amber-300 hover:shadow-md transition-all"
+              >
+                <div className="w-20 h-20 bg-gray-50 rounded-md overflow-hidden shrink-0">
+                  {a.mainPhoto ? (
+                    <img src={a.mainPhoto} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="flex items-center justify-center w-full h-full"><Package className="h-8 w-8 text-gray-300" /></div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 uppercase">{a.brand}</p>
+                  <p className="text-sm font-medium text-gray-900 truncate">{a.title || 'Article'}</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-lg font-bold text-amber-600">{a.currentPrice.toFixed(2)} €</span>
+                    <span className="text-[10px] text-gray-400">{a.bidCount} enchère{a.bidCount > 1 ? 's' : ''}</span>
+                    <span className="text-[10px] text-gray-500 font-mono">
+                      {String(h).padStart(2, '0')}:{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
+                    </span>
+                  </div>
+                </div>
+                <ExternalLink className="h-5 w-5 text-gray-400 shrink-0" />
+              </Link>
+            )
+          })}
+        </div>
       </div>
     )
   }
@@ -244,6 +323,17 @@ export default function AuctionPage() {
                 Grade {auction.stockItem.grade}
               </span>
             )}
+            {/* Lot items titles */}
+            {hasLot && auction.lotItems!.map((li, i) => (
+              <div key={i} className="mt-2 pt-2 border-t border-dashed border-gray-200">
+                <p className="text-xs text-gray-500 uppercase font-medium">{li.brand}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {li.title || li.category || ''}
+                  {li.size && ` · Taille ${li.size}`}
+                  {li.color && ` · ${li.color}`}
+                </p>
+              </div>
+            ))}
           </div>
 
           {/* Article links */}

@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, Package, AlertCircle, Tag } from 'lucide-react'
+import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, Package, AlertCircle, Tag, AlertTriangle } from 'lucide-react'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 
 interface CartItem {
@@ -228,6 +228,17 @@ function CartPage() {
           <span>
             Votre offre a été acceptée ! <strong>{offerApplied.brand}</strong> est à <strong>{offerApplied.offeredPrice.toFixed(2)} €</strong> dans votre panier.
             Profitez-en, ce prix est valable pour une durée limitée.
+          </span>
+        </div>
+      )}
+
+      {/* Warning: don't refresh or leave the page */}
+      {offerApplied && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-4 py-3 text-sm flex items-start gap-2">
+          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-amber-600" />
+          <span>
+            <strong>Attention :</strong> ce lien n'est valable qu'une seule fois. Ne pas rafraîchir ou quitter cette page sous peine de vider votre panier.
+            Si vous souhaitez finaliser votre achat, cliquez sur « Passer la commande » ci-dessous.
           </span>
         </div>
       )}

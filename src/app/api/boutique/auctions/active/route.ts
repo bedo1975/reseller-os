@@ -1,20 +1,25 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getBoutiqueSettings } from '@/lib/boutique-settings'
 import { notifyAuctionWon } from '@/lib/email'
 import { randomBytes } from 'crypto'
 
 /**
- * GET /api/boutique/auctions/active
- * Public — returns the currently active auction (or the most recent scheduled/active one).
+ * GET /api/boutique/auctions/active[?id=XXX]
+ * Public — returns the currently active auction(s).
  * Used by the /enchere page on the boutique.
+ *
+ * If ?id=XXX is provided, returns the details of that specific auction.
+ * Otherwise, returns the single active auction (or a list if multiple).
  *
  * Also auto-processes expired auctions:
  * - Activates scheduled auctions whose startsAt has passed
  * - Ends active auctions whose endsAt has passed (determines winner, sends email, updates stock)
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url)
+    const requestedId = searchParams.get('id')
     const now = new Date()
 
     // 1. Auto-activate scheduled auctions whose startsAt has passed
@@ -117,29 +122,46 @@ export async function GET() {
       }
     }
 
-    // Find the active auction
-    const auction = await db.auction.findFirst({
-      where: {
-        status: 'active',
-        startsAt: { lte: now },
-        endsAt: { gt: now },
-      },
+    // Find ALL active auctions (or a specific one if ?id= is provided)
+    const whereClause = requestedId
+      ? { id: requestedId, status: 'active' }
+      : { status: 'active', startsAt: { lte: now }, endsAt: { gt: now } }
+    const activeAuctions = await db.auction.findMany({
+      where: whereClause,
       include: {
-        bids: {
-          orderBy: { amount: 'desc' },
-          take: 10,
-          select: { id: true, amount: true, bidderName: true, createdAt: true },
-        },
-        stockItem: {
-          select: {
-            sku: true, brand: true, title: true, category: true,
-            size: true, color: true, condition: true, grade: true,
-            description: true, photos: true, quantity: true,
-          },
-        },
+        bids: { orderBy: { amount: 'desc' }, take: 10, select: { id: true, amount: true, bidderName: true, createdAt: true } },
+        stockItem: { select: { sku: true, brand: true, title: true, category: true, size: true, color: true, condition: true, grade: true, description: true, photos: true, quantity: true } },
       },
       orderBy: { endsAt: 'asc' },
     })
+
+    // If no active auctions, return null
+    if (activeAuctions.length === 0) {
+      return NextResponse.json({ auction: null, auctions: [] })
+    }
+
+    // If multiple active auctions, return the list (the frontend will show a selection page)
+    if (activeAuctions.length > 1) {
+      const auctionList = activeAuctions.map(a => ({
+        id: a.id,
+        sku: a.sku,
+        brand: a.brand,
+        title: a.title,
+        mainPhoto: a.mainPhoto,
+        startPrice: a.startPrice,
+        currentPrice: a.currentPrice,
+        endsAt: a.endsAt,
+        bidCount: 0, // will be filled below
+      }))
+      // Fill bid counts
+      for (const al of auctionList) {
+        al.bidCount = await db.bid.count({ where: { auctionId: al.id } })
+      }
+      return NextResponse.json({ auction: null, auctions: auctionList })
+    }
+
+    // Single active auction — return full details
+    const auction = activeAuctions[0]
 
     if (!auction) {
       return NextResponse.json({ auction: null })
