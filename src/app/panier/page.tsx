@@ -64,7 +64,7 @@ function CartPage() {
           return r.json()
         })
         .then(data => {
-          if (!data || data.status !== 'accepted') {
+          if (!data || (data.status !== 'accepted' && data.status !== 'won')) {
             setOfferError('Cette offre n\'est plus valide ou a expiré.')
             setCart(c)
             setLoaded(true)
@@ -77,29 +77,58 @@ function CartPage() {
             setLoaded(true)
             return
           }
-          // Apply the offered price to the matching item in the cart
+
+          // Determine the price to apply:
+          // - Offer: offeredPrice (the reduced price)
+          // - Auction: offeredPrice = winning bid (the full winning amount)
+          const effectivePrice = data.offeredPrice
+
+          // Apply the price to the matching item in the cart
           const updatedCart = c.map(item => {
             if (item.sku === data.sku) {
-              return { ...item, offerPrice: data.offeredPrice, qty: 1 }
+              return { ...item, offerPrice: effectivePrice, qty: 1 }
             }
             return item
           })
-          // If the item is not in the cart yet, add it
+
+          // If the main item is not in the cart yet, add it
           if (!updatedCart.find(i => i.sku === data.sku)) {
             updatedCart.push({
               sku: data.sku,
               brand: data.brand,
               category: data.category || 'vetements',
               price: data.originalPrice,
-              offerPrice: data.offeredPrice,
+              offerPrice: effectivePrice,
               qty: 1,
               mainPhoto: null,
             })
           }
+
+          // If it's an auction with a lot, add the lot items too (at price 0 — included in the lot)
+          if (data.source === 'auction' && data.lotItems && Array.isArray(data.lotItems)) {
+            for (const li of data.lotItems) {
+              if (!updatedCart.find(i => i.sku === li.sku)) {
+                updatedCart.push({
+                  sku: li.sku,
+                  brand: li.brand,
+                  category: 'vetements',
+                  price: 0,           // lot item — included in the auction price
+                  offerPrice: 0,       // no additional charge
+                  qty: 1,
+                  mainPhoto: null,
+                })
+              }
+            }
+          }
+
           setCart(updatedCart)
           localStorage.setItem('boutique_cart', JSON.stringify(updatedCart))
           window.dispatchEvent(new Event('cart-updated'))
-          setOfferApplied({ sku: data.sku, offeredPrice: data.offeredPrice, brand: data.brand })
+          setOfferApplied({
+            sku: data.sku,
+            offeredPrice: effectivePrice,
+            brand: data.brand + (data.source === 'auction' ? (data.lotItems ? ` + lot` : '') : ''),
+          })
           setLoaded(true)
         })
         .catch(() => {
