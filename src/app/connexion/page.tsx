@@ -6,8 +6,14 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, User, Mail, Lock, Phone, MailCheck, CheckCircle2, XCircle } from 'lucide-react'
+import { Loader2, User, Mail, Lock, Phone, MailCheck, CheckCircle2, XCircle, Shield } from 'lucide-react'
 import { toast } from 'sonner'
+
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog'
+
+
 
 function ConnexionPageContent() {
   const router = useRouter()
@@ -18,6 +24,11 @@ function ConnexionPageContent() {
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', password: '', phone: '',
   })
+
+  const [rgpdAccepted, setRgpdAccepted] = useState(false)
+  const [rgpdPopupOpen, setRgpdPopupOpen] = useState(false)
+
+
   // When set: show the "check your email" panel instead of the form
   const [pendingValidationEmail, setPendingValidationEmail] = useState<string | null>(null)
   // Validation result from the email link (GET /api/boutique/client/validate-account redirects here)
@@ -49,6 +60,12 @@ function ConnexionPageContent() {
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }))
 
   const submit = async () => {
+
+      if (mode === 'register' && !rgpdAccepted) {
+      toast.error('Vous devez accepter la politique de confidentialité pour vous inscrire.')
+      return
+    }
+
     setLoading(true)
     try {
       const endpoint = mode === 'login' ? '/api/boutique/client/login' : '/api/boutique/client/register'
@@ -356,6 +373,30 @@ function ConnexionPageContent() {
               </p>
             )}
           </div>
+       
+          {mode === 'register' && (
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rgpdAccepted}
+                  onChange={e => setRgpdAccepted(e.target.checked)}
+                  className="rounded mt-0.5 shrink-0"
+                />
+                <span>
+                  J'ai lu et j'accepte la{' '}
+                  <button
+                    type="button"
+                    onClick={() => setRgpdPopupOpen(true)}
+                    className="text-[#007bff] underline inline-flex items-center gap-0.5"
+                  >
+                    <Shield className="h-3 w-3" /> politique de confidentialité
+                  </button>{' '}
+                  et le traitement de mes données personnelles conformément au RGPD.
+                </span>
+              </label>
+            </div>
+          )}
 
           <Button
             onClick={submit}
@@ -373,6 +414,39 @@ function ConnexionPageContent() {
           </Link>
         </div>
       </div>
+
+            <Dialog open={rgpdPopupOpen} onOpenChange={setRgpdPopupOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-[#007bff]" />
+              Protection de vos données — RGPD
+            </DialogTitle>
+            <DialogDescription>
+              Informations sur le traitement de vos données personnelles
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-gray-600 py-2">
+            <p><strong>Inscription et compte client :</strong> vos données (prénom, nom, email, téléphone) sont utilisées pour gérer votre compte, traiter vos commandes et vous contacter si nécessaire.</p>
+            <p><strong>Commandes :</strong> votre adresse de livraison est transmise au transporteur pour l'expédition. Vos données bancaires sont traitées directement par notre prestataire de paiement — nous ne stockons jamais vos numéros de carte.</p>
+            <p><strong>Statistiques :</strong> nous collectons anonymement des données de visite pour améliorer notre boutique.</p>
+            <p><strong>Cookies :</strong> cookies essentiels (panier, authentification) et cookies de mesure d'audience (avec votre consentement).</p>
+            <p><strong>Vos droits :</strong> accès, rectification, effacement, opposition, portabilité.</p>
+            <p><strong>Conservation :</strong> 3 ans après votre dernière activité (10 ans pour les factures).</p>
+            <div className="pt-2 border-t">
+              <Link href="/politique-confidentialite" target="_blank" className="text-[#007bff] underline font-medium">
+                Politique de confidentialité complète →
+              </Link>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button variant="outline" size="sm" onClick={() => setRgpdPopupOpen(false)}>Fermer</Button>
+            <Button size="sm" onClick={() => { setRgpdAccepted(true); setRgpdPopupOpen(false) }} className="bg-[#007bff]">
+              J'accepte
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
