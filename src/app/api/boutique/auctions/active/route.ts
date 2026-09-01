@@ -151,7 +151,11 @@ export async function GET(req: NextRequest) {
         startPrice: a.startPrice,
         currentPrice: a.currentPrice,
         endsAt: a.endsAt,
-        bidCount: 0, // will be filled below
+        bidCount: 0,
+        lotItems: a.lotItems ? (() => { try {
+          const lotIds = JSON.parse(a.lotItems) as { stockItemId: string; sku: string; brand: string; title: string | null }[]
+          return lotIds.map(li => ({ sku: li.sku, brand: li.brand, title: li.title, mainPhoto: null }))
+        } catch { return null } })() : null,
       }))
       // Fill bid counts
       for (const al of auctionList) {

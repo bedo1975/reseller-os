@@ -6862,9 +6862,32 @@ function AuctionsTab() {
             </SelectContent>
           </Select>
         </div>
-        <Button onClick={() => setShowCreateForm(true)} className="gap-2">
-          <Plus className="h-4 w-4" /> Nouvelle enchère
-        </Button>
+        <div className="flex gap-2">
+          {statusFilter === 'archived' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 border-red-300 hover:bg-red-50 gap-2"
+              onClick={async () => {
+                if (!confirm('Supprimer définitivement toutes les enchères archivées ?')) return
+                try {
+                  const res = await fetch('/api/boutique/admin/auctions/clear-archives', { method: 'POST' })
+                  const data = await res.json()
+                  if (!res.ok) throw new Error(data.error || 'Erreur')
+                  toast.success(data.message || 'Archives vidées')
+                  fetchAuctions()
+                } catch (e: unknown) {
+                  toast.error(e instanceof Error ? e.message : 'Erreur')
+                }
+              }}
+            >
+              <Trash2 className="h-4 w-4" /> Vider les archives
+            </Button>
+          )}
+          <Button onClick={() => setShowCreateForm(true)} className="gap-2">
+            <Plus className="h-4 w-4" /> Nouvelle enchère
+          </Button>
+        </div>
       </div>
 
       {loading ? (

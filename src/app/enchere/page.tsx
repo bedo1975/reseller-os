@@ -47,6 +47,7 @@ interface AuctionSummary {
   currentPrice: number
   endsAt: string
   bidCount: number
+  lotItems: { sku: string; brand: string; title: string | null; mainPhoto: string | null }[] | null
 }
 
 export default function AuctionPageWrapper() {
@@ -203,16 +204,40 @@ function AuctionPage() {
                 href={`/enchere?id=${a.id}`}
                 className="flex items-center gap-4 bg-white border border-gray-200 rounded-lg p-3 hover:border-amber-300 hover:shadow-md transition-all"
               >
-                <div className="w-20 h-20 bg-gray-50 rounded-md overflow-hidden shrink-0">
-                  {a.mainPhoto ? (
-                    <img src={a.mainPhoto} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="flex items-center justify-center w-full h-full"><Package className="h-8 w-8 text-gray-300" /></div>
-                  )}
+                {/* Photos: main + lot items */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <div className="w-20 h-20 bg-gray-50 rounded-md overflow-hidden">
+                    {a.mainPhoto ? (
+                      <img src={a.mainPhoto} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="flex items-center justify-center w-full h-full"><Package className="h-8 w-8 text-gray-300" /></div>
+                    )}
+                  </div>
+                  {a.lotItems && a.lotItems.length > 0 && a.lotItems.map((li, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <Plus className="h-3 w-3 text-gray-300" />
+                      <div className="w-20 h-20 bg-gray-50 rounded-md overflow-hidden">
+                        {li.mainPhoto ? (
+                          <img src={li.mainPhoto} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="flex items-center justify-center w-full h-full"><Package className="h-6 w-6 text-gray-300" /></div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-500 uppercase">{a.brand}</p>
                   <p className="text-sm font-medium text-gray-900 truncate">{a.title || 'Article'}</p>
+                  {a.lotItems && a.lotItems.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {a.lotItems.map((li, i) => (
+                        <span key={i} className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                          {li.brand} {li.title || ''}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-lg font-bold text-amber-600">{a.currentPrice.toFixed(2)} €</span>
                     <span className="text-[10px] text-gray-400">{a.bidCount} enchère{a.bidCount > 1 ? 's' : ''}</span>
@@ -289,23 +314,6 @@ function AuctionPage() {
                 <Package className="h-16 w-16 text-gray-300" />
               </div>
             )
-          )}
-
-          {/* Lot items details (below photos) */}
-          {hasLot && (
-            <div className="mt-3 space-y-1">
-              {auction.lotItems!.map((li, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
-                  <span className="font-medium">{li.brand}</span>
-                  {li.title && <span>{li.title}</span>}
-                  {li.size && <span className="text-gray-400">· Taille {li.size}</span>}
-                  {li.color && <span className="text-gray-400">· {li.color}</span>}
-                  <Link href={`/produit/${li.sku}`} className="text-[#007bff] hover:underline ml-auto">
-                    <ExternalLink className="h-3 w-3" />
-                  </Link>
-                </div>
-              ))}
-            </div>
           )}
         </div>
 
