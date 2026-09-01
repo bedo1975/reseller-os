@@ -46,18 +46,17 @@ function CartPage() {
   const [offerError, setOfferError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Load cart from localStorage
-    let c: CartItem[] = []
-    try {
-      c = JSON.parse(localStorage.getItem('boutique_cart') || '[]')
-    } catch {
-      c = []
-    }
-
-    // Check for Make an Offer token in the URL (?offer=TOKEN)
+    // Check for Make an Offer / Auction token in the URL (?offer=TOKEN)
     const offerToken = searchParams.get('offer')
+
     if (offerToken) {
-      // Fetch the offer by token (public endpoint)
+      // When there's a token in the URL, START with an empty cart (don't load the old one)
+      // This prevents showing a stale cart from a previous visit
+      const c: CartItem[] = []
+      setCart(c)
+      localStorage.setItem('boutique_cart', JSON.stringify(c))
+
+      // Fetch the offer/auction by token
       fetch(`/api/boutique/offers/by-token?token=${encodeURIComponent(offerToken)}`)
         .then(r => {
           if (!r.ok) throw new Error('not found')
@@ -149,12 +148,18 @@ function CartPage() {
           setLoaded(true)
         })
         .catch(() => {
-          setOfferError('Offre introuvable. Le lien n\'est peut-être plus valide.')
-          setCart(c)
+          setOfferError('Offre ou enchère introuvable. Le lien n\'est peut-être plus valide ou a expiré.')
+          setCart([])
           setLoaded(true)
         })
     } else {
-      setCart(c)
+      // No token in URL — load cart from localStorage normally
+      try {
+        const c = JSON.parse(localStorage.getItem('boutique_cart') || '[]')
+        setCart(c)
+      } catch {
+        setCart([])
+      }
       setLoaded(true)
     }
   }, [searchParams])
