@@ -322,12 +322,12 @@ export function StockModule() {
     <div className="space-y-5">
       {/* Stats — cards cliquables */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Articles en stock (non vendus) */}
+        {/* Articles en stock (non vendus, quantité > 0) */}
         <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setShowStockDetail(!showStockDetail)}>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground uppercase">En stock</p>
-            <p className="text-2xl font-bold mt-1">{inStockItems.length}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{soldItems.length} vendus exclus</p>
+            <p className="text-2xl font-bold mt-1">{physicallyInStock.reduce((s, i) => s + (i.quantity || 1), 0)}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{physicallyInStock.length} réf · {soldItems.length} vendus · {inStockItems.length - physicallyInStock.length} en rupture</p>
           </CardContent>
         </Card>
         {/* Valeur du stock réel (coût d'achat des articles non vendus) */}
