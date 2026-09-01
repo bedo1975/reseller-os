@@ -665,7 +665,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           )}
 
           {/* Actions */}
-          {product.status === 'RESERVE' ? (
+          {product.status === 'RESERVE' && (product.quantity ?? 0) <= 1 ? (
             <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-4 py-3 text-sm flex items-start gap-2">
               <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
               <span>
