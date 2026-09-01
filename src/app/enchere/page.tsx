@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useFetch } from '@/hooks/use-fetch'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Package, Gavel, Mail, Send, Loader2, Clock, TrendingUp, CheckCircle2 } from 'lucide-react'
+import { Package, Gavel, Mail, Send, Loader2, Clock, TrendingUp, CheckCircle2, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatEUR } from '@/lib/constants'
 import Link from 'next/link'
@@ -24,6 +23,7 @@ interface ActiveAuction {
   increments: number[]
   bidCount: number
   bids: { amount: number; name: string; time: string }[]
+  lotItems: { sku: string; brand: string; title: string | null }[] | null
   stockItem: {
     size: string | null
     color: string | null
@@ -36,7 +36,8 @@ interface ActiveAuction {
 }
 
 export default function AuctionPage() {
-  const { data, loading } = useFetch<{ auction: ActiveAuction | null }>('/api/boutique/auctions/active')
+  const [auction, setAuction] = useState<ActiveAuction | null>(null)
+  const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [selectedIncrement, setSelectedIncrement] = useState<number | null>(null)
@@ -45,20 +46,32 @@ export default function AuctionPage() {
   const [bidDone, setBidDone] = useState(false)
   const [now, setNow] = useState(Date.now())
 
+  // Fetch auction data
+  const fetchAuction = useCallback(async () => {
+    try {
+      const res = await fetch('/api/boutique/auctions/active')
+      const data = await res.json()
+      setAuction(data.auction || null)
+    } catch {
+      // silent fail
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchAuction() }, [fetchAuction])
+
   // Update the clock every second
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(interval)
   }, [])
 
-  // Refresh auction data every 15 seconds
-  const { refresh } = useFetch<{ auction: ActiveAuction | null }>('/api/boutique/auctions/active')
+  // Refresh auction data every 10 seconds (for live price updates)
   useEffect(() => {
-    const interval = setInterval(() => refresh(), 15000)
+    const interval = setInterval(() => fetchAuction(), 10000)
     return () => clearInterval(interval)
-  }, [refresh])
-
-  const auction = data?.auction
+  }, [fetchAuction])
 
   // Countdown timer
   const endsAtMs = auction ? new Date(auction.endsAt).getTime() : 0
@@ -110,7 +123,8 @@ export default function AuctionPage() {
       if (!res.ok) throw new Error(data.error || 'Erreur')
       setBidDone(true)
       toast.success(`Enchère placée : ${amount.toFixed(2)} €`)
-      refresh()
+      // Immediate refresh to show updated price
+      await fetchAuction()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Erreur')
     } finally {
@@ -138,6 +152,12 @@ export default function AuctionPage() {
   }
 
   const photos = auction.stockItem?.photos?.length ? auction.stockItem.photos : (auction.mainPhoto ? [auction.mainPhoto] : [])
+
+  // Collect all article links (main + lot)
+  const allArticles = [
+    { sku: auction.sku, brand: auction.brand, title: auction.title },
+    ...(auction.lotItems || []),
+  ]
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
@@ -176,6 +196,22 @@ export default function AuctionPage() {
               </span>
             )}
           </div>
+
+          {/* Article links */}
+          {allArticles.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {allArticles.map((art, i) => (
+                <Link
+                  key={i}
+                  href={`/produit/${art.sku}`}
+                  className="inline-flex items-center gap-1 text-xs text-[#007bff] hover:underline bg-blue-50 dark:bg-blue-950/30 px-2 py-1 rounded-md"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  {art.brand} {art.title || ''}
+                </Link>
+              ))}
+            </div>
+          )}
 
           {/* Current price */}
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">

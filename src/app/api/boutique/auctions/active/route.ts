@@ -75,6 +75,14 @@ export async function GET() {
     // Count total bids
     const bidCount = await db.bid.count({ where: { auctionId: auction.id } })
 
+    // Parse lotItems
+    let lotItems: { sku: string; brand: string; title: string | null }[] | null = null
+    if (auction.lotItems) {
+      try {
+        lotItems = JSON.parse(auction.lotItems)
+      } catch {}
+    }
+
     return NextResponse.json({
       auction: {
         id: auction.id,
@@ -95,6 +103,7 @@ export async function GET() {
           name: b.bidderName || 'Anonyme',
           time: b.createdAt,
         })),
+        lotItems,
         stockItem: auction.stockItem ? {
           ...auction.stockItem,
           photos,

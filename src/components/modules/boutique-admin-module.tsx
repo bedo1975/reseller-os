@@ -6757,7 +6757,7 @@ function AuctionsTab() {
         .then(r => r.json())
         .then(data => {
           if (Array.isArray(data)) {
-            setStockItems(data.filter((i: any) => i.status !== 'VENDU' && i.status !== 'RESERVE'))
+            setStockItems(data.filter((i: any) => i.status !== 'VENDU' && i.status !== 'RESERVE' && (i.quantity || 0) > 0))
           }
         })
         .catch(() => {})
@@ -6809,7 +6809,13 @@ function AuctionsTab() {
       const res = await fetch(`/api/boutique/admin/auctions/${id}/end`, { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erreur')
-      toast.success(data.message || 'Enchère terminée')
+      if (data.emailSent === false && data.emailError) {
+        toast.warning(`Enchère terminée — mais l'email n'a pas pu être envoyé : ${data.emailError}`)
+      } else if (data.winner) {
+        toast.success(`Enchère remportée par ${data.winner} — ${data.amount.toFixed(2)} € — email envoyé !`)
+      } else {
+        toast.success(data.message || 'Enchère terminée')
+      }
       fetchAuctions()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Erreur')

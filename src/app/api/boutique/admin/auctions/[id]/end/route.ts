@@ -106,7 +106,9 @@ export async function POST(
       ? `${siteUrl.replace(/\/+$/, '')}/panier?offer=${cartToken}`
       : `/panier?offer=${cartToken}`
 
-    // Send the notification email (best-effort)
+    // Send the notification email
+    let emailSent = false
+    let emailError: string | null = null
     try {
       await notifyAuctionWon({
         clientEmail: winningBid.bidderEmail,
@@ -120,11 +122,19 @@ export async function POST(
         endsAt: auction.endsAt,
       })
       await db.auction.update({ where: { id }, data: { winnerEmailSent: true } })
-    } catch (emailErr) {
+      emailSent = true
+    } catch (emailErr: any) {
+      emailError = emailErr?.message || 'Erreur inconnue'
       console.error('[auctions/end] Failed to send winner email:', emailErr)
     }
 
-    return NextResponse.json({ ok: true, winner: winningBid.bidderEmail, amount: winningBid.amount })
+    return NextResponse.json({
+      ok: true,
+      winner: winningBid.bidderEmail,
+      amount: winningBid.amount,
+      emailSent,
+      emailError,
+    })
   } catch (error) {
     console.error('POST /api/boutique/admin/auctions/[id]/end error:', error)
     if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {
