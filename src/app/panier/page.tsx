@@ -91,16 +91,31 @@ function CartPage() {
             return item
           })
 
-          // If the main item is not in the cart yet, add it
+          // If the main item is not in the cart yet, add it with full details
           if (!updatedCart.find(i => i.sku === data.sku)) {
             updatedCart.push({
               sku: data.sku,
               brand: data.brand,
               category: data.category || 'vetements',
+              size: data.size || null,
+              color: data.color || null,
               price: data.originalPrice,
               offerPrice: effectivePrice,
               qty: 1,
-              mainPhoto: null,
+              mainPhoto: data.mainPhoto || data.photos?.[0] || null,
+            })
+          } else {
+            // Update existing item with photo + details if missing
+            updatedCart = updatedCart.map(item => {
+              if (item.sku === data.sku) {
+                return {
+                  ...item,
+                  size: item.size || data.size || null,
+                  color: item.color || data.color || null,
+                  mainPhoto: item.mainPhoto || data.mainPhoto || data.photos?.[0] || null,
+                }
+              }
+              return item
             })
           }
 
@@ -111,11 +126,13 @@ function CartPage() {
                 updatedCart.push({
                   sku: li.sku,
                   brand: li.brand,
-                  category: 'vetements',
+                  category: li.category || 'vetements',
+                  size: li.size || null,
+                  color: li.color || null,
                   price: 0,           // lot item — included in the auction price
                   offerPrice: 0,       // no additional charge
                   qty: 1,
-                  mainPhoto: null,
+                  mainPhoto: li.mainPhoto || null,
                 })
               }
             }

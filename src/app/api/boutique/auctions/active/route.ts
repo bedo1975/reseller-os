@@ -172,11 +172,35 @@ export async function GET() {
     // Count total bids
     const bidCount = await db.bid.count({ where: { auctionId: auction.id } })
 
-    // Parse lotItems
-    let lotItems: { sku: string; brand: string; title: string | null }[] | null = null
+    // Parse lotItems + fetch their photos
+    let lotItems: { sku: string; brand: string; title: string | null; mainPhoto: string | null; size: string | null; color: string | null }[] | null = null
     if (auction.lotItems) {
       try {
-        lotItems = JSON.parse(auction.lotItems)
+        const lotIds = JSON.parse(auction.lotItems) as { stockItemId: string; sku: string; brand: string; title: string | null }[]
+        const lotStockItems = await db.stockItem.findMany({
+          where: { id: { in: lotIds.map(li => li.stockItemId) } },
+          select: { id: true, sku: true, photos: true, size: true, color: true },
+        })
+        lotItems = lotIds.map(li => {
+          const si = lotStockItems.find(s => s.id === li.stockItemId)
+          let liPhoto: string | null = null
+          if (si?.photos) {
+            try {
+              const liPhotos = JSON.parse(si.photos)
+              if (Array.isArray(liPhotos) && liPhotos.length > 0) {
+                liPhoto = liPhotos[0].startsWith('/uploads/') ? `/api${liPhotos[0]}` : liPhotos[0]
+              }
+            } catch {}
+          }
+          return {
+            sku: li.sku,
+            brand: li.brand,
+            title: li.title,
+            mainPhoto: liPhoto,
+            size: si?.size || null,
+            color: si?.color || null,
+          }
+        })
       } catch {}
     }
 

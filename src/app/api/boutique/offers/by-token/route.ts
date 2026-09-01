@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
       where: { cartToken: token },
       include: {
         stockItem: {
-          select: { sku: true, brand: true, title: true, category: true, photos: true, suggestedPrice: true, quantity: true, status: true },
+          select: { sku: true, brand: true, title: true, category: true, photos: true, suggestedPrice: true, quantity: true, status: true, size: true, color: true },
         },
       },
     })
@@ -73,8 +73,49 @@ export async function GET(req: NextRequest) {
         await db.auction.update({ where: { id: auction.id }, data: { status: 'ended' } })
         return NextResponse.json({ error: 'Enchère expirée', status: 'expired' }, { status: 410 })
       }
-      // For auctions, the stock item might be VENDU (marked sold when the auction ended).
-      // That's OK — the winner can still checkout at the winning price.
+
+      // Parse photos for the main item
+      let mainPhoto: string | null = null
+      let mainPhotos: string[] = []
+      if (auction.stockItem?.photos) {
+        try {
+          mainPhotos = JSON.parse(auction.stockItem.photos)
+          mainPhotos = mainPhotos.map((p: string) => p.startsWith('/uploads/') ? `/api${p}` : p)
+          if (mainPhotos.length > 0) mainPhoto = mainPhotos[0]
+        } catch {}
+      }
+      if (!mainPhoto && auction.mainPhoto) mainPhoto = auction.mainPhoto
+
+      // Fetch lot items with full details (photos, size, color, category)
+      let lotItemsDetailed: any[] | null = null
+      if (auction.lotItems) {
+        try {
+          const lotIds = JSON.parse(auction.lotItems) as { stockItemId: string; sku: string; brand: string; title: string | null }[]
+          const lotStockItems = await db.stockItem.findMany({
+            where: { id: { in: lotIds.map(li => li.stockItemId) } },
+            select: { id: true, sku: true, brand: true, title: true, category: true, size: true, color: true, photos: true },
+          })
+          lotItemsDetailed = lotIds.map(li => {
+            const si = lotStockItems.find(s => s.id === li.stockItemId)
+            let photos: string[] = []
+            if (si?.photos) {
+              try {
+                photos = JSON.parse(si.photos).map((p: string) => p.startsWith('/uploads/') ? `/api${p}` : p)
+              } catch {}
+            }
+            return {
+              sku: li.sku,
+              brand: li.brand,
+              title: li.title,
+              category: si?.category || 'vetements',
+              size: si?.size || null,
+              color: si?.color || null,
+              mainPhoto: photos[0] || null,
+            }
+          })
+        } catch {}
+      }
+
       return NextResponse.json({
         id: auction.id,
         source: 'auction',
@@ -83,12 +124,15 @@ export async function GET(req: NextRequest) {
         brand: auction.brand,
         title: auction.title,
         category: auction.stockItem?.category || 'vetements',
+        size: auction.stockItem?.size || null,
+        color: auction.stockItem?.color || null,
+        mainPhoto,
+        photos: mainPhotos,
         originalPrice: auction.startPrice,
-        offeredPrice: auction.currentPrice,  // winning bid amount
-        discountAmount: 0,  // not applicable for auctions
+        offeredPrice: auction.currentPrice,
+        discountAmount: 0,
         cartExpiresAt: auction.cartExpiresAt,
-        // If it's a lot, include the lot items so the cart can add them all
-        lotItems: auction.lotItems ? (() => { try { return JSON.parse(auction.lotItems) } catch { return null } })() : null,
+        lotItems: lotItemsDetailed,
       })
     }
 

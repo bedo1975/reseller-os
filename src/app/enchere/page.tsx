@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Package, Gavel, Mail, Send, Loader2, Clock, TrendingUp, CheckCircle2, ExternalLink } from 'lucide-react'
+import { Package, Gavel, Mail, Send, Loader2, Clock, TrendingUp, CheckCircle2, ExternalLink, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatEUR } from '@/lib/constants'
 import Link from 'next/link'
@@ -23,7 +23,7 @@ interface ActiveAuction {
   increments: number[]
   bidCount: number
   bids: { amount: number; name: string; time: string }[]
-  lotItems: { sku: string; brand: string; title: string | null }[] | null
+  lotItems: { sku: string; brand: string; title: string | null; mainPhoto: string | null; size: string | null; color: string | null }[] | null
   stockItem: {
     size: string | null
     color: string | null
@@ -152,6 +152,7 @@ export default function AuctionPage() {
   }
 
   const photos = auction.stockItem?.photos?.length ? auction.stockItem.photos : (auction.mainPhoto ? [auction.mainPhoto] : [])
+  const hasLot = auction.lotItems && auction.lotItems.length > 0
 
   // Collect all article links (main + lot)
   const allArticles = [
@@ -168,15 +169,63 @@ export default function AuctionPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Product photos */}
+        {/* Product photos — main + lot items */}
         <div>
-          {photos.length > 0 ? (
-            <div className="aspect-square bg-gray-50 rounded-lg overflow-hidden">
-              <img src={photos[0]} alt={auction.brand} className="w-full h-full object-cover" />
+          {hasLot ? (
+            // Lot: show each article's main photo with a "+" between them
+            <div className="flex items-center gap-2">
+              {/* Main article photo */}
+              <div className="flex-1 aspect-square bg-gray-50 rounded-lg overflow-hidden">
+                {photos.length > 0 ? (
+                  <img src={photos[0]} alt={auction.brand} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex items-center justify-center w-full h-full"><Package className="h-16 w-16 text-gray-300" /></div>
+                )}
+              </div>
+              {/* Plus icon */}
+              <div className="shrink-0">
+                <div className="w-12 h-12 rounded-full bg-amber-100 border-2 border-amber-300 flex items-center justify-center">
+                  <Plus className="h-6 w-6 text-amber-600" />
+                </div>
+              </div>
+              {/* Lot item photos */}
+              {auction.lotItems!.map((li, i) => (
+                <div key={i} className="flex-1 aspect-square bg-gray-50 rounded-lg overflow-hidden">
+                  {li.mainPhoto ? (
+                    <img src={li.mainPhoto} alt={li.brand} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="flex items-center justify-center w-full h-full"><Package className="h-16 w-16 text-gray-300" /></div>
+                  )}
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="aspect-square bg-gray-50 rounded-lg flex items-center justify-center">
-              <Package className="h-16 w-16 text-gray-300" />
+            // Single article: just show the main photo
+            photos.length > 0 ? (
+              <div className="aspect-square bg-gray-50 rounded-lg overflow-hidden">
+                <img src={photos[0]} alt={auction.brand} className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              <div className="aspect-square bg-gray-50 rounded-lg flex items-center justify-center">
+                <Package className="h-16 w-16 text-gray-300" />
+              </div>
+            )
+          )}
+
+          {/* Lot items details (below photos) */}
+          {hasLot && (
+            <div className="mt-3 space-y-1">
+              {auction.lotItems!.map((li, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+                  <span className="font-medium">{li.brand}</span>
+                  {li.title && <span>{li.title}</span>}
+                  {li.size && <span className="text-gray-400">· Taille {li.size}</span>}
+                  {li.color && <span className="text-gray-400">· {li.color}</span>}
+                  <Link href={`/produit/${li.sku}`} className="text-[#007bff] hover:underline ml-auto">
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                </div>
+              ))}
             </div>
           )}
         </div>
