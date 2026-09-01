@@ -1047,7 +1047,7 @@ model BoutiqueMessage {
 // ─────────────────────────────────────────────
 model Auction {
   id            String   @id @default(cuid())
-  // Article mis aux enchères
+  // Article principal mis aux enchères (obligatoire — c'est l'article qui est réservé)
   stockItemId   String
   stockItem     StockItem @relation(fields: [stockItemId], references: [id])
   sku           String              // snapshot SKU
@@ -1057,7 +1057,7 @@ model Auction {
   // Snapshot de la photo principale (pour l'affichage sans re-fetch)
   mainPhoto     String?
   // Prix
-  startPrice    Float               // prix de départ (€)
+  startPrice    Float               // prix de départ (€) — fixé par l'admin
   currentPrice  Float               // prix actuel (dernière enchère ou prix de départ)
   reservePrice  Float?              // prix de réserve (optionnel — l'enchère n'est pas vendue en dessous)
   // Dates
@@ -1075,6 +1075,10 @@ model Auction {
   winnerEmailSent Boolean @default(false)
   // Incréments spécifiques à cette enchère (JSON: [0.5,1,2,5]) — si null, utilise la config globale
   increments    String?
+  // Articles supplémentaires du lot (JSON: [{ stockItemId, sku, brand, title }])
+  // Le lot est composé de l'article principal + ces articles supplémentaires.
+  // Tous sont réservés pendant l'enchère et décrémentés si l'enchère est remportée.
+  lotItems      String?             // JSON array — null si enchère simple (1 article)
   // Métadonnées
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

@@ -2579,6 +2579,7 @@ interface EmailSettingsData {
   templateOfferAccepted: string | null
   templateOfferRejected: string | null
   templateAdminOffer: string | null
+  templateAuctionWon: string | null
 }
 
 // Modern HTML preset generator for email templates.
@@ -2696,6 +2697,13 @@ ${footerBlock}
         '<p>Une nouvelle offre vient d\'être soumise.</p><div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;text-align:left;"><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Client</p><p style="margin:0 0 12px 0;font-weight:600;">{clientName} ({clientEmail})</p><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Article</p><p style="margin:0 0 12px 0;font-weight:600;">{brand} <span style="font-family:monospace;font-size:11px;color:#666;">{sku}</span></p><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Offre</p><p style="margin:0;font-size:22px;font-weight:700;color:#f59e0b;">{offeredPrice} € <span style="font-size:14px;color:#92400e;">(au lieu de {originalPrice} €)</span></p></div>',
         'Traiter l\'offre',
         '{adminUrl}',
+      )
+    case 'templateAuctionWon':
+      return wrap(
+        '🎉 Enchère remportée !',
+        '<p>Bonjour {firstName},</p><p>Félicitations ! Vous avez <strong style="color:#10b981;">remporté l\'enchère</strong> pour l\'article <strong>{brand}</strong> !</p><div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:16px;margin:12px 0;"><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Article</p><p style="margin:0 0 12px 0;font-weight:600;">{brand} <span style="font-family:monospace;font-size:11px;color:#666;">{sku}</span></p><p style="margin:0 0 4px 0;font-size:12px;color:#6b7280;text-transform:uppercase;">Votre enchère gagnante</p><p style="margin:0;font-size:28px;font-weight:700;color:#10b981;">{winningBid} €</p><p style="margin:8px 0 0 0;font-size:12px;color:#065f46;">⏰ Valable jusqu\'au {cartExpiresAt}</p></div>',
+        'Accéder à mon panier',
+        '{cartUrl}',
       )
     default:
       return wrap('Bonjour {firstName}', '<p>Votre message ici.</p>')
@@ -2899,6 +2907,7 @@ function EmailSection() {
             { key: 'templateOfferAccepted' as const, label: 'Offre acceptée (client)', placeholder: 'Bonjour {firstName}, votre offre de {offeredPrice}€ pour {brand} a été acceptée !' },
             { key: 'templateOfferRejected' as const, label: 'Offre refusée (client)', placeholder: 'Bonjour {firstName}, nous ne pouvons pas accepter votre offre pour {brand}. Motif : {reason}.' },
             { key: 'templateAdminOffer' as const, label: 'Nouvelle offre (admin)', placeholder: 'Nouvelle offre : {clientName} propose {offeredPrice}€ pour {brand} (SKU : {sku}).' },
+            { key: 'templateAuctionWon' as const, label: 'Enchère remportée', placeholder: 'Bonjour {firstName}, félicitations ! Vous avez remporté l\'enchère pour {brand} à {winningBid}€ !' },
           ].map(t => (
             <div key={t.key} className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">

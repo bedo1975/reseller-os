@@ -51,6 +51,7 @@ export async function PUT(req: NextRequest) {
       newsletterEnabled, newsletterTitle, newsletterSubtitle, newsletterButtonText, newsletterPlaceholder, newsletterSuccessMessage, newsletterColor,
       preparationSlipSubtitle, invoiceFooterText,
       makeOfferDiscounts, makeOfferAllowFreeOffer, makeOfferCartDurationHours,
+      auctionIncrements, auctionStartPrice, auctionDurationHours,
     } = body
 
     const data: any = {}
@@ -171,6 +172,16 @@ export async function PUT(req: NextRequest) {
     if (makeOfferCartDurationHours !== undefined && makeOfferCartDurationHours !== null) {
       const hours = typeof makeOfferCartDurationHours === 'string' ? parseInt(makeOfferCartDurationHours) : makeOfferCartDurationHours
       if (!Number.isNaN(hours)) data.makeOfferCartDurationHours = Math.max(1, Math.min(168, hours))
+    }
+    // Auction configuration
+    if (typeof auctionIncrements === 'string') data.auctionIncrements = auctionIncrements
+    if (auctionStartPrice !== undefined && auctionStartPrice !== null) {
+      const sp = typeof auctionStartPrice === 'string' ? parseFloat(auctionStartPrice) : auctionStartPrice
+      if (!Number.isNaN(sp) && sp > 0) data.auctionStartPrice = sp
+    }
+    if (auctionDurationHours !== undefined && auctionDurationHours !== null) {
+      const hours = typeof auctionDurationHours === 'string' ? parseInt(auctionDurationHours) : auctionDurationHours
+      if (!Number.isNaN(hours)) data.auctionDurationHours = Math.max(1, Math.min(720, hours))
     }
 
     // Use update (not upsert) — the row is guaranteed to exist (created by getBoutiqueSettings on first access).

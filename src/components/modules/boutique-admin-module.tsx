@@ -5,7 +5,7 @@ import {
   ShoppingBag, Package, Users, Mail, Palette, Truck, Layers,
   Loader2, Trash2, Edit, Eye, Send, Check, X, Plus, Save, RefreshCw, Upload,
   ChevronRight, ChevronDown, Clock, Euro, FileText, Image as ImageIcon, Store, Shield, BarChart3, Filter, MapPin, Search,
-  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler, Calculator, CreditCard, Calendar, PackageCheck, Tag,
+  TicketPercent, Share2, MailOpen, BellRing, Award, Stamp, Crop, Ruler, Calculator, CreditCard, Calendar, PackageCheck, Tag, Gavel,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils'
 import { usePermissions } from '@/hooks/use-permissions'
 import { formatEUR, formatDate } from '@/lib/constants'
 
-type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter' | 'stock-alerts' | 'size-guide' | 'price-calculator' | 'offers'
+type Tab = 'orders' | 'clients' | 'messages' | 'appearance' | 'shipping' | 'payments' | 'categories' | 'coupons' | 'share' | 'newsletter' | 'stock-alerts' | 'size-guide' | 'price-calculator' | 'offers' | 'auctions'
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'orders', label: 'Commandes', icon: Package },
@@ -46,6 +46,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: 'size-guide', label: 'Guide tailles', icon: Ruler },
   { id: 'price-calculator', label: 'Prix auto', icon: Calculator },
   { id: 'offers', label: 'Offres', icon: Tag },
+  { id: 'auctions', label: 'Enchères', icon: Gavel },
 ]
 
 export function BoutiqueAdminModule() {
@@ -104,6 +105,7 @@ export function BoutiqueAdminModule() {
       {tab === 'size-guide' && <SizeGuideTab />}
       {tab === 'price-calculator' && <PriceCalculatorTab />}
       {tab === 'offers' && <OffersTab />}
+      {tab === 'auctions' && <AuctionsTab />}
     </div>
   )
 }
@@ -6678,6 +6680,343 @@ function OffersTab() {
             <Button onClick={doReject} disabled={saving} variant="destructive" className="gap-2">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
               Refuser et envoyer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ONGLET — ENCHÈRES (Auction)
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface AuctionRow {
+  id: string
+  sku: string
+  brand: string
+  title: string | null
+  mainPhoto: string | null
+  startPrice: number
+  currentPrice: number
+  startsAt: string
+  endsAt: string
+  status: string
+  winnerEmail: string | null
+  lotItems: string | null
+  bidCount: number
+  bids: { amount: number; bidderName: string | null; bidderEmail: string }[]
+  stockItem: { quantity: number; status: string; photos: string } | null
+}
+
+const AUCTION_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  scheduled: { label: 'Programmée', color: 'bg-blue-100 text-blue-700' },
+  active: { label: 'En cours', color: 'bg-emerald-100 text-emerald-700' },
+  ended: { label: 'Terminée', color: 'bg-gray-100 text-gray-500' },
+  won: { label: 'Remportée', color: 'bg-amber-100 text-amber-700' },
+  cancelled: { label: 'Annulée', color: 'bg-red-100 text-red-700' },
+  archived: { label: 'Archivée', color: 'bg-gray-100 text-gray-400' },
+}
+
+function AuctionsTab() {
+  const [auctions, setAuctions] = useState<AuctionRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [stockItems, setStockItems] = useState<any[]>([])
+  const [form, setForm] = useState({
+    stockItemId: '',
+    lotItemIds: [] as string[],
+    startPrice: '1',
+    reservePrice: '',
+    startsAt: '',
+    endsAt: '',
+    increments: '',
+  })
+  const [saving, setSaving] = useState(false)
+
+  const fetchAuctions = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/boutique/admin/auctions?status=${statusFilter}`)
+      const data = await res.json()
+      setAuctions(data.auctions || [])
+    } catch {
+      toast.error('Erreur réseau')
+    } finally {
+      setLoading(false)
+    }
+  }, [statusFilter])
+
+  useEffect(() => { fetchAuctions() }, [fetchAuctions])
+
+  useEffect(() => {
+    if (showCreateForm && stockItems.length === 0) {
+      fetch('/api/stock?limit=200')
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setStockItems(data.filter((i: any) => i.status !== 'VENDU' && i.status !== 'RESERVE'))
+          }
+        })
+        .catch(() => {})
+    }
+  }, [showCreateForm])
+
+  const createAuction = async () => {
+    if (!form.stockItemId || !form.startPrice || !form.startsAt || !form.endsAt) {
+      toast.error('Article, prix de départ et dates requis')
+      return
+    }
+    setSaving(true)
+    try {
+      const lotItems = form.lotItemIds.map(id => {
+        const si = stockItems.find(s => s.id === id)
+        return { stockItemId: id, sku: si?.sku, brand: si?.brand, title: si?.title }
+      })
+      const res = await fetch('/api/boutique/admin/auctions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stockItemId: form.stockItemId,
+          startPrice: form.startPrice,
+          reservePrice: form.reservePrice || null,
+          startsAt: form.startsAt,
+          endsAt: form.endsAt,
+          increments: form.increments || null,
+          lotItems: lotItems.length > 0 ? lotItems : null,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Erreur')
+      }
+      toast.success('Enchère créée — article(s) réservé(s)')
+      setShowCreateForm(false)
+      setForm({ stockItemId: '', lotItemIds: [], startPrice: '1', reservePrice: '', startsAt: '', endsAt: '', increments: '' })
+      fetchAuctions()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const endAuction = async (id: string) => {
+    if (!confirm('Terminer cette enchère ? Le gagnant sera déterminé et notifié par email.')) return
+    try {
+      const res = await fetch(`/api/boutique/admin/auctions/${id}/end`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erreur')
+      toast.success(data.message || 'Enchère terminée')
+      fetchAuctions()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Erreur')
+    }
+  }
+
+  const archiveAuction = async (id: string) => {
+    try {
+      const res = await fetch(`/api/boutique/admin/auctions/${id}/archive`, { method: 'POST' })
+      if (!res.ok) throw new Error('Erreur')
+      toast.success('Enchère archivée')
+      fetchAuctions()
+    } catch {
+      toast.error('Erreur')
+    }
+  }
+
+  const deleteAuction = async (id: string) => {
+    if (!confirm('Supprimer cette enchère ? Les articles seront remis en stock.')) return
+    try {
+      const res = await fetch(`/api/boutique/admin/auctions?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Erreur')
+      toast.success('Enchère supprimée — articles remis en stock')
+      fetchAuctions()
+    } catch {
+      toast.error('Erreur')
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Label className="text-xs text-muted-foreground">Filtrer :</Label>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px] h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toutes</SelectItem>
+              <SelectItem value="scheduled">Programmées</SelectItem>
+              <SelectItem value="active">En cours</SelectItem>
+              <SelectItem value="ended">Terminées</SelectItem>
+              <SelectItem value="won">Remportées</SelectItem>
+              <SelectItem value="archived">Archivées</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button onClick={() => setShowCreateForm(true)} className="gap-2">
+          <Plus className="h-4 w-4" /> Nouvelle enchère
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>
+      ) : auctions.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <Gavel className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+            <p className="text-sm font-medium">Aucune enchère</p>
+            <p className="text-xs text-muted-foreground mt-1">Créez une enchère pour mettre un article aux enchères.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {auctions.map(a => {
+            const st = AUCTION_STATUS_CONFIG[a.status] || AUCTION_STATUS_CONFIG.scheduled
+            const isLot = a.lotItems && a.lotItems !== 'null'
+            let lotCount = 1
+            if (isLot) { try { lotCount = 1 + JSON.parse(a.lotItems).length } catch {} }
+            return (
+              <Card key={a.id}>
+                <CardContent className="p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-16 h-16 rounded-md overflow-hidden bg-muted shrink-0">
+                        {a.mainPhoto ? (
+                          <img src={a.mainPhoto} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="flex items-center justify-center w-full h-full"><Package className="h-6 w-6 text-muted-foreground/40" /></div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge className={st.color}>{st.label}</Badge>
+                          {lotCount > 1 && <Badge variant="secondary" className="text-[10px] gap-1"><Layers className="h-2.5 w-2.5" /> Lot de {lotCount}</Badge>}
+                        </div>
+                        <p className="text-sm font-medium">{a.brand} {a.title || ''}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{a.sku}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          Début : {new Date(a.startsAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          {' · Fin : '} {new Date(a.endsAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-muted-foreground">Prix départ</p>
+                      <p className="text-sm text-muted-foreground line-through">{a.startPrice.toFixed(2)} €</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Prix actuel</p>
+                      <p className="text-xl font-bold text-amber-600">{a.currentPrice.toFixed(2)} €</p>
+                      <p className="text-[10px] text-muted-foreground">{a.bidCount} enchère{a.bidCount > 1 ? 's' : ''}</p>
+                    </div>
+                  </div>
+
+                  {a.status === 'won' && a.winnerEmail && (
+                    <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2 text-xs mb-2">
+                      <p className="text-amber-700 dark:text-amber-300">🏆 Gagnant : {a.winnerEmail} — {a.currentPrice.toFixed(2)} €</p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 flex-wrap">
+                    {(a.status === 'scheduled' || a.status === 'active') && (
+                      <Button size="sm" onClick={() => endAuction(a.id)} className="gap-1">
+                        <Gavel className="h-3.5 w-3.5" /> Terminer
+                      </Button>
+                    )}
+                    {(a.status === 'scheduled' || a.status === 'active') && (
+                      <Button size="sm" variant="outline" onClick={() => deleteAuction(a.id)} className="text-red-600 gap-1">
+                        <Trash2 className="h-3.5 w-3.5" /> Annuler + stock
+                      </Button>
+                    )}
+                    {(a.status === 'ended' || a.status === 'won') && (
+                      <Button size="sm" variant="outline" onClick={() => archiveAuction(a.id)} className="gap-1">
+                        <Package className="h-3.5 w-3.5" /> Archiver
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+
+      <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Gavel className="h-5 w-5 text-amber-600" /> Créer une enchère
+            </DialogTitle>
+            <DialogDescription>
+              Sélectionnez un article (et optionnellement un lot), fixez le prix de départ et les dates.
+              Les articles seront automatiquement réservés pendant l'enchère.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Article principal *</Label>
+              <Select value={form.stockItemId} onValueChange={v => setForm({ ...form, stockItemId: v })}>
+                <SelectTrigger><SelectValue placeholder="Sélectionner un article…" /></SelectTrigger>
+                <SelectContent>
+                  {stockItems.map(si => (
+                    <SelectItem key={si.id} value={si.id}>
+                      {si.brand} {si.title || si.category} · {si.sku} (stock: {si.quantity})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Articles supplémentaires du lot (optionnel)</Label>
+              <p className="text-[10px] text-muted-foreground">Sélectionnez plusieurs articles pour créer un lot. Tous seront réservés et vendus ensemble si l'enchère est remportée.</p>
+              <div className="max-h-32 overflow-y-auto border rounded-md p-2 space-y-1">
+                {stockItems.filter(si => si.id !== form.stockItemId).map(si => (
+                  <label key={si.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/30 rounded p-1">
+                    <input
+                      type="checkbox"
+                      checked={form.lotItemIds.includes(si.id)}
+                      onChange={e => {
+                        if (e.target.checked) setForm({ ...form, lotItemIds: [...form.lotItemIds, si.id] })
+                        else setForm({ ...form, lotItemIds: form.lotItemIds.filter(id => id !== si.id) })
+                      }}
+                      className="rounded"
+                    />
+                    {si.brand} {si.title || si.category} · {si.sku}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Prix de départ (€) *</Label>
+                <Input type="number" step="0.01" value={form.startPrice} onChange={e => setForm({ ...form, startPrice: e.target.value })} placeholder="1.00" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Prix de réserve (€) — optionnel</Label>
+                <Input type="number" step="0.01" value={form.reservePrice} onChange={e => setForm({ ...form, reservePrice: e.target.value })} placeholder="L'enchère n'est pas vendue en dessous" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Début *</Label>
+                <Input type="datetime-local" value={form.startsAt} onChange={e => setForm({ ...form, startsAt: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Fin *</Label>
+                <Input type="datetime-local" value={form.endsAt} onChange={e => setForm({ ...form, endsAt: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Incréments d'enchère (€) — optionnel</Label>
+              <Input value={form.increments} onChange={e => setForm({ ...form, increments: e.target.value })} placeholder="[0.5,1,2,5] (vide = config globale)" className="font-mono text-sm" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateForm(false)}>Annuler</Button>
+            <Button onClick={createAuction} disabled={saving} className="gap-2 bg-amber-500 hover:bg-amber-600 text-white">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gavel className="h-4 w-4" />}
+              Créer l'enchère
             </Button>
           </DialogFooter>
         </DialogContent>
