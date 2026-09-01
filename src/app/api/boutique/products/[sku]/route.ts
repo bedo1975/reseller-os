@@ -14,8 +14,9 @@ export async function GET(
 
     // Allow quantity = 0 products to be visible (shown as "Non disponible" on the product page)
     // Only boutique-type items appear on the storefront (excludes "plateforme" stock)
+    // Also allow RESERVE status — items reserved for an auction should still be viewable (with a "reserved" badge)
     const item = await db.stockItem.findFirst({
-      where: { sku, status: 'PUBLIE', stockType: 'boutique' },
+      where: { sku, status: { in: ['PUBLIE', 'RESERVE'] }, stockType: 'boutique' },
       select: {
         id: true,
         sku: true,
@@ -35,6 +36,7 @@ export async function GET(
         photos: true,
         measurements: true,
         weight: true,
+        status: true,
         quantity: true,
         createdAt: true,
         isLot: true,
@@ -74,6 +76,7 @@ export async function GET(
       measurements: item.measurements,
       weight: item.weight || 0,
       quantity: item.quantity ?? 1,
+      status: item.status,
       createdAt: item.createdAt,
       isLot: item.isLot || false,
       lotItems: (() => {
@@ -99,7 +102,7 @@ export async function GET(
         where: {
           title: item.title,
           brand: item.brand,
-          status: 'PUBLIE',
+          status: { in: ['PUBLIE', 'RESERVE'] },
           stockType: 'boutique',
           sku: { not: item.sku },
           suggestedPrice: { gt: 0 },

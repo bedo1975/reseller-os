@@ -157,6 +157,26 @@ export async function GET(req: NextRequest) {
           return lotIds.map(li => ({ sku: li.sku, brand: li.brand, title: li.title, mainPhoto: null }))
         } catch { return null } })() : null,
       }))
+      // Fetch photos for lot items in the list
+      for (const al of auctionList) {
+        if (al.lotItems && al.lotItems.length > 0) {
+          const lotStockItems = await db.stockItem.findMany({
+            where: { sku: { in: al.lotItems.map(li => li.sku) } },
+            select: { sku: true, photos: true },
+          })
+          for (const li of al.lotItems) {
+            const si = lotStockItems.find(s => s.sku === li.sku)
+            if (si?.photos) {
+              try {
+                const photos = JSON.parse(si.photos)
+                if (Array.isArray(photos) && photos.length > 0) {
+                  li.mainPhoto = photos[0].startsWith('/uploads/') ? `/api${photos[0]}` : photos[0]
+                }
+              } catch {}
+            }
+          }
+        }
+      }
       // Fill bid counts
       for (const al of auctionList) {
         al.bidCount = await db.bid.count({ where: { auctionId: al.id } })

@@ -55,6 +55,7 @@ interface Product {
   isLot?: boolean
   lotItems?: { brand: string; title?: string | null; size?: string | null; color?: string | null; quantity: number; unitPrice: number; photo?: string | null }[]
   makeOfferEnabled?: boolean
+  status?: string
 }
 
 // Grade → couleur + libellé (Grade A = vert, B = jaune, C = orange)
@@ -664,7 +665,15 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           )}
 
           {/* Actions */}
-          {settings.boutiqueClosed === true ? (
+          {product.status === 'RESERVE' ? (
+            <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-4 py-3 text-sm flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+              <span>
+                Cet article est actuellement <strong>réservé pour une enchère en cours</strong>.
+                Il n'est pas disponible à la vente directe. Consultez la <Link href="/enchere" className="underline font-medium">page des enchères</Link> pour participer.
+              </span>
+            </div>
+          ) : settings.boutiqueClosed === true ? (
             <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 px-4 py-3 text-sm flex items-start gap-2">
               <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
               <span className="whitespace-pre-wrap">
