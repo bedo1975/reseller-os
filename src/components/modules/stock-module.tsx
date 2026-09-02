@@ -590,6 +590,33 @@ export function StockModule() {
               </span>
             </div>
             <div className="flex items-center gap-2">
+
+                          <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/stock/labels', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ ids: Array.from(selectedIds) }),
+                    })
+                    if (!res.ok) throw new Error('Erreur')
+                    const html = await res.text()
+                    const blob = new Blob([html], { type: 'text/html' })
+                    const url = URL.createObjectURL(blob)
+                    window.open(url, '_blank')
+                    toast.success(`${selectedIds.size} étiquette(s) générée(s)`)
+                  } catch {
+                    toast.error('Erreur lors de la génération des étiquettes')
+                  }
+                }}
+              >
+                <Tags className="h-3.5 w-3.5" /> Export Étiquettes
+              </Button>
+
+              
               <Button
                 variant="outline"
                 size="sm"
