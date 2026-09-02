@@ -137,12 +137,13 @@ export function StockModule() {
   }
 
   // Quand le scanner trouve un article → ouvrir la modal "quantité à ajouter"
-  const handleBarcodeFound = (item: any) => {
+  const handleBarcodeFound = (data: any) => {
     setShowScanner(false)
     if (!can('stock', 'edit')) {
       toast.error("Vous n'avez pas la permission de modifier le stock")
       return
     }
+    const item = data.item || data  // ✅ extrait le vrai article depuis data.item
     setQuickQtyItem(item)
   }
 
