@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
       margin: parseFloat(margin.toFixed(1)),
       avgRoi: parseFloat(avgRoi.toFixed(1)),
       salesCount: monthlySales.length,
-      totalStockItems: stockItems.length,
+      totalStockItems: stockItems.filter(i => i.status !== 'VENDU' && (i.quantity || 0) > 0).length,
       stockValue: parseFloat(stockValue.toFixed(2)),
       statusCounts,
       caByPlatform,
