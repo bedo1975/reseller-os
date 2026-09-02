@@ -264,19 +264,24 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
                   <div className="space-y-1">
                     <button
                       onClick={() => setSubcatFilter('all')}
-                      className={`block w-full text-left px-2 py-1 rounded text-sm ${subcatFilter === 'all' ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                      className={`flex items-center justify-between w-full text-left px-2 py-1 rounded text-sm ${subcatFilter === 'all' ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
-                      Toutes
+                      <span>Toutes</span>
+                      <span className="text-[10px] text-gray-400">{allProducts.length}</span>
                     </button>
-                    {subcats.map(s => (
-                      <button
-                        key={s.slug}
-                        onClick={() => setSubcatFilter(s.slug)}
-                        className={`block w-full text-left px-2 py-1 rounded text-sm ${subcatFilter === s.slug ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
+                    {subcats.map(s => {
+                      const count = allProducts.filter(p => p.subcategory === s.slug).length
+                      return (
+                        <button
+                          key={s.slug}
+                          onClick={() => setSubcatFilter(s.slug)}
+                          className={`flex items-center justify-between w-full text-left px-2 py-1 rounded text-sm ${subcatFilter === s.slug ? 'bg-blue-50 text-[#007bff] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                          <span>{s.label}</span>
+                          {count > 0 && <span className="text-[10px] text-gray-400">{count}</span>}
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </div>
