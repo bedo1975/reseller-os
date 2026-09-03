@@ -12,14 +12,16 @@ import bwip from 'bwip-js'
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth()
-    const { ids } = await req.json()
+    const { ids, count } = await req.json()
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({ error: 'Aucun article sélectionné' }, { status: 400 })
     }
 
+    // Deduplicate IDs for the DB query
+    const uniqueIds = Array.from(new Set(ids as string[]))
     const items = await db.stockItem.findMany({
-      where: { id: { in: ids }, userId: user.id },
+      where: { id: { in: uniqueIds }, userId: user.id },
       select: {
         id: true,
         sku: true,
@@ -72,8 +74,15 @@ export async function POST(req: NextRequest) {
       }
     }))
 
+    // If count is provided (single article selected), duplicate the label N times
+    // If multiple articles selected, count is not used (1 label per article)
+    let finalLabels = labels
+    if (count && count > 1 && labels.length === 1) {
+      finalLabels = Array(count).fill(labels[0])
+    }
+
     // Build labels HTML — horizontal layout: text left, barcode right
-    const labelsHtml = labels.map(label => `
+    const labelsHtml = finalLabels.map(label => `
       <div class="label">
         <div class="label-left">
           <div class="label-product">${escapeHtml(label.productName)}</div>
@@ -93,7 +102,7 @@ export async function POST(req: NextRequest) {
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Étiquettes — ${labels.length} article(s)</title>
+<title>Étiquettes — ${finalLabels.length} étiquette(s)</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; padding: 8mm; }
@@ -188,7 +197,7 @@ export async function POST(req: NextRequest) {
 </head>
 <body>
   <div class="print-bar">
-    <span>📋 ${labels.length} étiquette(s) — ${Math.ceil(labels.length / 10)} feuille(s)</span>
+    <span>📋 ${finalLabels.length} étiquette(s) — ${Math.ceil(finalLabels.length / 10)} feuille(s)</span>
     <button onclick="window.print()">🖨️ Imprimer</button>
   </div>
   <div style="height: 40px;"></div>

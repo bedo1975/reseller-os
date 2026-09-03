@@ -123,6 +123,9 @@ export function StockModule() {
   const [showScanner, setShowScanner] = useState(false)
   const [quickQtyItem, setQuickQtyItem] = useState<any>(null)
   const [prefillBarcode, setPrefillBarcode] = useState<string | null>(null)
+  // Label count modal — when 1 article is selected for export
+  const [labelModalOpen, setLabelModalOpen] = useState(false)
+  const [labelCount, setLabelCount] = useState('1')
 
   // Quand le scanner trouve un code-barres inconnu → ouvrir le formulaire d'ajout avec le code pré-rempli
   const handleBarcodeNotFound = (barcode: string) => {
@@ -150,6 +153,25 @@ export function StockModule() {
   }
 
   // Quand l'utilisateur valide la quantité à ajouter → PATCH l'article
+  // Export labels — sends IDs + optional count to the API and opens the result in a new tab
+  const exportLabels = async (ids: string[], count?: number) => {
+    try {
+      const res = await fetch('/api/stock/labels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, count }),
+      })
+      if (!res.ok) throw new Error('Erreur')
+      const html = await res.text()
+      const blob = new Blob([html], { type: 'text/html' })
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      toast.success(`${count || ids.length} étiquette(s) générée(s)`)
+    } catch {
+      toast.error('Erreur lors de la génération des étiquettes')
+    }
+  }
+
   const handleQuickQtyConfirm = async (item: any, qtyToAdd: number) => {
     if (!can('stock', 'edit')) {
       toast.error("Vous n'avez pas la permission de modifier le stock")
@@ -601,32 +623,14 @@ export function StockModule() {
                 size="sm"
                 className="gap-1.5"
                 onClick={async () => {
-                  try {
-                    let ids = Array.from(selectedIds)
-                    let labelCount = ids.length
-                    // If only 1 article selected, ask how many labels to print
-                    if (ids.length === 1) {
-                      const input = prompt('Combien d\'étiquettes imprimer pour cet article ?', '1')
-                      if (!input) return
-                      const n = parseInt(input)
-                      if (!n || n < 1) { toast.error('Nombre invalide'); return }
-                      labelCount = n
-                      // Duplicate the ID n times so the API generates n labels
-                      ids = Array(n).fill(ids[0])
-                    }
-                    const res = await fetch('/api/stock/labels', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ ids }),
-                    })
-                    if (!res.ok) throw new Error('Erreur')
-                    const html = await res.text()
-                    const blob = new Blob([html], { type: 'text/html' })
-                    const url = URL.createObjectURL(blob)
-                    window.open(url, '_blank')
-                    toast.success(`${labelCount} étiquette(s) générée(s)`)
-                  } catch {
-                    toast.error('Erreur lors de la génération des étiquettes')
+                  const ids = Array.from(selectedIds)
+                  if (ids.length === 1) {
+                    // Single article — open modal to ask how many labels
+                    setLabelCount('1')
+                    setLabelModalOpen(true)
+                  } else {
+                    // Multiple articles — generate directly
+                    exportLabels(ids, ids.length)
                   }
                 }}
               >
@@ -918,6 +922,51 @@ export function StockModule() {
         item={quickQtyItem}
         onConfirm={handleQuickQtyConfirm}
       />
+
+      {/* Label count modal — when 1 article is selected for export */}
+      <Dialog open={labelModalOpen} onOpenChange={setLabelModalOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tags className="h-5 w-5" />
+              Nombre d'étiquettes
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label className="text-xs">Combien d'étiquettes imprimer ?</Label>
+            <Input
+              type="number"
+              min={1}
+              value={labelCount}
+              onChange={e => setLabelCount(e.target.value)}
+              autoFocus
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const n = parseInt(labelCount)
+                  if (!n || n < 1) { toast.error('Nombre invalide'); return }
+                  setLabelModalOpen(false)
+                  exportLabels(Array.from(selectedIds), n)
+                }
+              }}
+            />
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setLabelModalOpen(false)}>Annuler</Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const n = parseInt(labelCount)
+                  if (!n || n < 1) { toast.error('Nombre invalide'); return }
+                  setLabelModalOpen(false)
+                  exportLabels(Array.from(selectedIds), n)
+                }}
+                className="gap-1.5"
+              >
+                <Tags className="h-3.5 w-3.5" /> Générer
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* View Dialog */}
       <StockDetail open={!!viewItem} onOpenChange={(o) => !o && setViewItem(null)} item={viewItem} />
