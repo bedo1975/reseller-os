@@ -929,26 +929,31 @@ export function StockModule() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Tags className="h-5 w-5" />
-              Nombre d'étiquettes
+              Étiquettes d'impression
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <Label className="text-xs">Combien d'étiquettes imprimer ?</Label>
-            <Input
-              type="number"
-              min={1}
-              value={labelCount}
-              onChange={e => setLabelCount(e.target.value)}
-              autoFocus
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  const n = parseInt(labelCount)
-                  if (!n || n < 1) { toast.error('Nombre invalide'); return }
-                  setLabelModalOpen(false)
-                  exportLabels(Array.from(selectedIds), n)
-                }
-              }}
-            />
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Nombre d'étiquettes</Label>
+              <Input
+                type="number"
+                min={1}
+                value={labelCount}
+                onChange={e => setLabelCount(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Format d'impression</Label>
+              <Select value={labelFormat} onValueChange={setLabelFormat}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2col">A4 — 2 colonnes (~10/feuille)</SelectItem>
+                  <SelectItem value="1col">A4 — 1 colonne / ligne (étiqueteuse)</SelectItem>
+                  <SelectItem value="3col">A4 — 3 colonnes (compact)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={() => setLabelModalOpen(false)}>Annuler</Button>
               <Button
@@ -957,7 +962,7 @@ export function StockModule() {
                   const n = parseInt(labelCount)
                   if (!n || n < 1) { toast.error('Nombre invalide'); return }
                   setLabelModalOpen(false)
-                  exportLabels(Array.from(selectedIds), n)
+                  exportLabels(Array.from(selectedIds), n, labelFormat)
                 }}
                 className="gap-1.5"
               >

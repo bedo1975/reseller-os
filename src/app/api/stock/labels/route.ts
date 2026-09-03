@@ -12,7 +12,7 @@ import bwip from 'bwip-js'
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth()
-    const { ids, count } = await req.json()
+    const { ids, count, format } = await req.json()
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({ error: 'Aucun article sélectionné' }, { status: 400 })
@@ -98,6 +98,14 @@ export async function POST(req: NextRequest) {
       </div>
     `).join('')
 
+    // Format: '2col' (default), '1col', '3col'
+    const fmt = format || '2col'
+    const gridCols = fmt === '1col' ? '1fr' : fmt === '3col' ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)'
+    const labelHeight = fmt === '1col' ? '22mm' : fmt === '3col' ? '30mm' : '30mm'
+    const barcodeWidth = fmt === '1col' ? '60mm' : fmt === '3col' ? '35mm' : '45mm'
+    const barcodeMaxHeight = fmt === '1col' ? '18mm' : fmt === '3col' ? '22mm' : '24mm'
+    const labelsPerSheet = fmt === '1col' ? 12 : fmt === '3col' ? 12 : 10
+
     const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -108,7 +116,7 @@ export async function POST(req: NextRequest) {
   body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; padding: 8mm; }
   .labels-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: ${gridCols};
     gap: 3mm;
   }
   .label {
@@ -118,7 +126,7 @@ export async function POST(req: NextRequest) {
     display: flex;
     align-items: center;
     gap: 3mm;
-    height: 30mm;
+    height: ${labelHeight};
     page-break-inside: avoid;
   }
   .label-left {
@@ -154,11 +162,11 @@ export async function POST(req: NextRequest) {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    width: 45mm;
+    width: ${barcodeWidth};
   }
   .label-right img {
-    max-height: 24mm;
-    max-width: 45mm;
+    max-height: ${barcodeMaxHeight};
+    max-width: ${barcodeWidth};
     object-fit: contain;
   }
   .no-bc {
@@ -197,7 +205,7 @@ export async function POST(req: NextRequest) {
 </head>
 <body>
   <div class="print-bar">
-    <span>📋 ${finalLabels.length} étiquette(s) — ${Math.ceil(finalLabels.length / 10)} feuille(s)</span>
+    <span>📋 ${finalLabels.length} étiquette(s) — ${Math.ceil(finalLabels.length / labelsPerSheet)} feuille(s) — format ${fmt === '1col' ? '1 colonne' : fmt === '3col' ? '3 colonnes' : '2 colonnes'}</span>
     <button onclick="window.print()">🖨️ Imprimer</button>
   </div>
   <div style="height: 40px;"></div>
