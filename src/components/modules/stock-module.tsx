@@ -1472,8 +1472,8 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         body: JSON.stringify(payload),
       })
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Erreur')
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `Erreur ${res.status}`)
       }
       toast.success(item ? 'Article modifié' : 'Article créé')
       onSaved()

@@ -46,16 +46,18 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  let user: { id: string } | undefined
+  let body: any
   try {
-    const user = await requireAuth()
-    const body = await req.json()
+    user = await requireAuth()
+    body = await req.json()
     const {
       sku, title, brand, url, category, subcategory, size, color, condition, grade,
       purchaseCost, purchaseDate, supplierId, lotReference, lotOrigin, lotCurrent,
       purchaseInvoiceNumber, supplierOrderNumber, purchasePaymentMethod,
       warehouse, rack, shelf, bin, weight, quantity,
       description, suggestedPrice, salePrice, saleActive, photos, barcode, measurements,
-      status, platform, salePlatform, platforms, stockType, makeOfferEnabled,
+      status, platform, salePlatform, platforms, stockType, makeOfferEnabled, variantGroup,
     } = body
 
     if (!sku || !brand) {
@@ -88,7 +90,6 @@ export async function POST(req: NextRequest) {
         shelf: shelf || null,
         bin: bin || null,
         weight: weight ? parseFloat(weight) : null,
-        variantGroup: variantGroup || null,
         quantity: (() => {
           const parsed = parseInt(String(quantity))
           return Number.isNaN(parsed) ? 1 : Math.max(0, parsed)
@@ -108,6 +109,8 @@ export async function POST(req: NextRequest) {
         stockType: stockType === 'plateforme' ? 'plateforme' : 'boutique',
         // Make an Offer — allows clients to propose a reduced price
         makeOfferEnabled: makeOfferEnabled === true,
+        // Variant group — set by the multi-variant form to link sibling variants
+        variantGroup: variantGroup || null,
         userId: user.id,
       },
       include: { supplier: true },
