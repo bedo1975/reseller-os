@@ -280,6 +280,11 @@ model StockItem {
   // Make an Offer — si activé, les clients peuvent proposer un prix réduit
   makeOfferEnabled Boolean @default(false)
 
+  // Variantes — groupe de variantes (rempli uniquement par le mode multi-variant du StockForm).
+  // Articles avec le même variantGroup = variantes du même produit (différentes tailles/couleurs).
+  // null = article standalone (jamais groupé comme variante, même si titre+marque identiques).
+  variantGroup  String?
+
   // 1 StockItem peut avoir plusieurs Sales (utile pour quantité > 1)
   sales         Sale[]
   // Make an Offer — offres reçues pour cet article

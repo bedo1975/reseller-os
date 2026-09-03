@@ -41,7 +41,7 @@ export async function PATCH(
       'warehouse', 'rack', 'shelf', 'bin', 'weight', 'quantity',
       'description', 'suggestedPrice', 'salePrice', 'saleActive', 'photos', 'barcode', 'measurements',
       'status', 'platform', 'salePlatform', 'platforms', 'stockType', 'makeOfferEnabled',
-      'invoicePath', 'invoiceName',
+      'invoicePath', 'invoiceName','variantGroup',
     ]
     for (const key of allowed) {
       if (key in body) updateData[key] = body[key]

@@ -126,7 +126,7 @@ export function StockModule() {
   // Label count modal — when 1 article is selected for export
   const [labelModalOpen, setLabelModalOpen] = useState(false)
   const [labelCount, setLabelCount] = useState('1')
-   const [labelFormat, setLabelFormat] = useState('2col')
+  const [labelFormat, setLabelFormat] = useState('2col')
 
   // Quand le scanner trouve un code-barres inconnu → ouvrir le formulaire d'ajout avec le code pré-rempli
   const handleBarcodeNotFound = (barcode: string) => {
@@ -1419,6 +1419,8 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
       let created = 0
       let failed = 0
       const baseSku = form.sku || `ART-${Date.now().toString(36).toUpperCase()}`
+      // Generate a unique variantGroup ID — all variants share it so they're grouped on the boutique
+      const variantGroupId = `VG-${Date.now().toString(36).toUpperCase()}`
       for (let i = 0; i < validVariants.length; i++) {
         const v = validVariants[i]
         const suffix = [v.size, v.color].filter(Boolean).join('-').toUpperCase()
@@ -1430,6 +1432,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
           color: v.color || null,
           quantity: parseInt(v.quantity) || 1,
           photos: JSON.stringify(photos),
+          variantGroup: variantGroupId,
         }
         if (form.status !== 'VENDU') delete (payload as Record<string, unknown>).platform
         try {

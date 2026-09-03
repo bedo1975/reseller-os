@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
         quantity: true,
         createdAt: true,
         isLot: true,
+        variantGroup: true,
       },
     })
 
@@ -107,7 +108,8 @@ export async function GET(req: NextRequest) {
     // Group variants by title + brand — items created via the multi-variant form
     // share the same title and brand. This is the most reliable way to group variants
     // regardless of SKU format. Only show one product per group (prefer in-stock).
-    const groupKey = (p: any) => `${p.title || ''}||${p.brand || ''}`
+    
+        const groupKey = (p: any) => p.variantGroup || `__standalone__${p.id}
     const groups = new Map<string, any[]>()
     for (const p of allProducts) {
       const key = groupKey(p)
