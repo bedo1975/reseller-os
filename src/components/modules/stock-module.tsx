@@ -126,6 +126,7 @@ export function StockModule() {
   // Label count modal — when 1 article is selected for export
   const [labelModalOpen, setLabelModalOpen] = useState(false)
   const [labelCount, setLabelCount] = useState('1')
+   const [labelFormat, setLabelFormat] = useState('2col')
 
   // Quand le scanner trouve un code-barres inconnu → ouvrir le formulaire d'ajout avec le code pré-rempli
   const handleBarcodeNotFound = (barcode: string) => {
@@ -154,12 +155,12 @@ export function StockModule() {
 
   // Quand l'utilisateur valide la quantité à ajouter → PATCH l'article
   // Export labels — sends IDs + optional count to the API and opens the result in a new tab
-  const exportLabels = async (ids: string[], count?: number) => {
+  const exportLabels = async (ids: string[], count?: number, fmt?: string) => {
     try {
       const res = await fetch('/api/stock/labels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, count }),
+        body: JSON.stringify({ ids, count, format: fmt || '2col' }),
       })
       if (!res.ok) throw new Error('Erreur')
       const html = await res.text()
