@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Plus, Search, MapPin, Barcode, Edit, Trash2, Package, ChevronLeft, ChevronRight,
   Eye, AlertCircle, Camera, Upload, RefreshCw, Sparkles, ScanEye, QrCode, Link2, Download,
-  Tag, Euro, Layers, Loader2, Printer, Wand2, Calculator, Store, ShoppingCart, Filter, Tags
+  Tag, Euro, Layers, Loader2, Printer, Wand2, Calculator, Store, ShoppingCart, Filter, Tags,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -143,7 +143,9 @@ export function StockModule() {
       toast.error("Vous n'avez pas la permission de modifier le stock")
       return
     }
-    const item = data.item || data  // ✅ extrait le vrai article depuis data.item
+    // data is the full API response: { found, item, items? }
+    // Use data.item (the actual stock item with all details)
+    const item = data.item || data
     setQuickQtyItem(item)
   }
 
@@ -513,37 +515,40 @@ export function StockModule() {
                 </SelectContent>
               </Select>
               <Select value={brandFilter} onValueChange={setBrandFilter}>
-                <SelectTrigger className="w-full lg:w-[140px]">
+                <SelectTrigger className="w-full lg:w-[160px]">
                   <SelectValue placeholder="Marque" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes marques</SelectItem>
-                  {brands.map(b => (
-                    <SelectItem key={b} value={b}>{b}</SelectItem>
-                  ))}
+                  <SelectItem value="all">Toutes marques ({items?.length || 0})</SelectItem>
+                  {brands.map(b => {
+                    const count = items?.filter(i => i.brand === b).length || 0
+                    return <SelectItem key={b} value={b}>{b} ({count})</SelectItem>
+                  })}
                 </SelectContent>
               </Select>
               <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setSubcategoryFilter('all') }}>
-                <SelectTrigger className="w-full lg:w-[140px]">
+                <SelectTrigger className="w-full lg:w-[160px]">
                   <SelectValue placeholder="Catégorie" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes catégories</SelectItem>
-                  {categories.map(c => (
-                    <SelectItem key={c.id} value={c.code}>{c.value}</SelectItem>
-                  ))}
+                  <SelectItem value="all">Toutes catégories ({items?.length || 0})</SelectItem>
+                  {categories.map(c => {
+                    const count = items?.filter(i => i.category === c.code).length || 0
+                    return <SelectItem key={c.id} value={c.code}>{c.value} ({count})</SelectItem>
+                  })}
                 </SelectContent>
               </Select>
               {availableSubcats.length > 0 && (
                 <Select value={subcategoryFilter} onValueChange={setSubcategoryFilter}>
-                  <SelectTrigger className="w-full lg:w-[140px]">
+                  <SelectTrigger className="w-full lg:w-[160px]">
                     <SelectValue placeholder="Sous-cat." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Toutes sous-cat.</SelectItem>
-                    {availableSubcats.map(s => (
-                      <SelectItem key={s.code} value={s.code}>{s.value}</SelectItem>
-                    ))}
+                    <SelectItem value="all">Toutes sous-cat. ({items?.filter(i => i.category === categoryFilter).length || 0})</SelectItem>
+                    {availableSubcats.map(s => {
+                      const count = items?.filter(i => i.category === categoryFilter && (i as { subcategory?: string }).subcategory === s.code).length || 0
+                      return <SelectItem key={s.code} value={s.code}>{s.value} ({count})</SelectItem>
+                    })}
                   </SelectContent>
                 </Select>
               )}
@@ -591,24 +596,35 @@ export function StockModule() {
               </span>
             </div>
             <div className="flex items-center gap-2">
-
-                          <Button
+              <Button
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
                 onClick={async () => {
                   try {
+                    let ids = Array.from(selectedIds)
+                    let labelCount = ids.length
+                    // If only 1 article selected, ask how many labels to print
+                    if (ids.length === 1) {
+                      const input = prompt('Combien d\'étiquettes imprimer pour cet article ?', '1')
+                      if (!input) return
+                      const n = parseInt(input)
+                      if (!n || n < 1) { toast.error('Nombre invalide'); return }
+                      labelCount = n
+                      // Duplicate the ID n times so the API generates n labels
+                      ids = Array(n).fill(ids[0])
+                    }
                     const res = await fetch('/api/stock/labels', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ ids: Array.from(selectedIds) }),
+                      body: JSON.stringify({ ids }),
                     })
                     if (!res.ok) throw new Error('Erreur')
                     const html = await res.text()
                     const blob = new Blob([html], { type: 'text/html' })
                     const url = URL.createObjectURL(blob)
                     window.open(url, '_blank')
-                    toast.success(`${selectedIds.size} étiquette(s) générée(s)`)
+                    toast.success(`${labelCount} étiquette(s) générée(s)`)
                   } catch {
                     toast.error('Erreur lors de la génération des étiquettes')
                   }
@@ -616,8 +632,6 @@ export function StockModule() {
               >
                 <Tags className="h-3.5 w-3.5" /> Export Étiquettes
               </Button>
-
-              
               <Button
                 variant="outline"
                 size="sm"
