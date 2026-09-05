@@ -56,7 +56,6 @@ export async function GET(req: NextRequest) {
       return acc
     }, {} as Record<string, number>)
 
-
     const stockValue = stockItems
       .filter(i => i.status !== 'VENDU' && (i.quantity || 0) > 0)
       .reduce((sum, i) => sum + i.purchaseCost * (i.quantity || 1), 0)

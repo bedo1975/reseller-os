@@ -93,7 +93,14 @@ echo ""
 echo -e "${YELLOW}📥 3/7 — Pull depuis GitHub...${NC}"
 git fetch origin
 git reset --hard origin/main
-echo -e "  ✓ Code à jour"
+
+# Nettoie les fichiers untracked (vieux dossiers supprimés du repo mais encore présents sur le serveur)
+# Important après une refonte de structure (ex: déplacement de /boutique/* vers /*)
+# --force : ne demande pas confirmation
+# -d : supprime aussi les dossiers vides
+# On ne touche pas à .env, db/, node_modules/ car ils sont dans .gitignore
+git clean -fd -- src/ public/
+echo -e "  ✓ Code à jour + fichiers obsolètes supprimés"
 echo ""
 
 # Show new commits

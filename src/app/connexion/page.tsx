@@ -6,14 +6,11 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, User, Mail, Lock, Phone, MailCheck, CheckCircle2, XCircle, Shield } from 'lucide-react'
+import { Loader2, User, Mail, Lock, Phone, MailCheck, CheckCircle2, XCircle, Shield, X } from 'lucide-react'
 import { toast } from 'sonner'
-
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
-
-
 
 function ConnexionPageContent() {
   const router = useRouter()
@@ -24,11 +21,8 @@ function ConnexionPageContent() {
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', password: '', phone: '',
   })
-
   const [rgpdAccepted, setRgpdAccepted] = useState(false)
   const [rgpdPopupOpen, setRgpdPopupOpen] = useState(false)
-
-
   // When set: show the "check your email" panel instead of the form
   const [pendingValidationEmail, setPendingValidationEmail] = useState<string | null>(null)
   // Validation result from the email link (GET /api/boutique/client/validate-account redirects here)
@@ -60,12 +54,10 @@ function ConnexionPageContent() {
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }))
 
   const submit = async () => {
-
-      if (mode === 'register' && !rgpdAccepted) {
+    if (mode === 'register' && !rgpdAccepted) {
       toast.error('Vous devez accepter la politique de confidentialité pour vous inscrire.')
       return
     }
-
     setLoading(true)
     try {
       const endpoint = mode === 'login' ? '/api/boutique/client/login' : '/api/boutique/client/register'
@@ -373,7 +365,8 @@ function ConnexionPageContent() {
               </p>
             )}
           </div>
-       
+
+          {/* RGPD consent — only on registration */}
           {mode === 'register' && (
             <div className="space-y-2">
               <label className="flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
@@ -415,7 +408,8 @@ function ConnexionPageContent() {
         </div>
       </div>
 
-            <Dialog open={rgpdPopupOpen} onOpenChange={setRgpdPopupOpen}>
+      {/* RGPD popup */}
+      <Dialog open={rgpdPopupOpen} onOpenChange={setRgpdPopupOpen}>
         <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -428,13 +422,17 @@ function ConnexionPageContent() {
           </DialogHeader>
           <div className="space-y-3 text-sm text-gray-600 py-2">
             <p><strong>Inscription et compte client :</strong> vos données (prénom, nom, email, téléphone) sont utilisées pour gérer votre compte, traiter vos commandes et vous contacter si nécessaire.</p>
-            <p><strong>Commandes :</strong> votre adresse de livraison est transmise au transporteur pour l'expédition. Vos données bancaires sont traitées directement par notre prestataire de paiement — nous ne stockons jamais vos numéros de carte.</p>
-            <p><strong>Statistiques :</strong> nous collectons anonymement des données de visite pour améliorer notre boutique.</p>
-            <p><strong>Cookies :</strong> cookies essentiels (panier, authentification) et cookies de mesure d'audience (avec votre consentement).</p>
-            <p><strong>Vos droits :</strong> accès, rectification, effacement, opposition, portabilité.</p>
-            <p><strong>Conservation :</strong> 3 ans après votre dernière activité (10 ans pour les factures).</p>
+            <p><strong>Commandes :</strong> votre adresse de livraison est transmise au transporteur pour l'expédition de votre colis. Vos données bancaires sont traitées directement par notre prestataire de paiement (Stripe/PayPal) — nous ne stockons jamais vos numéros de carte.</p>
+            <p><strong>Statistiques :</strong> nous collectons anonymement des données de visite (pages vues, durée, provenance) pour améliorer notre boutique.</p>
+            <p><strong>Cookies :</strong> nous utilisons des cookies essentiels (panier, authentification) et des cookies de mesure d'audience (avec votre consentement).</p>
+            <p><strong>Vos droits :</strong> accès, rectification, effacement, opposition, portabilité. Pour exercer ces droits, contactez-nous par email.</p>
+            <p><strong>Conservation :</strong> vos données sont conservées 3 ans après votre dernière activité (10 ans pour les factures — obligation légale).</p>
             <div className="pt-2 border-t">
-              <Link href="/politique-confidentialite" target="_blank" className="text-[#007bff] underline font-medium">
+              <Link
+                href="/politique-confidentialite"
+                target="_blank"
+                className="text-[#007bff] underline font-medium inline-flex items-center gap-1"
+              >
                 Politique de confidentialité complète →
               </Link>
             </div>

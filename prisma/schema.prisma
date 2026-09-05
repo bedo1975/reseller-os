@@ -207,6 +207,7 @@ model StockItem {
   // Identification
   sku           String   @unique
   barcode       String?
+  reference     String?  // référence interne ou fournisseur (libre — ex: "REF-NIKE-2024-001")
   photos        String   // JSON array of URLs (serialized)
   title         String?  // titre / nom du produit (ex: "T-shirt Nike Sportswear")
   brand         String

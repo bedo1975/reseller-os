@@ -50,6 +50,7 @@ interface StockItem {
   id: string
   sku: string
   barcode: string | null
+  reference?: string | null
   photos: string
   title: string | null
   brand: string
@@ -1109,6 +1110,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     description: '', suggestedPrice: '', salePrice: '', saleActive: false,
     platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', supplierOrderNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
     barcode: '',
+    reference: '',
     stockType: 'boutique',
     makeOfferEnabled: false,
   })
@@ -1144,6 +1146,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         salePlatform: (item as { salePlatform?: string }).salePlatform || '',
         status: item.status,
         barcode: item.barcode || '',
+        reference: (item as { reference?: string | null }).reference || '',
         stockType: (item as { stockType?: string }).stockType || 'boutique',
         makeOfferEnabled: (item as { makeOfferEnabled?: boolean }).makeOfferEnabled === true,
       })
@@ -1157,6 +1160,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         description: '', suggestedPrice: '', salePrice: '', saleActive: false,
         platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', supplierOrderNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
         barcode: prefillBarcode || '',
+        reference: '',
         stockType: 'boutique',
       })
       setPhotos([])
@@ -1681,6 +1685,18 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                 </div>
                 <p className="text-[10px] text-muted-foreground">
                   Pas de code-barres d'origine ? Cliquez sur <Wand2 className="inline h-3 w-3" /> pour en générer un, puis sur <Printer className="inline h-3 w-3" /> pour l'imprimer.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Référence</Label>
+                <Input
+                  value={form.reference}
+                  onChange={e => setForm({ ...form, reference: e.target.value })}
+                  placeholder="REF-NIKE-2024-001 (libre)"
+                  className="font-mono text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Référence interne ou fournisseur — facultative.
                 </p>
               </div>
               <div className="space-y-1.5">

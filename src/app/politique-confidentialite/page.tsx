@@ -6,8 +6,8 @@ import { Shield } from 'lucide-react'
 
 const DEFAULT_PRIVACY = `<div class="space-y-6">
   <h2 class="text-xl font-bold mb-2">Responsable du traitement</h2>
-  <p>Le responsable du traitement des données personnelles collectées sur ce site est Junashop, immatriculée sous le numéro SIRET: 44963214000041 , dont le siège social est situé 10 rue de la mairie, 30250 JUNAS.</p>
-  <p>Email : contact@junashop.fr · Téléphone : 06 44 91 99 43</p>
+  <p>Le responsable du traitement des données personnelles collectées sur ce site est [Nom de l'entreprise/raison sociale], immatriculée sous le numéro SIRET [numéro SIRET], dont le siège social est situé [adresse complète].</p>
+  <p>Email : [email de contact] · Téléphone : [téléphone]</p>
 
   <h2 class="text-xl font-bold mb-2">Données collectées</h2>
   <p>Nous collectons les données suivantes lors de votre inscription et de vos commandes :</p>
@@ -50,7 +50,7 @@ const DEFAULT_PRIVACY = `<div class="space-y-6">
   </ul>
 
   <h2 class="text-xl font-bold mb-2">Destinataires des données</h2>
-  <p>Vos données sont destinées exclusivement à JUNASHOP et à ses prestataires techniques (hébergeur, processeur de paiement, transporteur). Elles ne sont jamais vendues ni cédées à des tiers à des fins commerciales.</p>
+  <p>Vos données sont destinées exclusivement à [Nom de l'entreprise] et à ses prestataires techniques (hébergeur, processeur de paiement, transporteur). Elles ne sont jamais vendues ni cédées à des tiers à des fins commerciales.</p>
   <p>Les prestataires susceptibles d'accéder à certaines données :</p>
   <ul class="list-disc pl-6 space-y-1">
     <li>Hébergeur du site (stockage et traitement des données)</li>
@@ -73,7 +73,7 @@ const DEFAULT_PRIVACY = `<div class="space-y-6">
     <li><strong>Droit d'opposition</strong> : vous opposer au traitement de vos données</li>
     <li><strong>Droit de retirer votre consentement</strong> à tout moment (sans affecter la licéité du traitement antérieur)</li>
   </ul>
-  <p>Pour exercer ces droits, contactez-nous à : contact@junashop.fr</p>
+  <p>Pour exercer ces droits, contactez-nous à : [email de contact]</p>
 
   <h2 class="text-xl font-bold mb-2">Cookies</h2>
   <p>Ce site utilise des cookies pour :</p>

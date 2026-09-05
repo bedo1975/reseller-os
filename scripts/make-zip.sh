@@ -1,51 +1,89 @@
 #!/bin/bash
-# Generate a fresh zip of the project source code
+# Create a real .zip file with the full Reseller OS source code.
+# Excludes node_modules, .next, .git, build artifacts, and dev-only files.
+
 set -e
 
-cd /home/z/my-project
+PROJECT_DIR="/home/z/my-project"
+OUTPUT_ZIP="/home/z/my-project/download/reseller-os.zip"
+STAGING_DIR="/tmp/reseller-os-staging"
 
-ZIP_FILE="public/reseller-os.zip"
+cd "$PROJECT_DIR"
 
-# Remove old zip
-rm -f "$ZIP_FILE"
+# Clean previous staging
+rm -rf "$STAGING_DIR"
+rm -f "$OUTPUT_ZIP"
 
-# Create a fresh zip excluding heavy/unnecessary folders
-# Using git archive if available, otherwise manual zip
-if command -v zip &> /dev/null; then
-  echo "Creating zip with manual exclusion list..."
-  zip -r "$ZIP_FILE" . \
-    -x ".next/*" \
-    -x "node_modules/*" \
-    -x "node_modules/.cache/*" \
-    -x ".git/*" \
-    -x "db/*.db" \
-    -x "db/*.db-journal" \
-    -x "public/uploads/*" \
-    -x "public/reseller-os.zip" \
-    -x "download/*" \
-    -x "scripts/*.log" \
-    -x "*.log" \
-    -x ".DS_Store" \
-    -x "Thumbs.db" \
-    -x "agent-ctx/*" \
-    -x "skills/*" \
-    -x "examples/*" \
-    -x "upload/*" \
-    -x "check-db.js" \
-    2>&1 | tail -5
+mkdir -p "$STAGING_DIR/reseller-os"
 
-  echo ""
-  echo "=== Zip created ==="
-  ls -lh "$ZIP_FILE"
-else
-  echo "zip command not found, using Node archiver..."
-  node scripts/make-zip.js
-fi
+# Copy project files (excluding heavy/build directories via a tmp-exclude list)
+cat > /tmp/zip-exclude.lst <<'EOF'
+node_modules/
+.next/
+.git/
+.zscripts/logs/
+agent-ctx/
+data/uploads/
+download/
+scripts/start-dev.sh
+tool-results/
+upload/
+*.log
+.DS_Store
+EOF
+
+# Use rsync to copy the project to staging while excluding heavy dirs
+rsync -a \
+  --exclude='node_modules' \
+  --exclude='.next' \
+  --exclude='.git' \
+  --exclude='.zscripts/logs' \
+  --exclude='.zscripts/mini-service-*.log' \
+  --exclude='.zscripts/dev.pid' \
+  --exclude='agent-ctx' \
+  --exclude='data/uploads' \
+  --exclude='download' \
+  --exclude='tool-results' \
+  --exclude='upload' \
+  --exclude='skills' \
+  --exclude='examples' \
+  --exclude='*.log' \
+  --exclude='.DS_Store' \
+  --exclude='worklog.md' \
+  --exclude='db/custom.db-journal' \
+  --exclude='db/custom.db-wal' \
+  --exclude='db/custom.db-shm' \
+  ./ "$STAGING_DIR/reseller-os/"
+
+# Verify the staging dir has the source files
+echo "=== Staging directory contents ==="
+ls -la "$STAGING_DIR/reseller-os/" | head -30
 
 echo ""
-echo "=== Verify zip contains new features ==="
-unzip -l "$ZIP_FILE" | grep -E "hours-editor|paiement-securise|livraison-rapide|retours-14-jours|logo-upload" | head -10
+echo "=== File count ==="
+find "$STAGING_DIR/reseller-os" -type f | wc -l
+
 echo ""
-echo "=== Verify schema in zip has new fields ==="
-unzip -p "$ZIP_FILE" prisma/schema.prisma | grep -cE "hoursVisible|logoImage|trustPagePaymentTitle"
-echo "(should be > 0)"
+echo "=== Total size ==="
+du -sh "$STAGING_DIR/reseller-os"
+
+# Create a real .zip file (not a tar.gz)
+cd "$STAGING_DIR"
+zip -r -q "$OUTPUT_ZIP" reseller-os/
+
+echo ""
+echo "=== Zip created ==="
+ls -lh "$OUTPUT_ZIP"
+file "$OUTPUT_ZIP"
+
+echo ""
+echo "=== Zip contents (first 40 entries) ==="
+unzip -l "$OUTPUT_ZIP" | head -40
+echo "..."
+unzip -l "$OUTPUT_ZIP" | tail -5
+
+# Clean staging
+rm -rf "$STAGING_DIR" /tmp/zip-exclude.lst
+
+echo ""
+echo "✅ Done"

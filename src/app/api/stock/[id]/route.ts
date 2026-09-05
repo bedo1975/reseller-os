@@ -39,9 +39,9 @@ export async function PATCH(
       'purchaseCost', 'purchaseDate', 'supplierId', 'lotReference', 'lotOrigin', 'lotCurrent',
       'purchaseInvoiceNumber', 'supplierOrderNumber', 'purchasePaymentMethod',
       'warehouse', 'rack', 'shelf', 'bin', 'weight', 'quantity',
-      'description', 'suggestedPrice', 'salePrice', 'saleActive', 'photos', 'barcode', 'measurements',
-      'status', 'platform', 'salePlatform', 'platforms', 'stockType', 'makeOfferEnabled',
-      'invoicePath', 'invoiceName','variantGroup',
+      'description', 'suggestedPrice', 'salePrice', 'saleActive', 'photos', 'barcode', 'reference', 'measurements',
+      'status', 'platform', 'salePlatform', 'platforms', 'stockType', 'makeOfferEnabled', 'variantGroup',
+      'invoicePath', 'invoiceName',
     ]
     for (const key of allowed) {
       if (key in body) updateData[key] = body[key]
