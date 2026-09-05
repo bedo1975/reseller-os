@@ -49,6 +49,7 @@ export function PhotoSessionModule() {
   const [exporting, setExporting] = useState(false)
   const [tryonPhoto, setTryonPhoto] = useState<string | null>(null)  // photo path being transformed
   const [tryonModel, setTryonModel] = useState<string>('man_1')
+  const [tryonCategory, setTryonCategory] = useState<string>('upperbody')
   const [tryonLoading, setTryonLoading] = useState(false)
   const [tryonResult, setTryonResult] = useState<string | null>(null)  // output URL from Replicate
   const [tryonError, setTryonError] = useState<string | null>(null)
@@ -178,7 +179,7 @@ export function PhotoSessionModule() {
       const res = await fetch('/api/ai/virtual-tryon', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photoPath: tryonPhoto, modelImage: tryonModel }),
+        body: JSON.stringify({ photoPath: tryonPhoto, modelImage: tryonModel, category: tryonCategory }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -457,16 +458,40 @@ export function PhotoSessionModule() {
                   <div className="flex-1 space-y-2">
                     <p className="text-xs text-muted-foreground">Photo d'origine</p>
                     <Label className="text-xs">Modèle (mannequin)</Label>
-                    <select
+                   
+                   
+                                        <select
                       value={tryonModel}
                       onChange={e => setTryonModel(e.target.value)}
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
-                      <option value="man_1">Homme — debout, face</option>
-                      <option value="woman_1">Femme — debout, face</option>
-                      <option value="man_2">Homme — décontracté</option>
-                      <option value="woman_2">Femme — décontracté</option>
+                      <optgroup label="Face">
+                        <option value="man_1">Homme — face</option>
+                        <option value="woman_1">Femme — face</option>
+                        <option value="man_2">Homme — décontracté face</option>
+                        <option value="woman_2">Femme — décontracté face</option>
+                      </optgroup>
+                      <optgroup label="Dos">
+                        <option value="man_back">Homme — dos</option>
+                        <option value="woman_back">Femme — dos</option>
+                      </optgroup>
+                      <optgroup label="Côté">
+                        <option value="man_side">Homme — côté</option>
+                        <option value="woman_side">Femme — côté</option>
+                      </optgroup>
                     </select>
+                    <Label className="text-xs mt-2">Type de vêtement</Label>
+                    <select
+                      value={tryonCategory}
+                      onChange={e => setTryonCategory(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="upperbody">Haut (t-shirt, veste, pull…)</option>
+                      <option value="lowerbody">Bas (pantalon, jupe…)</option>
+                      <option value="dresses">Robe / Tenue complète</option>
+                    </select>
+                 
+                 
                   </div>
                 </div>
 

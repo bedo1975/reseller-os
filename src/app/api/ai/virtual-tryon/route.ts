@@ -18,20 +18,39 @@ import path from 'path'
 // Predefined model/person images hosted on Replicate's CDN (works for both providers
 // since they both accept URL inputs).
 const MODEL_IMAGES: Record<string, { url: string; label: string }> = {
+  // Face
   'man_1': {
-    label: 'Homme — debout, face',
+    label: 'Homme — face',
     url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/man_1.jpg',
   },
   'woman_1': {
-    label: 'Femme — debout, face',
+    label: 'Femme — face',
     url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/woman_1.jpg',
   },
   'man_2': {
-    label: 'Homme — décontracté',
+    label: 'Homme — décontracté face',
     url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/man_2.jpg',
   },
   'woman_2': {
-    label: 'Femme — décontracté',
+    label: 'Femme — décontracté face',
+    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/woman_2.jpg',
+  },
+  // Dos (back view)
+  'man_back': {
+    label: 'Homme — dos',
+    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/man_1.jpg',
+  },
+  'woman_back': {
+    label: 'Femme — dos',
+    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/woman_1.jpg',
+  },
+  // Côté (side view)
+  'man_side': {
+    label: 'Homme — côté',
+    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/man_2.jpg',
+  },
+  'woman_side': {
+    label: 'Femme — côté',
     url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/woman_2.jpg',
   },
 }
@@ -40,7 +59,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth()
     const body = await req.json()
-    const { photoPath, modelImage } = body
+     const { photoPath, modelImage, category } = body
 
     if (!photoPath) {
       return NextResponse.json({ error: 'Photo requise' }, { status: 400 })
@@ -92,7 +111,7 @@ export async function POST(req: NextRequest) {
     } else if (vtonProvider === 'gemini') {
       return await callGemini(apiKey, dataUri, modelConfig)
     } else {
-      return await callReplicate(apiKey, dataUri, modelConfig.url)
+      return await callReplicate(apiKey, dataUri, modelConfig.url, body.category || 'upperbody')
     }
   } catch (error) {
     console.error('POST /api/ai/virtual-tryon error:', error)
@@ -181,7 +200,7 @@ async function callGemini(apiKey: string, garmentDataUri: string, modelConfig: {
 /**
  * Call Replicate IDM-VTON
  */
-async function callReplicate(apiKey: string, garmentImage: string, modelImage: string) {
+async function callReplicate(apiKey: string, garmentImage: string, modelImage: string, category: string) {
   const createRes = await fetch('https://api.replicate.com/v1/predictions', {
     method: 'POST',
     headers: {
@@ -192,8 +211,10 @@ async function callReplicate(apiKey: string, garmentImage: string, modelImage: s
     body: JSON.stringify({
       version: 'cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4',
       input: {
-        model_image: modelImage,
-        garment_image: garmentImage,
+        garm_img: garmentImage,
+        human_img: modelImage,
+        category: category || 'upperbody',
+        crop: false,
       },
     }),
   })
