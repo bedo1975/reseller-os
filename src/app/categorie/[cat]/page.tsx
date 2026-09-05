@@ -8,7 +8,10 @@ import { ProductCard } from '@/components/boutique/product-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { ChevronRight, ChevronDown, Package, Filter as FilterIcon, X } from 'lucide-react'
+import { ChevronRight, ChevronLeft, ChevronDown, Package, Filter as FilterIcon, X } from 'lucide-react'
+
+// Number of products shown per page on category pages
+const CATEGORY_PAGE_SIZE = 12
 
 const CONDITION_LABELS: Record<string, string> = {
   'neuf': 'Neuf avec étiquette',
@@ -145,6 +148,22 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
       return true
     })
   }, [allProducts, filterValues, subcatFilter])
+
+
+    // Pagination state — resets to page 1 when filters change
+  const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(products.length / CATEGORY_PAGE_SIZE))
+  useEffect(() => {
+    setPage(1)
+  }, [cat, sort, filterValues, subcatFilter])
+  useEffect(() => {
+    if (page > totalPages) setPage(1)
+  }, [page, totalPages])
+  const pagedProducts = useMemo(
+    () => products.slice((page - 1) * CATEGORY_PAGE_SIZE, page * CATEGORY_PAGE_SIZE),
+    [products, page]
+  )
+
 
   const hasActiveFilters =
     subcatFilter !== 'all' ||
@@ -359,12 +378,58 @@ export default function CategoryPage({ params }: { params: Promise<{ cat: string
                 <Link href="/" className="text-sm text-[#007bff] hover:underline">← Retour à la boutique</Link>
               )}
             </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {products.map(p => (
-                <ProductCard key={p.sku} product={p} />
-              ))}
-            </div>
+                ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {pagedProducts.map(p => (
+                  <ProductCard key={p.sku} product={p} />
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-8 select-none">
+                  <button
+                    type="button"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                    aria-label="Page précédente"
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Précédent
+                  </button>
+                  {Array.from({ length: totalPages }).map((_, i) => {
+                    const pageNum = i + 1
+                    const isActive = pageNum === page
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => setPage(pageNum)}
+                        className={`min-w-[2.5rem] h-9 px-2 rounded-md text-sm font-medium transition-colors border ${
+                          isActive
+                            ? 'bg-gray-900 text-white border-gray-900'
+                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                        }`}
+                        aria-current={isActive ? 'page' : undefined}
+                      >
+                        {pageNum}
+                      </button>
+                    )
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                    aria-label="Page suivante"
+                  >
+                    Suivant <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+              <p className="text-center text-xs text-gray-400 mt-3">
+                {products.length} produit{products.length > 1 ? 's' : ''} • Page {page} sur {totalPages}
+              </p>
+            </>
           )}
         </div>
       </div>
