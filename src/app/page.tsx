@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowRight, Truck, Shield, RefreshCw, Headphones, Package, Star, Check, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { NewsletterBlock } from '@/components/boutique/newsletter-block'
 
-// Number of products shown per page in the "Nos nouveautés" section
+// Number of products shown per page in the "Nos nouveautés" section test envoi du nouveau push
 const NEW_PRODUCTS_PAGE_SIZE = 10
 // Maximum number of products fetched for the "Nos nouveautés" section
 const NEW_PRODUCTS_FETCH_LIMIT = 50
