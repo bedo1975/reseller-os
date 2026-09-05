@@ -1,13 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useFetch } from '@/hooks/use-fetch'
 import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 import { ProductCard } from '@/components/boutique/product-card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowRight, Truck, Shield, RefreshCw, Headphones, Package, Star, Check, Clock } from 'lucide-react'
+import { ArrowRight, Truck, Shield, RefreshCw, Headphones, Package, Star, Check, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { NewsletterBlock } from '@/components/boutique/newsletter-block'
+
+// Number of products shown per page in the "Nos nouveautés" section
+const NEW_PRODUCTS_PAGE_SIZE = 10
+// Maximum number of products fetched for the "Nos nouveautés" section
+const NEW_PRODUCTS_FETCH_LIMIT = 50
 
 interface Product {
   sku: string
@@ -41,12 +46,23 @@ const FALLBACK_CATEGORIES: CategoryCard[] = [
 ]
 
 export default function BoutiqueHomePage() {
-  const { data, loading } = useFetch<{ products: Product[]; count: number }>('/api/boutique/products?limit=20')
+   const { data, loading } = useFetch<{ products: Product[]; count: number }>(`/api/boutique/products?limit=${NEW_PRODUCTS_FETCH_LIMIT}`)
   const settings = useBoutiqueSettings()
   const [categories, setCategories] = useState<CategoryCard[]>(FALLBACK_CATEGORIES)
   const products = data?.products || []
   const featured = products.slice(0, 10)
-  const newProducts = products.slice(0, 10)
+  const newProducts = products
+
+  // Pagination state for the "Nos nouveautés" section
+  const [newPage, setNewPage] = useState(1)
+  const newTotalPages = Math.max(1, Math.ceil(newProducts.length / NEW_PRODUCTS_PAGE_SIZE))
+  useEffect(() => {
+    if (newPage > newTotalPages) setNewPage(1)
+  }, [newPage, newTotalPages])
+  const newProductsPaged = useMemo(
+    () => newProducts.slice((newPage - 1) * NEW_PRODUCTS_PAGE_SIZE, newPage * NEW_PRODUCTS_PAGE_SIZE),
+    [newProducts, newPage]
+  )
 
   // Fetch categories from DB (top-level only for homepage cards)
   useEffect(() => {
@@ -196,13 +212,13 @@ export default function BoutiqueHomePage() {
       </section>
 
       {/* Featured products */}
-      <section id="produits" className="max-w-7xl mx-auto px-4 py-12">
+          <section id="produits" className="max-w-7xl mx-auto px-4 py-12">
         <div className="flex items-end justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">{settings.newProductsTitle}</h2>
             <p className="text-sm text-gray-500 mt-1">{settings.newProductsSubtitle}</p>
           </div>
-          <Link href="/categorie/vetements" className="text-sm font-medium text-[#007bff] hover:underline flex items-center gap-1">
+          <Link href="/boutique/categorie/vetements" className="text-sm font-medium text-[#007bff] hover:underline flex items-center gap-1">
             Tout voir <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
@@ -219,11 +235,57 @@ export default function BoutiqueHomePage() {
             <p className="text-sm text-gray-400 mt-1">Revenez bientôt découvrir nos nouveautés !</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {newProducts.map(p => (
-              <ProductCard key={p.sku} product={p} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {newProductsPaged.map(p => (
+                <ProductCard key={p.sku} product={p} />
+              ))}
+            </div>
+            {newTotalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-8 select-none">
+                <button
+                  type="button"
+                  onClick={() => setNewPage(p => Math.max(1, p - 1))}
+                  disabled={newPage === 1}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                  aria-label="Page précédente"
+                >
+                  <ChevronLeft className="h-4 w-4" /> Précédent
+                </button>
+                {Array.from({ length: newTotalPages }).map((_, i) => {
+                  const pageNum = i + 1
+                  const isActive = pageNum === newPage
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setNewPage(pageNum)}
+                      className={`min-w-[2.5rem] h-9 px-2 rounded-md text-sm font-medium transition-colors border ${
+                        isActive
+                          ? 'bg-gray-900 text-white border-gray-900'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      }`}
+                      aria-current={isActive ? 'page' : undefined}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  onClick={() => setNewPage(p => Math.min(newTotalPages, p + 1))}
+                  disabled={newPage === newTotalPages}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                  aria-label="Page suivante"
+                >
+                  Suivant <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            <p className="text-center text-xs text-gray-400 mt-3">
+              {newProducts.length} produit{newProducts.length > 1 ? 's' : ''} • Page {newPage} sur {newTotalPages}
+            </p>
+          </>
         )}
       </section>
 
