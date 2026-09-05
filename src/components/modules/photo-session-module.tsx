@@ -49,7 +49,7 @@ export function PhotoSessionModule() {
   const [exporting, setExporting] = useState(false)
   const [tryonPhoto, setTryonPhoto] = useState<string | null>(null)  // photo path being transformed
   const [tryonModel, setTryonModel] = useState<string>('man_1')
-  const [tryonCategory, setTryonCategory] = useState<string>('upperbody')
+  const [tryonCategory, setTryonCategory] = useState<string>('upper_body')
   const [tryonLoading, setTryonLoading] = useState(false)
   const [tryonResult, setTryonResult] = useState<string | null>(null)  // output URL from Replicate
   const [tryonError, setTryonError] = useState<string | null>(null)
@@ -481,13 +481,13 @@ export function PhotoSessionModule() {
                       </optgroup>
                     </select>
                     <Label className="text-xs mt-2">Type de vêtement</Label>
-                    <select
+                                        <select
                       value={tryonCategory}
                       onChange={e => setTryonCategory(e.target.value)}
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
-                      <option value="upperbody">Haut (t-shirt, veste, pull…)</option>
-                      <option value="lowerbody">Bas (pantalon, jupe…)</option>
+                      <option value="upper_body">Haut (t-shirt, veste, pull…)</option>
+                      <option value="lower_body">Bas (pantalon, jupe…)</option>
                       <option value="dresses">Robe / Tenue complète</option>
                     </select>
                  

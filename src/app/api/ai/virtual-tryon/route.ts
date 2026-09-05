@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
     } else if (vtonProvider === 'gemini') {
       return await callGemini(apiKey, dataUri, modelConfig)
     } else {
-      return await callReplicate(apiKey, dataUri, modelConfig.url, body.category || 'upperbody')
+      return await callReplicate(apiKey, dataUri, modelConfig.url, body.category || 'upper_body')
     }
   } catch (error) {
     console.error('POST /api/ai/virtual-tryon error:', error)
@@ -213,7 +213,7 @@ async function callReplicate(apiKey: string, garmentImage: string, modelImage: s
       input: {
         garm_img: garmentImage,
         human_img: modelImage,
-        category: category || 'upperbody',
+        category: category || 'upper_body',
         crop: false,
       },
     }),
