@@ -219,25 +219,38 @@ export function PhotoSessionModule() {
   }
 
   // Replace the original photo with the virtual try-on result
+    // Replace the original photo with the virtual try-on result
   const applyTryOnResult = async () => {
     if (!tryonResult || !tryonPhoto || !selectedSession) return
+    setTryonLoading(true)
     try {
-      // Download the result image and replace the original file
+      // Download the result image and send it to the server via the upload API
       const res = await fetch(tryonResult)
       const blob = await res.blob()
-      const buffer = Buffer.from(await blob.arrayBuffer())
+      const file = new File([blob], 'virtual-tryon.jpg', { type: 'image/jpeg' })
 
-      // Write the new image to the same path (overwrite original)
-      const fullPath = `${process.cwd()}/public${tryonPhoto}`
-      const fs = await import('fs')
-      fs.writeFileSync(fullPath, buffer)
+      // Upload the new image — overwrite the original photo via a dedicated endpoint
+      const formData = new FormData()
+      formData.append('photo', file)
+      formData.append('path', tryonPhoto)
+
+      const uploadRes = await fetch('/api/photo-sessions/replace-photo', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await uploadRes.json()
+      if (!uploadRes.ok) {
+        throw new Error(data.error || 'Erreur remplacement')
+      }
 
       toast.success('Photo remplacée par la version virtuelle !')
       setTryonPhoto(null)
       setTryonResult(null)
       await fetchSessions()
     } catch (e: unknown) {
-      toast.error('Erreur lors du remplacement de la photo')
+      toast.error(e instanceof Error ? e.message : 'Erreur lors du remplacement de la photo')
+    } finally {
+      setTryonLoading(false)
     }
   }
 
