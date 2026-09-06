@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/session'
-import fs from 'fs'
-import path from 'path'
-import sharp from 'sharp'
+
 
 /**
  * POST /api/ai/virtual-tryon
@@ -43,7 +41,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth()
     const body = await req.json()
-     const { photoPath, modelImage, category } = body
+    const { photoPath, modelImage, category } = body
 
     if (!photoPath) {
       return NextResponse.json({ error: 'Photo requise' }, { status: 400 })
@@ -65,7 +63,6 @@ export async function POST(req: NextRequest) {
     } else if (vtonProvider === 'replicate') {
       apiKey = config.replicateApiKey
     } else if (vtonProvider === 'gemini') {
-      // Gemini uses the main AI apiKey (Google AI Studio key)
       apiKey = config.apiKey
     }
 
@@ -76,50 +73,24 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // Read the product photo from disk and convert to base64 data URI
-     // Handle different path formats: "/uploads/...", "uploads/...", "public/uploads/...", "/api/uploads/..."
-    let cleanPath = photoPath
-    if (cleanPath.startsWith('public/')) cleanPath = cleanPath.slice('public/'.length)
-    if (cleanPath.startsWith('/api/')) cleanPath = cleanPath.slice('/api/'.length)
-    cleanPath = cleanPath.replace(/^\//, '')
-    const fullPath = path.join(process.cwd(), 'public', cleanPath)
-    console.log('[virtual-tryon] Looking for photo:', { photoPath, cleanPath, fullPath, exists: fs.existsSync(fullPath) })
-    if (!fs.existsSync(fullPath)) {
-      return NextResponse.json({ error: `Photo introuvable sur le disque (${photoPath})` }, { status: 404 })
-    }
-
-    // Read the product photo from disk
-    const rawBuffer = fs.readFileSync(fullPath)
-    const ext = path.extname(fullPath).toLowerCase()
-
-    // Convert WebP to JPEG — the IDM-VTON model doesn't handle WebP well
-    // (causes "can only concatenate str (not NoneType) to str" error inside the model)
-    let photoBuffer: Buffer
-    let mimeType: string
-    if (ext === '.webp') {
-      photoBuffer = await sharp(rawBuffer).jpeg({ quality: 95 }).toBuffer()
-      mimeType = 'image/jpeg'
-      console.log('[virtual-tryon] Converted WebP to JPEG:', rawBuffer.length, '→', photoBuffer.length, 'bytes')
-    } else if (ext === '.png') {
-      photoBuffer = rawBuffer
-      mimeType = 'image/png'
-    } else {
-      // .jpg, .jpeg — use as-is
-      photoBuffer = rawBuffer
-      mimeType = 'image/jpeg'
-    }
-
-    const dataUri = `data:${mimeType};base64,${photoBuffer.toString('base64')}
+    // Construct the PUBLIC URL of the photo — Replicate downloads it itself.
+    // The /api/uploads/ route is public (no auth) and serves the photo.
+    // IMPORTANT: the IDM-VTON model can't handle data: URIs (base64) — it returns
+    // "can only concatenate str (not NoneType) to str" when given a data URI.
+    const publicBaseUrl = process.env.NEXTAUTH_URL || `https://${req.headers.get('host')}`
+    const cleanPath = photoPath.startsWith('/') ? photoPath : '/' + photoPath
+    const garmentUrl = `${publicBaseUrl}/api${cleanPath}`
+    console.log('[virtual-tryon] Garment URL:', garmentUrl)
 
     const modelConfig = MODEL_IMAGES[modelImage]
 
     // Call the appropriate provider
     if (vtonProvider === 'fashn') {
-      return await callFashn(apiKey, dataUri, modelConfig.url)
+      return await callFashn(apiKey, garmentUrl, modelConfig.url)
     } else if (vtonProvider === 'gemini') {
-      return await callGemini(apiKey, dataUri, modelConfig)
+      return await callGemini(apiKey, garmentUrl, modelConfig)
     } else {
-      return await callReplicate(apiKey, dataUri, modelConfig.url, body.category || 'upper_body')
+      return await callReplicate(apiKey, garmentUrl, modelConfig.url, category || 'upper_body')
     }
   } catch (error) {
     console.error('POST /api/ai/virtual-tryon error:', error)
