@@ -473,35 +473,13 @@ export function PhotoSessionModule() {
                     <Label className="text-xs">Modèle (mannequin)</Label>
                    
                    
-                                        <select
+                                          <select
                       value={tryonModel}
                       onChange={e => setTryonModel(e.target.value)}
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
-                      <optgroup label="Face">
-                        <option value="man_1">Homme — face</option>
-                        <option value="woman_1">Femme — face</option>
-                        <option value="man_2">Homme — décontracté face</option>
-                        <option value="woman_2">Femme — décontracté face</option>
-                      </optgroup>
-                      <optgroup label="Dos">
-                        <option value="man_back">Homme — dos</option>
-                        <option value="woman_back">Femme — dos</option>
-                      </optgroup>
-                      <optgroup label="Côté">
-                        <option value="man_side">Homme — côté</option>
-                        <option value="woman_side">Femme — côté</option>
-                      </optgroup>
-                    </select>
-                    <Label className="text-xs mt-2">Type de vêtement</Label>
-                                        <select
-                      value={tryonCategory}
-                      onChange={e => setTryonCategory(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      <option value="upper_body">Haut (t-shirt, veste, pull…)</option>
-                      <option value="lower_body">Bas (pantalon, jupe…)</option>
-                      <option value="dresses">Robe / Tenue complète</option>
+                      <option value="man_1">Homme — face</option>
+                      <option value="woman_1">Femme — face</option>
                     </select>
                  
                  

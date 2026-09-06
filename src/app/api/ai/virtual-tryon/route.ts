@@ -17,42 +17,25 @@ import path from 'path'
 
 // Predefined model/person images hosted on Replicate's CDN (works for both providers
 // since they both accept URL inputs).
+// IMPORTANT: Replicate a supprimé les URLs https://replicate.delivery/mgxt/IDM-VTON/...
+// (elles retournent 404). On utilise maintenant des images hébergées sur junashop.fr/models/.
+// Pour ajouter de nouveaux mannequins : upload une photo dans public/models/ et ajoute l'URL ici.
 const MODEL_IMAGES: Record<string, { url: string; label: string }> = {
-  // Face
   'man_1': {
     label: 'Homme — face',
-    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/man_1.jpg',
+    url: 'https://junashop.fr/api/uploads/stock/stock-1788454399950-62e1ccc5fdde4ba5.webp',
   },
   'woman_1': {
     label: 'Femme — face',
-    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/woman_1.jpg',
+    url: 'https://junashop.fr/api/uploads/stock/stock-1788508019266-f3065d11ee75a9bf.webp',
   },
-  'man_2': {
-    label: 'Homme — décontracté face',
-    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/man_2.jpg',
-  },
-  'woman_2': {
-    label: 'Femme — décontracté face',
-    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/woman_2.jpg',
-  },
-  // Dos (back view)
-  'man_back': {
-    label: 'Homme — dos',
-    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/man_1.jpg',
-  },
-  'woman_back': {
-    label: 'Femme — dos',
-    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/woman_1.jpg',
-  },
-  // Côté (side view)
-  'man_side': {
-    label: 'Homme — côté',
-    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/man_2.jpg',
-  },
-  'woman_side': {
-    label: 'Femme — côté',
-    url: 'https://replicate.delivery/mgxt/IDM-VTON/assets/models/woman_2.jpg',
-  },
+  // Pour l'instant, on désactive les variantes dos/côté (pas d'images disponibles)
+  // Tu peux les réactiver plus tard en uploadant des photos dans public/models/
+  // et en décommentant les lignes ci-dessous.
+  // 'man_back': { label: 'Homme — dos', url: 'https://junashop.fr/models/man_back.jpg' },
+  // 'woman_back': { label: 'Femme — dos', url: 'https://junashop.fr/models/woman_back.jpg' },
+  // 'man_side': { label: 'Homme — côté', url: 'https://junashop.fr/models/man_side.jpg' },
+  // 'woman_side': { label: 'Femme — côté', url: 'https://junashop.fr/models/woman_side.jpg' },
 }
 
 export async function POST(req: NextRequest) {
