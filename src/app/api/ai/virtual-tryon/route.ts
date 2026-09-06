@@ -93,9 +93,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Read the product photo from disk and convert to base64 data URI
-    const fullPath = path.join(process.cwd(), 'public', photoPath.replace(/^\//, ''))
+     // Handle different path formats: "/uploads/...", "uploads/...", "public/uploads/...", "/api/uploads/..."
+    let cleanPath = photoPath
+    if (cleanPath.startsWith('public/')) cleanPath = cleanPath.slice('public/'.length)
+    if (cleanPath.startsWith('/api/')) cleanPath = cleanPath.slice('/api/'.length)
+    cleanPath = cleanPath.replace(/^\//, '')
+    const fullPath = path.join(process.cwd(), 'public', cleanPath)
+    console.log('[virtual-tryon] Looking for photo:', { photoPath, cleanPath, fullPath, exists: fs.existsSync(fullPath) })
     if (!fs.existsSync(fullPath)) {
-      return NextResponse.json({ error: 'Photo introuvable sur le disque' }, { status: 404 })
+      return NextResponse.json({ error: `Photo introuvable sur le disque (${photoPath})` }, { status: 404 })
     }
 
     const photoBuffer = fs.readFileSync(fullPath)
