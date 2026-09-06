@@ -86,7 +86,8 @@ export async function POST(req: NextRequest) {
     } else if (vtonProvider === 'gemini') {
       return await callGemini(apiKey, garmentUrl, modelConfig)
     } else {
-      return await callReplicate(apiKey, garmentUrl, modelConfig.url, category || 'upper_body')
+      return await callReplicate(apiKey, garmentUrl, modelConfig.url, category || 'upper_body', body.garmentDes || '')
+    }
     }
   } catch (error) {
     console.error('POST /api/ai/virtual-tryon error:', error)
@@ -175,7 +176,7 @@ async function callGemini(apiKey: string, garmentDataUri: string, modelConfig: {
 /**
  * Call Replicate IDM-VTON
  */
-async function callReplicate(apiKey: string, garmentImage: string, modelImage: string, category: string) {
+async function callReplicate(apiKey: string, garmentImage: string, modelImage: string, category: string, garmentDes: string) {
   const createRes = await fetch('https://api.replicate.com/v1/predictions', {
     method: 'POST',
     headers: {
@@ -192,6 +193,7 @@ async function callReplicate(apiKey: string, garmentImage: string, modelImage: s
         human_img: modelImage,
         category: category || 'upper_body',
         crop: false,
+         garment_des: garmentDes || 'a clothing item',
       },
     }),
   })
