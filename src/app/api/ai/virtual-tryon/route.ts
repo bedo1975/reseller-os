@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/session'
 
 
 /**
- * POST /api/ai/virtual-tryon
+ * POST /api/ai/virtual-tryon Test bug fix 
  * Admin — performs a virtual try-on using either Replicate (IDM-VTON) or FASHN.ai.
  *
  * Body: { photoPath: "/uploads/sessions/xxx/yyy.webp", modelImage: "man_1" | "woman_1" | ... }
