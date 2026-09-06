@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/session'
 import fs from 'fs'
 import path from 'path'
+import sharp from 'sharp'
 
 /**
  * POST /api/ai/virtual-tryon
