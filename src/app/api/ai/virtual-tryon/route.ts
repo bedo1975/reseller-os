@@ -212,7 +212,9 @@ async function callReplicate(apiKey: string, garmentImage: string, modelImage: s
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
-      'Prefer': 'wait',
+      // NOTE: on NE met PAS 'Prefer: wait' car ça fait attendre 30-60s la réponse
+      // de Replicate, ce qui dépasse le timeout de Next.js (~15s) → erreur 500.
+      // À la place, on retourne immédiatement le predictionId et le frontend poll.
     },
     body: JSON.stringify({
       version: 'cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4',
