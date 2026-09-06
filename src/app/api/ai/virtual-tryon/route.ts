@@ -338,8 +338,12 @@ export async function GET(req: NextRequest) {
     let config = await db.aIConfig.findUnique({ where: { userId: user.id } })
     if (!config) return NextResponse.json({ error: 'Config introuvable' }, { status: 404 })
 
-    const apiKey = provider === 'fashn' ? config.fashnApiKey : config.replicateApiKey
-    if (!apiKey) return NextResponse.json({ error: 'Clé API requise' }, { status: 400 })
+       const apiKey = provider === 'fashn' ? config.fashnApiKey : config.replicateApiKey
+    if (!apiKey) {
+      console.error('[virtual-tryon] GET: No API key for provider:', provider)
+      return NextResponse.json({ error: 'Clé API requise' }, { status: 400 })
+    }
+    console.log('[virtual-tryon] GET: polling prediction', predictionId, 'with provider', provider)
 
     if (provider === 'fashn') {
       // Poll FASHN status
@@ -350,6 +354,7 @@ export async function GET(req: NextRequest) {
 
       const prediction = await res.json()
       if (prediction.status === 'completed' && prediction.output) {
+        console.log('[virtual-tryon] GET: Replicate prediction:', JSON.stringify({ status: prediction.status, hasOutput: !!prediction.output, error: prediction.error }))
         const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
         return NextResponse.json({ status: 'succeeded', outputUrl })
       }
@@ -358,14 +363,21 @@ export async function GET(req: NextRequest) {
       }
       return NextResponse.json({ status: prediction.status })
     } else {
+      
       // Poll Replicate status
-      const res = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+        const res = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
         headers: { 'Authorization': `Bearer ${apiKey}` },
       })
-      if (!res.ok) return NextResponse.json({ error: 'Erreur lors de la vérification' }, { status: 500 })
+      console.log('[virtual-tryon] GET: Replicate status response:', res.status)
+      if (!res.ok) {
+        const errText = await res.text()
+        console.error('[virtual-tryon] GET: Replicate error response:', errText)
+        return NextResponse.json({ error: 'Erreur lors de la vérification' }, { status: 500 })
+      }
 
       const prediction = await res.json()
       if (prediction.status === 'succeeded' && prediction.output) {
+        console.log('[virtual-tryon] GET: Replicate prediction:', JSON.stringify({ status: prediction.status, hasOutput: !!prediction.output, error: prediction.error }))
         const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
         return NextResponse.json({ status: 'succeeded', outputUrl })
       }
