@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     } else {
       return await callReplicate(apiKey, garmentUrl, modelConfig.url, category || 'upper_body', body.garmentDes || '')
     }
-    }
+    
   } catch (error) {
     console.error('POST /api/ai/virtual-tryon error:', error)
     if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {
