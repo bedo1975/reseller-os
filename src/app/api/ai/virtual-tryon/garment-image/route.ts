@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/session'
 import fs from 'fs'
 import path from 'path'
 import sharp from 'sharp'
@@ -18,7 +17,9 @@ import sharp from 'sharp'
  */
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth()
+    // NOTE: This endpoint is PUBLIC (no auth) because Replicate needs to download
+    // the image without authentication. The URL is only sent to Replicate for a
+    // single prediction and is not exposed to end users.
     const { searchParams } = new URL(req.url)
     const photoPath = searchParams.get('path')
 
