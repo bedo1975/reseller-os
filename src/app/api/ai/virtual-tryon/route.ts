@@ -22,20 +22,14 @@ import { requireAuth } from '@/lib/session'
 const MODEL_IMAGES: Record<string, { url: string; label: string }> = {
   'man_1': {
     label: 'Homme — face',
-    url: 'https://junashop.fr/api/uploads/stock/stock-1788454399950-62e1ccc5fdde4ba5.webp',
+    url: 'https://junashop.fr/models/man_face.jpg',
   },
   'woman_1': {
     label: 'Femme — face',
-    url: 'https://junashop.fr/api/uploads/stock/stock-1788508019266-f3065d11ee75a9bf.webp',
+    url: 'https://junashop.fr/models/woman_face.jpg',
   },
-  // Pour l'instant, on désactive les variantes dos/côté (pas d'images disponibles)
-  // Tu peux les réactiver plus tard en uploadant des photos dans public/models/
-  // et en décommentant les lignes ci-dessous.
-  // 'man_back': { label: 'Homme — dos', url: 'https://junashop.fr/models/man_back.jpg' },
-  // 'woman_back': { label: 'Femme — dos', url: 'https://junashop.fr/models/woman_back.jpg' },
-  // 'man_side': { label: 'Homme — côté', url: 'https://junashop.fr/models/man_side.jpg' },
-  // 'woman_side': { label: 'Femme — côté', url: 'https://junashop.fr/models/woman_side.jpg' },
 }
+
 
 export async function POST(req: NextRequest) {
   try {
@@ -77,9 +71,11 @@ export async function POST(req: NextRequest) {
     // The /api/uploads/ route is public (no auth) and serves the photo.
     // IMPORTANT: the IDM-VTON model can't handle data: URIs (base64) — it returns
     // "can only concatenate str (not NoneType) to str" when given a data URI.
-    const publicBaseUrl = process.env.NEXTAUTH_URL || `https://${req.headers.get('host')}`
+      const publicBaseUrl = process.env.NEXTAUTH_URL || `https://${req.headers.get('host')}`
     const cleanPath = photoPath.startsWith('/') ? photoPath : '/' + photoPath
-    const garmentUrl = `${publicBaseUrl}/api${cleanPath}`
+    // Use the garment-image endpoint to convert WebP → JPEG on the fly
+    // (IDM-VTON can't handle WebP)
+    const garmentUrl = `${publicBaseUrl}/api/ai/virtual-tryon/garment-image?path=${encodeURIComponent(cleanPath)}`
     console.log('[virtual-tryon] Garment URL:', garmentUrl)
 
     const modelConfig = MODEL_IMAGES[modelImage]
