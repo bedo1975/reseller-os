@@ -22,11 +22,11 @@ import { requireAuth } from '@/lib/session'
 const MODEL_IMAGES: Record<string, { url: string; label: string }> = {
   'man_1': {
     label: 'Homme — face',
-    url: 'https://junashop.fr/models/man_face.jpg',
+    url: 'https://junashop.fr/api/models/man_face.jpg',
   },
   'woman_1': {
     label: 'Femme — face',
-    url: 'https://junashop.fr/models/woman_face.jpg',
+    url: 'https://junashop.fr/api/models/woman_face.jpg',
   },
 }
 
