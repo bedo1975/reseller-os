@@ -87,10 +87,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Photo introuvable sur le disque (${photoPath})` }, { status: 404 })
     }
 
-    const photoBuffer = fs.readFileSync(fullPath)
+    // Read the product photo from disk
+    const rawBuffer = fs.readFileSync(fullPath)
     const ext = path.extname(fullPath).toLowerCase()
-    const mimeType = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/webp'
-    const dataUri = `data:${mimeType};base64,${photoBuffer.toString('base64')}`
+
+    // Convert WebP to JPEG — the IDM-VTON model doesn't handle WebP well
+    // (causes "can only concatenate str (not NoneType) to str" error inside the model)
+    let photoBuffer: Buffer
+    let mimeType: string
+    if (ext === '.webp') {
+      photoBuffer = await sharp(rawBuffer).jpeg({ quality: 95 }).toBuffer()
+      mimeType = 'image/jpeg'
+      console.log('[virtual-tryon] Converted WebP to JPEG:', rawBuffer.length, '→', photoBuffer.length, 'bytes')
+    } else if (ext === '.png') {
+      photoBuffer = rawBuffer
+      mimeType = 'image/png'
+    } else {
+      // .jpg, .jpeg — use as-is
+      photoBuffer = rawBuffer
+      mimeType = 'image/jpeg'
+    }
+
+    const dataUri = `data:${mimeType};base64,${photoBuffer.toString('base64')}
 
     const modelConfig = MODEL_IMAGES[modelImage]
 
