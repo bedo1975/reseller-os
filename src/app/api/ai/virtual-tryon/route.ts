@@ -375,14 +375,15 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Erreur lors de la vérification' }, { status: 500 })
       }
 
-      const prediction = await res.json()
+     const prediction = await res.json()
+      console.log('[virtual-tryon] GET: Replicate prediction status:', prediction.status, '| error:', prediction.error, '| logs:', prediction.logs?.slice(-500))
       if (prediction.status === 'succeeded' && prediction.output) {
-        console.log('[virtual-tryon] GET: Replicate prediction:', JSON.stringify({ status: prediction.status, hasOutput: !!prediction.output, error: prediction.error }))
         const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
         return NextResponse.json({ status: 'succeeded', outputUrl })
       }
       if (prediction.status === 'failed') {
-        return NextResponse.json({ status: 'failed', error: 'La transformation a échoué' }, { status: 500 })
+        console.error('[virtual-tryon] GET: Replicate prediction FAILED. Full prediction:', JSON.stringify(prediction).slice(0, 1000))
+        return NextResponse.json({ status: 'failed', error: prediction.error || 'La transformation a échoué' }, { status: 500 })
       }
       return NextResponse.json({ status: prediction.status })
     }
