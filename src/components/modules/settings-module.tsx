@@ -1357,6 +1357,12 @@ function AISection() {
   const [fashnApiKey, setFashnApiKey] = useState<string>('')
   const [vtonProvider, setVtonProvider] = useState<string>('replicate')
   const [nvidiaApiKey, setNvidiaApiKey] = useState<string>('')
+  // Virtual Try-On model configuration (Replicate)
+  const [vtonModelId, setVtonModelId] = useState<string>('')
+  const [vtonVersion, setVtonVersion] = useState<string>('')
+  const [vtonImageWidth, setVtonImageWidth] = useState<number>(768)
+  const [vtonImageHeight, setVtonImageHeight] = useState<number>(1024)
+  const [vtonCustomParams, setVtonCustomParams] = useState<string>('')
   const [model, setModel] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -1371,7 +1377,16 @@ function AISection() {
   // Sync vtonProvider from data once
   useEffect(() => {
     if (data?.vtonProvider) setVtonProvider(data.vtonProvider)
-  }, [data?.vtonProvider])
+    if (data) {
+      // Sync VTON model config
+      const d = data as any
+      if (d.vtonModelId) setVtonModelId(d.vtonModelId)
+      if (d.vtonVersion) setVtonVersion(d.vtonVersion)
+      if (typeof d.vtonImageWidth === 'number') setVtonImageWidth(d.vtonImageWidth)
+      if (typeof d.vtonImageHeight === 'number') setVtonImageHeight(d.vtonImageHeight)
+      if (d.vtonCustomParams) setVtonCustomParams(d.vtonCustomParams)
+    }
+  }, [data])
 
   const currentProvider = data?.providers?.[provider]
   const hasApiKeySet = !!data?.hasApiKey && data?.provider === provider
@@ -1405,6 +1420,12 @@ function AISection() {
         (body as any).nvidiaApiKey = nvidiaApiKey
       }
       ;(body as any).vtonProvider = vtonProvider
+      // Virtual Try-On model configuration
+      ;(body as any).vtonModelId = vtonModelId || null
+      ;(body as any).vtonVersion = vtonVersion || null
+      ;(body as any).vtonImageWidth = vtonImageWidth
+      ;(body as any).vtonImageHeight = vtonImageHeight
+      ;(body as any).vtonCustomParams = vtonCustomParams || null
       const res = await fetch('/api/ai/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1681,6 +1702,83 @@ function AISection() {
               Créez un compte sur <a href="https://fashn.ai" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline">fashn.ai</a> → 10 crédits gratuits sans carte bancaire
             </p>
           </div>
+
+          {/* VTON Model Configuration — only show when Replicate is selected */}
+          {vtonProvider === 'replicate' && (
+            <div className="rounded-lg border border-purple-200 bg-purple-50/50 dark:bg-purple-950/20 dark:border-purple-900 p-3 space-y-3">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-purple-600" />
+                <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 uppercase">
+                  Configuration du modèle
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Modèle (owner/name)</Label>
+                  <Input
+                    value={vtonModelId}
+                    onChange={e => setVtonModelId(e.target.value)}
+                    placeholder="cuuupid/idm-vton"
+                    className="font-mono text-xs h-8"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Par défaut: cuuupid/idm-vton. Alternatives: fofr/flux-virtual-try-on, lucataco/kolors-virtual-try-on
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Version (hash)</Label>
+                  <Input
+                    value={vtonVersion}
+                    onChange={e => setVtonVersion(e.target.value)}
+                    placeholder="c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4"
+                    className="font-mono text-xs h-8"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Laisser vide pour IDM-VTON par défaut. Trouve le hash sur la page du modèle Replicate.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Largeur image (px)</Label>
+                  <Input
+                    type="number"
+                    value={vtonImageWidth}
+                    onChange={e => setVtonImageWidth(parseInt(e.target.value) || 768)}
+                    className="text-xs h-8"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Hauteur image (px)</Label>
+                  <Input
+                    type="number"
+                    value={vtonImageHeight}
+                    onChange={e => setVtonImageHeight(parseInt(e.target.value) || 1024)}
+                    className="text-xs h-8"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Dimensions cibles pour le redimensionnement. IDM-VTON attend 768×1024 (portrait). Ajuste si ton modèle utilise un ratio différent.
+              </p>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Paramètres custom (JSON — optionnel)</Label>
+                <textarea
+                  value={vtonCustomParams}
+                  onChange={e => setVtonCustomParams(e.target.value)}
+                  placeholder='{"seed": 42, "steps": 30, "guidance_scale": 7.5}'
+                  rows={2}
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-xs font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  JSON fusionné avec les paramètres standards. Permet d'ajouter des paramètres spécifiques au modèle (seed, steps, etc.).
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* NVIDIA NIM key */}
           <div className="space-y-1.5">

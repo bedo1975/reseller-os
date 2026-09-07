@@ -122,6 +122,18 @@ model AIConfig {
   // Which virtual try-on provider to use: "replicate" | "fashn" | "gemini"
   vtonProvider String @default("gemini")
 
+  // Virtual Try-On model configuration (Replicate)
+  // Default: cuuupid/idm-vton — but admin can switch to fofr/flux-virtual-try-on or others
+  vtonModelId    String?  // ex: "cuuupid/idm-vton" or "fofr/flux-virtual-try-on"
+  vtonVersion    String?  // version hash (ex: "c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4")
+  // Image dimensions for the model (resize before sending to Replicate)
+  // IDM-VTON expects 768×1024 (portrait) for best results
+  vtonImageWidth  Int @default(768)
+  vtonImageHeight Int @default(1024)
+  // JSON string of additional params to pass to the model input
+  // ex: '{"seed": 42, "steps": 30}' — merged with the standard params (garm_img, human_img, etc.)
+  vtonCustomParams String?
+
   // NVIDIA NIM API key (build.nvidia.com) — free endpoints for AI descriptions
   nvidiaApiKey String?
 

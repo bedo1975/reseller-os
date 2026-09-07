@@ -98,13 +98,65 @@ export async function POST(req: NextRequest) {
     // Client photo URL (already JPG — converted during upload)
     const humanUrl = `${publicBaseUrl}/api${clientPhotoPath.startsWith('/') ? clientPhotoPath : '/' + clientPhotoPath}`
 
+    // Determine which model to use (default: IDM-VTON)
+    const modelId = config.vtonModelId || 'cuuupid/idm-vton'
+    const defaultVersions: Record<string, string> = {
+      'cuuupid/idm-vton': 'c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4',
+    }
+    const version = config.vtonVersion || defaultVersions[modelId] || ''
+    if (!version) {
+      return NextResponse.json({ error: `Version manquante pour le modèle ${modelId}.` }, { status: 500 })
+    }
+
+    // Build the input based on the model
+    let input: Record<string, unknown> = {}
+    const garmentDes = prompt || model.defaultPrompt || `${product.brand} ${product.title || ''}`.trim() || 'a clothing item'
+
+    if (modelId === 'cuuupid/idm-vton') {
+      input = {
+        garm_img: garmentUrl,
+        human_img: humanUrl,
+        category: category || 'upper_body',
+        crop: false,
+        garment_des: garmentDes,
+      }
+    } else if (modelId.includes('flux-virtual-try-on') || modelId.includes('kolors')) {
+      const garmentType = category === 'lower_body' ? 'bottom' : category === 'dresses' ? 'dress' : 'top'
+      input = {
+        garment_image: garmentUrl,
+        model_image: humanUrl,
+        garment_type: garmentType,
+      }
+    } else {
+      input = {
+        garm_img: garmentUrl,
+        human_img: humanUrl,
+        garment_image: garmentUrl,
+        model_image: humanUrl,
+        category: category || 'upper_body',
+        garment_type: category === 'lower_body' ? 'bottom' : category === 'dresses' ? 'dress' : 'top',
+        garment_des: garmentDes,
+        crop: false,
+      }
+    }
+
+    // Merge custom params
+    if (config.vtonCustomParams) {
+      try {
+        const customParams = JSON.parse(config.vtonCustomParams)
+        input = { ...input, ...customParams }
+      } catch (e) {
+        console.error('[boutique-try-on] Invalid vtonCustomParams JSON:', e)
+      }
+    }
+
     console.log('[boutique-try-on] Starting prediction for SKU', sku, {
-      garmentUrl,
-      humanUrl,
-      category: category || 'upper_body',
+      model: modelId,
+      version: version.slice(0, 20) + '...',
+      inputKeys: Object.keys(input),
     })
 
-    // Call Replicate IDM-VTON (no Prefer: wait — we return immediately and poll)
+    // Call Replicate (no Prefer: wait — we return immediately and poll)
     const createRes = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
@@ -112,15 +164,8 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        version: 'cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4',
-        input: {
-          garm_img: garmentUrl,
-          human_img: humanUrl,
-          category: category || 'upper_body',
-          crop: false,
-          // Use the user-provided prompt if set, otherwise the model's defaultPrompt, otherwise a generic description
-          garment_des: prompt || model.defaultPrompt || `${product.brand} ${product.title || ''}`.trim() || 'a clothing item',
-        },
+        version: `${modelId}:${version}`,
+        input,
       }),
     })
 

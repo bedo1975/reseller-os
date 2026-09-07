@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
 import fs from 'fs'
 import path from 'path'
 import sharp from 'sharp'
@@ -7,14 +8,16 @@ import sharp from 'sharp'
  * GET /api/ai/virtual-tryon/garment-image?path=/uploads/sessions/xxx/photo.webp
  *
  * Reads a photo (possibly WebP) from disk, converts it to JPEG,
+ * resizes it to the dimensions configured in AIConfig (default 768×1024),
  * and returns it as an image/jpeg response.
  *
- * This is needed because the IDM-VTON model on Replicate can't handle WebP images
- * (returns "can only concatenate str (not NoneType) to str").
+ * This is needed because:
+ * 1. The IDM-VTON model on Replicate can't handle WebP images
+ * 2. The model expects a specific aspect ratio (portrait 768×1024) —
+ *    sending a square image results in a "crushed" output
  *
  * NOTE: This endpoint is PUBLIC (no auth) because Replicate needs to download
- * the image without authentication. The URL is only sent to Replicate for a
- * single prediction and is not exposed to end users.
+ * the image without authentication.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -42,20 +45,28 @@ export async function GET(req: NextRequest) {
     }
 
     const rawBuffer = fs.readFileSync(fullPath)
-    const ext = path.extname(fullPath).toLowerCase()
 
-    // If already JPEG, return as-is
-    if (ext === '.jpg' || ext === '.jpeg') {
-      return new NextResponse(rawBuffer, {
-        headers: {
-          'Content-Type': 'image/jpeg',
-          'Cache-Control': 'public, max-age=3600',
-        },
+    // Get the target dimensions from AIConfig (first admin with a Replicate key)
+    let targetWidth = 768
+    let targetHeight = 1024
+    try {
+      const config = await db.aIConfig.findFirst({
+        where: { replicateApiKey: { not: null } },
+        orderBy: { createdAt: 'asc' },
+        select: { vtonImageWidth: true, vtonImageHeight: true },
       })
-    }
+      if (config) {
+        targetWidth = config.vtonImageWidth || 768
+        targetHeight = config.vtonImageHeight || 1024
+      }
+    } catch {}
 
-    // Convert WebP/PNG to JPEG using sharp
-    const jpegBuffer = await sharp(rawBuffer).jpeg({ quality: 95 }).toBuffer()
+    // Resize to the target dimensions (cover — fills the frame, may crop slightly)
+    // and convert to JPEG. This ensures the model receives the correct aspect ratio.
+    const jpegBuffer = await sharp(rawBuffer)
+      .resize(targetWidth, targetHeight, { fit: 'cover', position: 'center' })
+      .jpeg({ quality: 95 })
+      .toBuffer()
 
     return new NextResponse(jpegBuffer, {
       headers: {
@@ -68,3 +79,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
+

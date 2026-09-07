@@ -4,6 +4,7 @@ import path from 'path'
 import crypto from 'crypto'
 import sharp from 'sharp'
 import { requireClient } from '@/lib/boutique-client-auth'
+import { db } from '@/lib/db'
 
 const TRYON_TEMP_DIR = path.join(process.cwd(), 'public', 'uploads', 'tryon-temp')
 
@@ -57,11 +58,25 @@ export async function POST(req: NextRequest) {
     // Read the file buffer
     const buffer = Buffer.from(await file.arrayBuffer())
 
-    // Resize to max 1024×1024 and convert to JPEG
-    // (IDM-VTON expects portrait orientation around 768×1024 for best results,
-    // but we don't force the aspect ratio — the user picks the right photo)
+    // Get the target dimensions from AIConfig (first admin with a Replicate key)
+    let targetWidth = 768
+    let targetHeight = 1024
+    try {
+      const config = await db.aIConfig.findFirst({
+        where: { replicateApiKey: { not: null } },
+        orderBy: { createdAt: 'asc' },
+        select: { vtonImageWidth: true, vtonImageHeight: true },
+      })
+      if (config) {
+        targetWidth = config.vtonImageWidth || 768
+        targetHeight = config.vtonImageHeight || 1024
+      }
+    } catch {}
+
+    // Resize to the target dimensions (cover — fills the frame, may crop slightly)
+    // and convert to JPEG. This ensures the model receives the correct aspect ratio.
     await sharp(buffer)
-      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .resize(targetWidth, targetHeight, { fit: 'cover', position: 'center' })
       .jpeg({ quality: 92 })
       .toFile(fullPath)
 
@@ -76,3 +91,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }
+

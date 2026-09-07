@@ -81,7 +81,11 @@ export async function POST(req: NextRequest) {
     } else {
       // Use the model's defaultPrompt if it exists, otherwise fall back to the user-provided garmentDes
       const finalGarmentDes = garmentDes || model.defaultPrompt || ''
-      return await callReplicate(apiKey, garmentUrl, modelImageUrl, category || 'upper_body', finalGarmentDes)
+      return await callReplicate(apiKey, garmentUrl, modelImageUrl, category || 'upper_body', finalGarmentDes, {
+        vtonModelId: config.vtonModelId,
+        vtonVersion: config.vtonVersion,
+        vtonCustomParams: config.vtonCustomParams,
+      })
     }
   } catch (error) {
     console.error('POST /api/ai/virtual-tryon error:', error)
@@ -156,9 +160,87 @@ async function callGemini(apiKey: string, garmentUrl: string, modelConfig: { url
 }
 
 /**
- * Call Replicate IDM-VTON
+ * Call Replicate — uses the model configured in AIConfig
+ *
+ * Defaults to cuuupid/idm-vton, but the admin can switch to any other model
+ * (fofr/flux-virtual-try-on, lucataco/kolors-virtual-try-on, etc.) via the
+ * "Virtual Try-On Configuration" section in Settings → IA.
+ *
+ * The function auto-detects the parameter names based on the model:
+ * - cuuupid/idm-vton: garm_img, human_img, category, garment_des, crop
+ * - fofr/flux-virtual-try-on: garment_image, model_image, garment_type
+ * - Other models: tries garm_img/human_img first, falls back to garment_image/model_image
  */
-async function callReplicate(apiKey: string, garmentImage: string, modelImage: string, category: string, garmentDes: string) {
+async function callReplicate(
+  apiKey: string,
+  garmentImage: string,
+  modelImage: string,
+  category: string,
+  garmentDes: string,
+  config: { vtonModelId?: string | null; vtonVersion?: string | null; vtonCustomParams?: string | null } = {}
+) {
+  // Determine which model to use (default: IDM-VTON)
+  const modelId = config.vtonModelId || 'cuuupid/idm-vton'
+  // Default version for IDM-VTON (used when no version is configured)
+  const defaultVersions: Record<string, string> = {
+    'cuuupid/idm-vton': 'c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4',
+  }
+  const version = config.vtonVersion || defaultVersions[modelId] || ''
+
+  if (!version) {
+    return NextResponse.json({
+      error: `Version manquante pour le modèle ${modelId}. Configurez-la dans Paramètres → IA.`
+    }, { status: 400 })
+  }
+
+  // Build the input based on the model
+  let input: Record<string, unknown> = {}
+
+  if (modelId === 'cuuupid/idm-vton') {
+    // IDM-VTON params
+    input = {
+      garm_img: garmentImage,
+      human_img: modelImage,
+      category: category || 'upper_body',
+      crop: false,
+      garment_des: garmentDes || 'a clothing item',
+    }
+  } else if (modelId.includes('flux-virtual-try-on') || modelId.includes('kolors')) {
+    // FLUX Virtual Try-On / Kolors params
+    const garmentType = category === 'lower_body' ? 'bottom'
+      : category === 'dresses' ? 'dress'
+      : 'top'
+    input = {
+      garment_image: garmentImage,
+      model_image: modelImage,
+      garment_type: garmentType,
+    }
+  } else {
+    // Generic fallback — try both parameter name conventions
+    input = {
+      garm_img: garmentImage,
+      human_img: modelImage,
+      garment_image: garmentImage,
+      model_image: modelImage,
+      category: category || 'upper_body',
+      garment_type: category === 'lower_body' ? 'bottom' : category === 'dresses' ? 'dress' : 'top',
+      garment_des: garmentDes || 'a clothing item',
+      crop: false,
+    }
+  }
+
+  // Merge custom params from config (vtonCustomParams is a JSON string)
+  if (config.vtonCustomParams) {
+    try {
+      const customParams = JSON.parse(config.vtonCustomParams)
+      input = { ...input, ...customParams }
+    } catch (e) {
+      console.error('[virtual-tryon] Invalid vtonCustomParams JSON:', e)
+    }
+  }
+
+  console.log('[virtual-tryon] Calling Replicate model:', modelId, 'version:', version.slice(0, 20) + '...', 'input keys:', Object.keys(input))
+
   const createRes = await fetch('https://api.replicate.com/v1/predictions', {
     method: 'POST',
     headers: {
@@ -169,16 +251,8 @@ async function callReplicate(apiKey: string, garmentImage: string, modelImage: s
       // À la place, on retourne immédiatement le predictionId et le frontend poll.
     },
     body: JSON.stringify({
-      version: 'cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4',
-      input: {
-        garm_img: garmentImage,
-        human_img: modelImage,
-        category: category || 'upper_body',
-        crop: false,
-        // garment_des is REQUIRED by the model — without it, the model crashes with
-        // "can only concatenate str (not NoneType) to str"
-        garment_des: garmentDes || 'a clothing item',
-      },
+      version: `${modelId}:${version}`,
+      input,
     }),
   })
 

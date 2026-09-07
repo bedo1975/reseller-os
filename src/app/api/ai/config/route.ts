@@ -140,6 +140,11 @@ export async function GET() {
       hasFashnApiKey: !!config.fashnApiKey,
       hasNvidiaApiKey: !!config.nvidiaApiKey,
       vtonProvider: config.vtonProvider || 'replicate',
+      vtonModelId: config.vtonModelId || null,
+      vtonVersion: config.vtonVersion || null,
+      vtonImageWidth: config.vtonImageWidth || 768,
+      vtonImageHeight: config.vtonImageHeight || 1024,
+      vtonCustomParams: config.vtonCustomParams || null,
       providers: AI_PROVIDERS,
     })
   } catch (error) {
@@ -155,7 +160,7 @@ export async function PUT(req: NextRequest) {
   try {
     const user = await requireAuth()
     const body = await req.json()
-    const { provider, apiKey, model, replicateApiKey: repKey, fashnApiKey: fashnKey, vtonProvider: vton, nvidiaApiKey: nvKey } = body
+    const { provider, apiKey, model, replicateApiKey: repKey, fashnApiKey: fashnKey, vtonProvider: vton, nvidiaApiKey: nvKey, vtonModelId, vtonVersion, vtonImageWidth, vtonImageHeight, vtonCustomParams } = body
 
     if (!provider || !AI_PROVIDERS[provider as keyof typeof AI_PROVIDERS]) {
       return NextResponse.json({ error: 'Fournisseur invalide' }, { status: 400 })
@@ -194,6 +199,22 @@ export async function PUT(req: NextRequest) {
       }
       if (vton && ['replicate', 'fashn', 'gemini'].includes(vton)) {
         (updateData as any).vtonProvider = vton
+      }
+      // Virtual Try-On model configuration
+      if (vtonModelId !== undefined) {
+        (updateData as any).vtonModelId = vtonModelId || null
+      }
+      if (vtonVersion !== undefined) {
+        (updateData as any).vtonVersion = vtonVersion || null
+      }
+      if (typeof vtonImageWidth === 'number' && vtonImageWidth > 0) {
+        (updateData as any).vtonImageWidth = vtonImageWidth
+      }
+      if (typeof vtonImageHeight === 'number' && vtonImageHeight > 0) {
+        (updateData as any).vtonImageHeight = vtonImageHeight
+      }
+      if (vtonCustomParams !== undefined) {
+        (updateData as any).vtonCustomParams = vtonCustomParams || null
       }
       config = await db.aIConfig.update({
         where: { userId: user.id },
