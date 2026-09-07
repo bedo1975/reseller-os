@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
         imageUrl: String(imageUrl),
         isActive: isActive !== false,
         order: typeof order === 'number' ? order : 0,
+        defaultPrompt: typeof body.defaultPrompt === 'string' ? body.defaultPrompt.trim() || null : null,
         userId: user.id,
       },
     })

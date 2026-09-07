@@ -79,7 +79,9 @@ export async function POST(req: NextRequest) {
     } else if (vtonProvider === 'gemini') {
       return await callGemini(apiKey, garmentUrl, { url: modelImageUrl, label: model.name })
     } else {
-      return await callReplicate(apiKey, garmentUrl, modelImageUrl, category || 'upper_body', garmentDes || '')
+      // Use the model's defaultPrompt if it exists, otherwise fall back to the user-provided garmentDes
+      const finalGarmentDes = garmentDes || model.defaultPrompt || ''
+      return await callReplicate(apiKey, garmentUrl, modelImageUrl, category || 'upper_body', finalGarmentDes)
     }
   } catch (error) {
     console.error('POST /api/ai/virtual-tryon error:', error)

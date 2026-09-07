@@ -32,6 +32,7 @@ export async function PATCH(
     if (typeof body.imageUrl === 'string') updateData.imageUrl = body.imageUrl
     if (typeof body.isActive === 'boolean') updateData.isActive = body.isActive
     if (typeof body.order === 'number') updateData.order = body.order
+    if (typeof body.defaultPrompt === 'string') updateData.defaultPrompt = body.defaultPrompt.trim() || null
 
     const model = await db.virtualTryOnModel.update({
       where: { id },

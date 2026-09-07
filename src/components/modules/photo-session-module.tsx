@@ -50,6 +50,7 @@ export function PhotoSessionModule() {
   const [tryonPhoto, setTryonPhoto] = useState<string | null>(null)  // photo path being transformed
   const [tryonModel, setTryonModel] = useState<string>('')  // model ID from DB
   const [tryonCategory, setTryonCategory] = useState<string>('upper_body')
+  const [tryonPrompt, setTryonPrompt] = useState<string>('')
   const [tryonLoading, setTryonLoading] = useState(false)
   const [tryonResult, setTryonResult] = useState<string | null>(null)  // output URL from Replicate
   const [tryonError, setTryonError] = useState<string | null>(null)
@@ -193,7 +194,7 @@ export function PhotoSessionModule() {
       const res = await fetch('/api/ai/virtual-tryon', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photoPath: tryonPhoto, modelImage: tryonModel, category: tryonCategory }),
+        body: JSON.stringify({ photoPath: tryonPhoto, modelImage: tryonModel, category: tryonCategory, garmentDes: tryonPrompt }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -506,6 +507,14 @@ export function PhotoSessionModule() {
                       <option value="lower_body">Bas (pantalon, jupe…)</option>
                       <option value="dresses">Robe / Tenue complète</option>
                     </select>
+                    <Label className="text-xs mt-2">Description (prompt — optionnel)</Label>
+                    <textarea
+                      value={tryonPrompt}
+                      onChange={e => setTryonPrompt(e.target.value)}
+                      placeholder="ex: a blue denim jacket, casual fit, front view"
+                      rows={2}
+                      className="flex w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
+                    />
                   </div>
                 </div>
 

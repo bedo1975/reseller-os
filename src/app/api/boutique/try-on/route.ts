@@ -19,7 +19,7 @@ import { db } from '@/lib/db'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { clientPhotoPath, sku, category } = body
+    const { clientPhotoPath, sku, category, prompt } = body
 
     if (!clientPhotoPath) {
       return NextResponse.json({ error: 'Photo requise' }, { status: 400 })
@@ -91,7 +91,8 @@ export async function POST(req: NextRequest) {
           human_img: humanUrl,
           category: category || 'upper_body',
           crop: false,
-          garment_des: `${product.brand} ${product.title || ''}`.trim() || 'a clothing item',
+          // Use the user-provided prompt if set, otherwise the model's defaultPrompt, otherwise a generic description
+          garment_des: prompt || model.defaultPrompt || `${product.brand} ${product.title || ''}`.trim() || 'a clothing item',
         },
       }),
     })

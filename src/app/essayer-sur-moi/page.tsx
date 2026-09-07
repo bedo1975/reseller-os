@@ -72,6 +72,7 @@ function TryOnPageContent() {
 
   // Category state
   const [category, setCategory] = useState<string>('upper_body')
+  const [prompt, setPrompt] = useState<string>('')
 
   // Try-on state
   const [loading, setLoading] = useState(false)
@@ -123,7 +124,7 @@ function TryOnPageContent() {
       const res = await fetch('/api/boutique/try-on', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientPhotoPath, sku, category }),
+        body: JSON.stringify({ clientPhotoPath, sku, category, prompt }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -342,6 +343,23 @@ function TryOnPageContent() {
                 <option value="lower_body">Bas (pantalon, jupe…)</option>
                 <option value="dresses">Robe / Tenue complète</option>
               </select>
+            </div>
+
+            {/* Prompt field */}
+            <div>
+              <Label className="text-xs text-gray-500 uppercase mb-2 block">
+                Description (optionnel)
+              </Label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="ex: a blue denim jacket, casual fit, front view"
+                rows={2}
+                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Décris le vêtement pour un meilleur résultat (couleur, type, style)
+              </p>
             </div>
           </div>
 

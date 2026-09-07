@@ -1312,6 +1312,11 @@ model VirtualTryOnModel {
   isActive  Boolean  @default(true)  // visible côté boutique
   order     Int      @default(0)  // ordre d'affichage
 
+  // Prompt par défaut pour ce modèle (description du vêtement envoyée à IDM-VTON).
+  // Ex: "a blue denim jacket, casual fit, front view"
+  // Si vide, le prompt générique "a clothing item" est utilisé.
+  defaultPrompt String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

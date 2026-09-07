@@ -32,6 +32,7 @@ interface TryOnModel {
   imageUrl: string
   isActive: boolean
   order: number
+  defaultPrompt: string | null
   createdAt: string
 }
 
@@ -40,6 +41,7 @@ interface ModelForm {
   gender: string
   imageUrl: string
   isActive: boolean
+  defaultPrompt: string
 }
 
 const GENDER_LABELS: Record<string, string> = {
@@ -61,6 +63,7 @@ const emptyForm: ModelForm = {
   gender: 'homme',
   imageUrl: '',
   isActive: true,
+  defaultPrompt: '',
 }
 
 export function TryOnModelsModule() {
@@ -90,6 +93,7 @@ export function TryOnModelsModule() {
       gender: model.gender,
       imageUrl: model.imageUrl,
       isActive: model.isActive,
+      defaultPrompt: model.defaultPrompt || '',
     })
     setEditingId(model.id)
     setShowForm(true)
@@ -433,6 +437,22 @@ export function TryOnModelsModule() {
               <Label htmlFor="isActive" className="text-sm cursor-pointer">
                 Actif (visible côté boutique)
               </Label>
+            </div>
+
+            {/* Prompt personnalisé */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Prompt par défaut (optionnel)</Label>
+              <textarea
+                value={form.defaultPrompt}
+                onChange={(e) => setForm(f => ({ ...f, defaultPrompt: e.target.value }))}
+                placeholder="ex: a blue denim jacket, casual fit, front view, studio lighting"
+                rows={3}
+                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"
+              />
+              <p className="text-xs text-muted-foreground">
+                Description du vêtement envoyée à l'IA pour améliorer le résultat. Si vide, une description générique est utilisée.
+                Astuce : décris la couleur, le type de vêtement, la matière, et le style pour de meilleurs résultats.
+              </p>
             </div>
           </div>
 
