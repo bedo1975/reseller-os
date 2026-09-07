@@ -63,6 +63,18 @@ function TryOnPageContent() {
   )
   const product = productData?.product
 
+  // Client auth state — the try-on feature requires a logged-in boutique client
+  const [client, setClient] = useState<{ firstName?: string; email?: string } | null>(null)
+  const [clientChecked, setClientChecked] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/boutique/client/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setClient(data) })
+      .catch(() => {})
+      .finally(() => setClientChecked(true))
+  }, [])
+
   // Client photo state
   const [clientPhotoPath, setClientPhotoPath] = useState<string | null>(null)
   const [clientPhotoUrl, setClientPhotoUrl] = useState<string | null>(null)
@@ -242,15 +254,56 @@ function TryOnPageContent() {
         </div>
       )}
 
+      {/* Loading client auth state */}
+      {sku && !clientChecked && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Not logged in — show login prompt */}
+      {sku && clientChecked && !client && (
+        <div className="max-w-md mx-auto py-8">
+          <div className="bg-white rounded-lg border border-purple-200 p-8 text-center shadow-sm">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 bg-purple-100">
+              <Sparkles className="h-8 w-8 text-purple-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Connexion requise</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Pour utiliser l'essai virtuel, vous devez être connecté à votre compte client.
+              Cela nous permet de protéger votre vie privée et de limiter l'usage du service.
+            </p>
+            <div className="flex flex-col gap-2">
+              <Link
+                href={`/connexion?callbackUrl=${encodeURIComponent(`/essayer-sur-moi?sku=${sku}`)}`}
+                className="w-full h-11 inline-flex items-center justify-center gap-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-medium transition-colors"
+              >
+                <Camera className="h-4 w-4" />
+                Se connecter
+              </Link>
+              <Link
+                href={`/connexion?callbackUrl=${encodeURIComponent(`/essayer-sur-moi?sku=${sku}`)}&mode=register`}
+                className="w-full h-11 inline-flex items-center justify-center gap-2 rounded-md border border-purple-300 text-purple-700 hover:bg-purple-50 font-medium transition-colors"
+              >
+                Créer un compte
+              </Link>
+            </div>
+            <p className="text-xs text-gray-400 mt-4">
+              Votre photo sera automatiquement supprimée après 15 minutes.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Product loading */}
-      {sku && productLoading && (
+      {sku && clientChecked && client && productLoading && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       )}
 
       {/* Product not found */}
-      {sku && !productLoading && !product && (
+      {sku && clientChecked && client && !productLoading && !product && (
         <div className="text-center py-12 bg-red-50 rounded-lg border border-red-200">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-3" />
           <p className="text-gray-700 mb-2">Produit introuvable</p>
@@ -260,8 +313,18 @@ function TryOnPageContent() {
         </div>
       )}
 
+      {/* Logged-in banner */}
+      {sku && clientChecked && client && product && (
+        <div className="mb-4 px-4 py-2 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-800 flex items-center gap-2">
+          <Check className="h-4 w-4 shrink-0" />
+          <span>
+            Connecté en tant que <strong>{client.firstName || client.email}</strong>
+          </span>
+        </div>
+      )}
+
       {/* Main content */}
-      {sku && product && (
+      {sku && clientChecked && client && product && (
         <div className="grid md:grid-cols-2 gap-8">
           {/* Left: Product + Client photo */}
           <div className="space-y-4">

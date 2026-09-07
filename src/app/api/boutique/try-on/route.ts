@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireClient } from '@/lib/boutique-client-auth'
 
 /**
  * POST /api/boutique/try-on
@@ -15,9 +16,18 @@ import { db } from '@/lib/db'
  * }
  *
  * Returns: { predictionId, provider, status } | { outputUrl } | { error }
+ *
+ * NOTE: Requires a logged-in boutique client (boutique_client_token cookie).
  */
 export async function POST(req: NextRequest) {
   try {
+    // Require a logged-in boutique client
+    try {
+      await requireClient()
+    } catch {
+      return NextResponse.json({ error: 'Connexion requise' }, { status: 401 })
+    }
+
     const body = await req.json()
     const { clientPhotoPath, sku, category, prompt, photoIndex } = body
 

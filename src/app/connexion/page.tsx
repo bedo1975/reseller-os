@@ -15,7 +15,11 @@ import {
 function ConnexionPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [mode, setMode] = useState<'login' | 'register'>(
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mode') === 'register'
+      ? 'register'
+      : 'login'
+  )
   const [loading, setLoading] = useState(false)
   const [resending, setResending] = useState(false)
   const [form, setForm] = useState({
@@ -45,11 +49,14 @@ function ConnexionPageContent() {
   }, [searchParams, router])
 
   useEffect(() => {
-    // If already logged in, redirect to account
+    // If already logged in, redirect to callbackUrl or account
     fetch('/api/boutique/client/me').then(r => {
-      if (r.ok) router.push('/compte')
+      if (r.ok) {
+        const cb = searchParams.get('callbackUrl')
+        router.push(cb || '/compte')
+      }
     })
-  }, [router])
+  }, [router, searchParams])
 
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }))
 
@@ -90,12 +97,14 @@ function ConnexionPageContent() {
           toast.success('Compte créé ! Un email de confirmation vous a été envoyé.')
         } else {
           toast.success('Compte créé')
-          router.push('/compte')
+          const cb = searchParams.get('callbackUrl')
+          router.push(cb || '/compte')
           router.refresh()
         }
       } else {
         toast.success('Connexion réussie')
-        router.push('/compte')
+        const cb = searchParams.get('callbackUrl')
+        router.push(cb || '/compte')
         router.refresh()
       }
     } catch {

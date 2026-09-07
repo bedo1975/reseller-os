@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import sharp from 'sharp'
+import { requireClient } from '@/lib/boutique-client-auth'
 
 const TRYON_TEMP_DIR = path.join(process.cwd(), 'public', 'uploads', 'tryon-temp')
 
@@ -15,17 +16,17 @@ const TRYON_TEMP_DIR = path.join(process.cwd(), 'public', 'uploads', 'tryon-temp
  *
  * Returns: { photoPath: "/uploads/tryon-temp/xxx.jpg", photoUrl: "/api/uploads/tryon-temp/xxx.jpg" }
  *
- * The photo is:
- *   - Resized to max 1024×1024 (preserves aspect ratio, no crop)
- *   - Converted to JPEG (quality 92) — IDM-VTON needs JPG/PNG (not WebP)
- *   - Saved with a unique filename in public/uploads/tryon-temp/
- *   - Auto-deleted after 15 minutes by a cron job
- *
- * No auth required — this is a public boutique endpoint.
- * Rate limiting: TODO (will be added later per user's request)
+ * NOTE: Requires a logged-in boutique client (boutique_client_token cookie).
  */
 export async function POST(req: NextRequest) {
   try {
+    // Require a logged-in boutique client
+    try {
+      await requireClient()
+    } catch {
+      return NextResponse.json({ error: 'Connexion requise' }, { status: 401 })
+    }
+
     const formData = await req.formData()
     const file = formData.get('photo')
 
