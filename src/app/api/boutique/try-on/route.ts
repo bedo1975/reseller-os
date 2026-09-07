@@ -66,6 +66,18 @@ export async function POST(req: NextRequest) {
       }, { status: 503 })
     }
 
+    // Fetch the first active model to get its defaultPrompt (the boutique client
+    // doesn't choose a model — the admin pre-selects which models are active).
+    const model = await db.virtualTryOnModel.findFirst({
+      where: { isActive: true },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    })
+    if (!model) {
+      return NextResponse.json({
+        error: 'Aucun modèle disponible pour l\'essai virtuel. Veuillez réessayer plus tard.'
+      }, { status: 503 })
+    }
+
     const apiKey = config.replicateApiKey
 
     // Construct the PUBLIC URLs — Replicate downloads them itself.
