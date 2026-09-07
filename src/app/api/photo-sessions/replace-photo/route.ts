@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/session'
 import fs from 'fs'
 import path from 'path'
 
+/**
+ * POST /api/photo-sessions/replace-photo
+ * Admin — replaces a photo file with a new image (used after virtual try-on).
+ *
+ * Body (multipart/form-data):
+ *   - photo: File (the new image)
+ *   - path: string (the path of the photo to replace, e.g. "/uploads/sessions/xxx/photo.webp")
+ *
+ * Returns: { success: true }
+ */
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireAuth()
+    await requireAuth()
+
     const formData = await req.formData()
     const file = formData.get('photo') as File | null
     const photoPath = formData.get('path') as string | null

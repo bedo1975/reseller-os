@@ -48,11 +48,12 @@ export function PhotoSessionModule() {
   const [uploading, setUploading] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [tryonPhoto, setTryonPhoto] = useState<string | null>(null)  // photo path being transformed
-  const [tryonModel, setTryonModel] = useState<string>('man_1')
+  const [tryonModel, setTryonModel] = useState<string>('')  // model ID from DB
   const [tryonCategory, setTryonCategory] = useState<string>('upper_body')
   const [tryonLoading, setTryonLoading] = useState(false)
   const [tryonResult, setTryonResult] = useState<string | null>(null)  // output URL from Replicate
   const [tryonError, setTryonError] = useState<string | null>(null)
+  const [tryonModels, setTryonModels] = useState<Array<{ id: string; name: string; gender: string; imageUrl: string }>>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const fetchSessions = useCallback(async () => {
@@ -70,6 +71,19 @@ export function PhotoSessionModule() {
   useEffect(() => {
     fetchSessions()
   }, [fetchSessions])
+
+  // Fetch available virtual try-on models from DB (all models, including inactive — admin sees everything)
+  useEffect(() => {
+    fetch('/api/virtual-tryon-models')
+      .then(r => r.json())
+      .then(data => {
+        if (data.models && Array.isArray(data.models) && data.models.length > 0) {
+          setTryonModels(data.models)
+          setTryonModel(data.models[0].id)  // select first model by default
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   // Refresh selected session when sessions list updates
   useEffect(() => {
@@ -219,17 +233,15 @@ export function PhotoSessionModule() {
   }
 
   // Replace the original photo with the virtual try-on result
-    // Replace the original photo with the virtual try-on result
   const applyTryOnResult = async () => {
     if (!tryonResult || !tryonPhoto || !selectedSession) return
     setTryonLoading(true)
     try {
-      // Download the result image and send it to the server via the upload API
+      // Download the result image and send it to the server via the replace-photo API
       const res = await fetch(tryonResult)
       const blob = await res.blob()
       const file = new File([blob], 'virtual-tryon.jpg', { type: 'image/jpeg' })
 
-      // Upload the new image — overwrite the original photo via a dedicated endpoint
       const formData = new FormData()
       formData.append('photo', file)
       formData.append('path', tryonPhoto)
@@ -471,18 +483,29 @@ export function PhotoSessionModule() {
                   <div className="flex-1 space-y-2">
                     <p className="text-xs text-muted-foreground">Photo d'origine</p>
                     <Label className="text-xs">Modèle (mannequin)</Label>
-                   
-                   
-                                          <select
+                    <select
                       value={tryonModel}
                       onChange={e => setTryonModel(e.target.value)}
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
-                      <option value="man_1">Homme — face</option>
-                      <option value="woman_1">Femme — face</option>
+                      {tryonModels.length === 0 ? (
+                        <option value="">Aucun modèle — ajoutez-en dans "Modèles Try-On"</option>
+                      ) : (
+                        tryonModels.map(m => (
+                          <option key={m.id} value={m.id}>{m.name} ({m.gender})</option>
+                        ))
+                      )}
                     </select>
-                 
-                 
+                    <Label className="text-xs mt-2">Type de vêtement</Label>
+                    <select
+                      value={tryonCategory}
+                      onChange={e => setTryonCategory(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="upper_body">Haut (t-shirt, veste, pull…)</option>
+                      <option value="lower_body">Bas (pantalon, jupe…)</option>
+                      <option value="dresses">Robe / Tenue complète</option>
+                    </select>
                   </div>
                 </div>
 

@@ -16,6 +16,7 @@ export type ModuleKey =
   | 'vinted'
   | 'product-trend'
   | 'photos'
+  | 'tryon-models'
   | 'boutique-admin'
   | 'statistics'
   | 'staff-messaging'

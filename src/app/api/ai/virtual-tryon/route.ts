@@ -2,46 +2,39 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/session'
 
-
 /**
- * POST /api/ai/virtual-tryon Test bug fix 
+ * POST /api/ai/virtual-tryon
  * Admin — performs a virtual try-on using either Replicate (IDM-VTON) or FASHN.ai.
  *
- * Body: { photoPath: "/uploads/sessions/xxx/yyy.webp", modelImage: "man_1" | "woman_1" | ... }
+ * Body: {
+ *   photoPath: "/uploads/sessions/xxx/yyy.webp",
+ *   modelImage: "model_id" (ID of a VirtualTryOnModel in DB),
+ *   category?: "upper_body" | "lower_body" | "dresses",
+ *   garmentDes?: "description of the garment" (optional, improves quality)
+ * }
  *
  * The provider is determined by AIConfig.vtonProvider ("replicate" | "fashn").
  *
- * Returns: { outputUrl: "https://..." } — the URL of the generated image.
+ * Returns: { outputUrl: "https://..." } | { predictionId, provider, status }
  */
-
-// Predefined model/person images hosted on Replicate's CDN (works for both providers
-// since they both accept URL inputs).
-// IMPORTANT: Replicate a supprimé les URLs https://replicate.delivery/mgxt/IDM-VTON/...
-// (elles retournent 404). On utilise maintenant des images hébergées sur junashop.fr/models/.
-// Pour ajouter de nouveaux mannequins : upload une photo dans public/models/ et ajoute l'URL ici.
-const MODEL_IMAGES: Record<string, { url: string; label: string }> = {
-  'man_1': {
-    label: 'Homme — face',
-    url: 'https://junashop.fr/api/models/man_face.jpg',
-  },
-  'woman_1': {
-    label: 'Femme — face',
-    url: 'https://junashop.fr/api/models/woman_face.jpg',
-  },
-}
-
 
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth()
     const body = await req.json()
-    const { photoPath, modelImage, category } = body
+    const { photoPath, modelImage, category, garmentDes } = body
 
     if (!photoPath) {
       return NextResponse.json({ error: 'Photo requise' }, { status: 400 })
     }
-    if (!modelImage || !MODEL_IMAGES[modelImage]) {
-      return NextResponse.json({ error: 'Modèle invalide' }, { status: 400 })
+    if (!modelImage) {
+      return NextResponse.json({ error: 'Modèle requis' }, { status: 400 })
+    }
+
+    // Fetch the model from DB (admin can use any model, even inactive ones)
+    const model = await db.virtualTryOnModel.findUnique({ where: { id: modelImage } })
+    if (!model) {
+      return NextResponse.json({ error: 'Modèle introuvable' }, { status: 404 })
     }
 
     // Get config
@@ -68,27 +61,26 @@ export async function POST(req: NextRequest) {
     }
 
     // Construct the PUBLIC URL of the photo — Replicate downloads it itself.
-    // The /api/uploads/ route is public (no auth) and serves the photo.
-    // IMPORTANT: the IDM-VTON model can't handle data: URIs (base64) — it returns
-    // "can only concatenate str (not NoneType) to str" when given a data URI.
-      const publicBaseUrl = process.env.NEXTAUTH_URL || `https://${req.headers.get('host')}`
+    // Use the garment-image endpoint to convert WebP → JPEG on the fly (IDM-VTON can't handle WebP).
+    const publicBaseUrl = process.env.NEXTAUTH_URL || `https://${req.headers.get('host')}`
     const cleanPath = photoPath.startsWith('/') ? photoPath : '/' + photoPath
-    // Use the garment-image endpoint to convert WebP → JPEG on the fly
-    // (IDM-VTON can't handle WebP)
     const garmentUrl = `${publicBaseUrl}/api/ai/virtual-tryon/garment-image?path=${encodeURIComponent(cleanPath)}`
-    console.log('[virtual-tryon] Garment URL:', garmentUrl)
+    console.log('[virtual-tryon] Garment URL:', garmentUrl, '| Model:', model.name)
 
-    const modelConfig = MODEL_IMAGES[modelImage]
+    // The model image URL — if it's a local upload, prefix with the public base URL
+    let modelImageUrl = model.imageUrl
+    if (modelImageUrl.startsWith('/uploads/') || modelImageUrl.startsWith('/api/')) {
+      modelImageUrl = `${publicBaseUrl}${modelImageUrl.startsWith('/api') ? '' : '/api'}${modelImageUrl}`
+    }
 
     // Call the appropriate provider
     if (vtonProvider === 'fashn') {
-      return await callFashn(apiKey, garmentUrl, modelConfig.url)
+      return await callFashn(apiKey, garmentUrl, modelImageUrl)
     } else if (vtonProvider === 'gemini') {
-      return await callGemini(apiKey, garmentUrl, modelConfig)
+      return await callGemini(apiKey, garmentUrl, { url: modelImageUrl, label: model.name })
     } else {
-      return await callReplicate(apiKey, garmentUrl, modelConfig.url, category || 'upper_body', body.garmentDes || '')
+      return await callReplicate(apiKey, garmentUrl, modelImageUrl, category || 'upper_body', garmentDes || '')
     }
-    
   } catch (error) {
     console.error('POST /api/ai/virtual-tryon error:', error)
     if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {
@@ -100,20 +92,15 @@ export async function POST(req: NextRequest) {
 
 /**
  * Call Gemini (Nano Banana — gemini-2.5-flash-image)
- * Uses the Google AI Studio API. Accepts an image + text prompt.
- * The prompt asks Gemini to put the garment on a real person.
- * Returns the generated image as base64.
- *
- * Free with Google AI Studio API key (same key as the main AI config).
  */
-async function callGemini(apiKey: string, garmentDataUri: string, modelConfig: { url: string; label: string }) {
-  // Build the prompt for Gemini. We send the garment photo and ask it to
-  // create an image of a real person wearing this garment.
+async function callGemini(apiKey: string, garmentUrl: string, modelConfig: { url: string; label: string }) {
   const genderHint = modelConfig.label.toLowerCase().includes('femme') ? 'a woman' : 'a man'
   const prompt = `Look at this clothing item. Generate a photorealistic image of ${genderHint} wearing this exact garment. The person should be standing, facing forward, in good lighting against a clean neutral background. The garment should fit naturally on the person. Keep the garment's color, pattern, and details exactly as shown in the original image.`
 
-  // Call Gemini API — generateContent with inline_data (image) + text
-  // Model: gemini-2.5-flash-image (Nano Banana) — supports image generation from image+text
+  // Download the garment image and send as base64 to Gemini
+  const imgRes = await fetch(garmentUrl)
+  const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
+
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -121,7 +108,7 @@ async function callGemini(apiKey: string, garmentDataUri: string, modelConfig: {
       contents: [{
         parts: [
           { text: prompt },
-          { inline_data: { mime_type: garmentDataUri.split(';')[0].split(':')[1], data: garmentDataUri.split(',')[1] } },
+          { inline_data: { mime_type: 'image/jpeg', data: imgBuffer.toString('base64') } },
         ],
       }],
       generationConfig: {
@@ -146,18 +133,13 @@ async function callGemini(apiKey: string, garmentDataUri: string, modelConfig: {
   }
 
   const data = await res.json()
-
-  // Gemini returns parts with inline_data (base64 image) in the response
   const parts = data?.candidates?.[0]?.content?.parts
   if (!parts) {
-    console.error('[virtual-tryon] Gemini no parts in response:', JSON.stringify(data).slice(0, 500))
     return NextResponse.json({ error: 'Gemini n\'a pas retourné d\'image. Essayez une autre photo.' }, { status: 500 })
   }
 
-  // Find the image part
   const imagePart = parts.find((p: any) => p.inline_data || p.inlineData)
   if (!imagePart) {
-    // Maybe Gemini returned only text (e.g. a refusal)
     const textPart = parts.find((p: any) => p.text)
     const textMsg = textPart?.text || 'Aucune image générée'
     return NextResponse.json({ error: `Gemini: ${textMsg.slice(0, 200)}` }, { status: 500 })
@@ -166,8 +148,6 @@ async function callGemini(apiKey: string, garmentDataUri: string, modelConfig: {
   const inlineData = imagePart.inline_data || imagePart.inlineData
   const base64Image = inlineData.data
   const mimeType = inlineData.mime_type || inlineData.mimeType || 'image/png'
-
-  // Return as a data URI that the frontend can display directly
   const outputDataUri = `data:${mimeType};base64,${base64Image}`
 
   return NextResponse.json({ outputUrl: outputDataUri })
@@ -193,7 +173,9 @@ async function callReplicate(apiKey: string, garmentImage: string, modelImage: s
         human_img: modelImage,
         category: category || 'upper_body',
         crop: false,
-         garment_des: garmentDes || 'a clothing item',
+        // garment_des is REQUIRED by the model — without it, the model crashes with
+        // "can only concatenate str (not NoneType) to str"
+        garment_des: garmentDes || 'a clothing item',
       },
     }),
   })
@@ -234,10 +216,8 @@ async function callReplicate(apiKey: string, garmentImage: string, modelImage: s
 
 /**
  * Call FASHN.ai
- * FASHN uses a similar API: POST /v1/run, then poll /v1/status/{id}
  */
 async function callFashn(apiKey: string, garmentImage: string, modelImage: string) {
-  // Step 1: Create the prediction
   const createRes = await fetch('https://api.fashn.ai/v1/run', {
     method: 'POST',
     headers: {
@@ -267,7 +247,6 @@ async function callFashn(apiKey: string, garmentImage: string, modelImage: strin
 
   const prediction = await createRes.json()
 
-  // FASHN returns { id: "xxx", status: "starting" | "processing" | "completed" | "failed" }
   if (prediction.status === 'completed' && prediction.output) {
     const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
     return NextResponse.json({ outputUrl })
@@ -277,7 +256,6 @@ async function callFashn(apiKey: string, garmentImage: string, modelImage: strin
     return NextResponse.json({ error: 'La transformation a échoué.' }, { status: 500 })
   }
 
-  // Need to poll for the result
   return NextResponse.json({
     predictionId: prediction.id,
     provider: 'fashn',
@@ -289,7 +267,6 @@ async function callFashn(apiKey: string, garmentImage: string, modelImage: strin
 /**
  * GET /api/ai/virtual-tryon?id=xxx
  * Polls the status of a virtual try-on prediction.
- * Also returns available models when called without id.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -299,25 +276,16 @@ export async function GET(req: NextRequest) {
     const provider = searchParams.get('provider') || 'replicate'
 
     if (!predictionId) {
-      return NextResponse.json({
-        models: Object.entries(MODEL_IMAGES).map(([key, val]) => ({
-          key, label: val.label,
-        }))
-      })
+      return NextResponse.json({ error: 'ID requis' }, { status: 400 })
     }
 
     let config = await db.aIConfig.findUnique({ where: { userId: user.id } })
     if (!config) return NextResponse.json({ error: 'Config introuvable' }, { status: 404 })
 
-       const apiKey = provider === 'fashn' ? config.fashnApiKey : config.replicateApiKey
-    if (!apiKey) {
-      console.error('[virtual-tryon] GET: No API key for provider:', provider)
-      return NextResponse.json({ error: 'Clé API requise' }, { status: 400 })
-    }
-    console.log('[virtual-tryon] GET: polling prediction', predictionId, 'with provider', provider)
+    const apiKey = provider === 'fashn' ? config.fashnApiKey : config.replicateApiKey
+    if (!apiKey) return NextResponse.json({ error: 'Clé API requise' }, { status: 400 })
 
     if (provider === 'fashn') {
-      // Poll FASHN status
       const res = await fetch(`https://api.fashn.ai/v1/status/${predictionId}`, {
         headers: { 'Authorization': `Bearer ${apiKey}` },
       })
@@ -325,7 +293,6 @@ export async function GET(req: NextRequest) {
 
       const prediction = await res.json()
       if (prediction.status === 'completed' && prediction.output) {
-        console.log('[virtual-tryon] GET: Replicate prediction:', JSON.stringify({ status: prediction.status, hasOutput: !!prediction.output, error: prediction.error }))
         const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
         return NextResponse.json({ status: 'succeeded', outputUrl })
       }
@@ -334,26 +301,18 @@ export async function GET(req: NextRequest) {
       }
       return NextResponse.json({ status: prediction.status })
     } else {
-      
-      // Poll Replicate status
-        const res = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+      const res = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
         headers: { 'Authorization': `Bearer ${apiKey}` },
       })
-      console.log('[virtual-tryon] GET: Replicate status response:', res.status)
-      if (!res.ok) {
-        const errText = await res.text()
-        console.error('[virtual-tryon] GET: Replicate error response:', errText)
-        return NextResponse.json({ error: 'Erreur lors de la vérification' }, { status: 500 })
-      }
+      if (!res.ok) return NextResponse.json({ error: 'Erreur lors de la vérification' }, { status: 500 })
 
-     const prediction = await res.json()
-      console.log('[virtual-tryon] GET: Replicate prediction status:', prediction.status, '| error:', prediction.error, '| logs:', prediction.logs?.slice(-500))
+      const prediction = await res.json()
       if (prediction.status === 'succeeded' && prediction.output) {
         const outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
         return NextResponse.json({ status: 'succeeded', outputUrl })
       }
       if (prediction.status === 'failed') {
-        console.error('[virtual-tryon] GET: Replicate prediction FAILED. Full prediction:', JSON.stringify(prediction).slice(0, 1000))
+        console.error('[virtual-tryon] GET: Replicate prediction FAILED:', JSON.stringify(prediction).slice(0, 1000))
         return NextResponse.json({ status: 'failed', error: prediction.error || 'La transformation a échoué' }, { status: 500 })
       }
       return NextResponse.json({ status: prediction.status })

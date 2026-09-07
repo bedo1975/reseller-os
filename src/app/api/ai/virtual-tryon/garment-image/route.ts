@@ -5,21 +5,19 @@ import sharp from 'sharp'
 
 /**
  * GET /api/ai/virtual-tryon/garment-image?path=/uploads/sessions/xxx/photo.webp
- * 
+ *
  * Reads a photo (possibly WebP) from disk, converts it to JPEG,
  * and returns it as an image/jpeg response.
- * 
+ *
  * This is needed because the IDM-VTON model on Replicate can't handle WebP images
  * (returns "can only concatenate str (not NoneType) to str").
- * 
- * NOTE: This endpoint requires auth (admin only) to prevent abuse,
- * but the returned URL is short-lived (just used for the Replicate prediction).
+ *
+ * NOTE: This endpoint is PUBLIC (no auth) because Replicate needs to download
+ * the image without authentication. The URL is only sent to Replicate for a
+ * single prediction and is not exposed to end users.
  */
 export async function GET(req: NextRequest) {
   try {
-    // NOTE: This endpoint is PUBLIC (no auth) because Replicate needs to download
-    // the image without authentication. The URL is only sent to Replicate for a
-    // single prediction and is not exposed to end users.
     const { searchParams } = new URL(req.url)
     const photoPath = searchParams.get('path')
 
@@ -32,6 +30,11 @@ export async function GET(req: NextRequest) {
     if (cleanPath.startsWith('public/')) cleanPath = cleanPath.slice('public/'.length)
     if (cleanPath.startsWith('/api/')) cleanPath = cleanPath.slice('/api/'.length)
     cleanPath = cleanPath.replace(/^\//, '')
+
+    // Security: prevent path traversal
+    if (cleanPath.includes('..')) {
+      return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
+    }
 
     const fullPath = path.join(process.cwd(), 'public', cleanPath)
     if (!fs.existsSync(fullPath)) {

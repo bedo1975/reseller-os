@@ -30,6 +30,7 @@ import { BiModule } from '@/components/modules/bi-module'
 import { VintedModule } from '@/components/modules/vinted-module'
 import { ProductTrendModule } from '@/components/modules/product-trend-module'
 import { PhotoSessionModule } from '@/components/modules/photo-session-module'
+import { TryOnModelsModule } from '@/components/modules/tryon-models-module'
 import { BoutiqueAdminModule } from '@/components/modules/boutique-admin-module'
 import { StatisticsModule } from '@/components/modules/statistics-module'
 import { StaffMessagingModule } from '@/components/modules/staff-messaging-module'
@@ -62,6 +63,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'vinted', label: 'Vinted Deals', short: 'Vinted', icon: Search, description: 'Recherche & deals Vinted' },
   { key: 'product-trend', label: 'Product Trend', short: 'Trend', icon: Sparkles, description: 'Produits tendance multi-marketplaces' },
   { key: 'photos', label: 'Shooting Photo', short: 'Photos', icon: Camera, description: 'Sessions photos produits' },
+  { key: 'tryon-models', label: 'Modèles Try-On', short: 'Try-On', icon: Sparkles, description: 'Mannequins pour essai virtuel' },
   { key: 'boutique-admin', label: 'Boutique Admin', short: 'Boutique', icon: ShoppingBag, description: 'Gestion boutique en ligne' },
   { key: 'statistics', label: 'Statistiques', short: 'Stats', icon: BarChart3, description: 'Visiteurs, pages vues, avis' },
   { key: 'staff-messaging', label: 'Messagerie', short: 'Messages', icon: Mail, description: 'Messagerie interne staff' },
@@ -461,6 +463,7 @@ export default function Home() {
             {activeModule === 'vinted' && <VintedModule />}
             {activeModule === 'product-trend' && <ProductTrendModule />}
             {activeModule === 'photos' && <PhotoSessionModule />}
+            {activeModule === 'tryon-models' && <TryOnModelsModule />}
             {activeModule === 'boutique-admin' && <BoutiqueAdminModule />}
             {activeModule === 'statistics' && <StatisticsModule />}
             {activeModule === 'staff-messaging' && <StaffMessagingModule />}

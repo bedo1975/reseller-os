@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
-import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2, BellRing, Loader2, Ruler, Tag, Mail, Send } from 'lucide-react'
+import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2, BellRing, Loader2, Ruler, Tag, Mail, Send, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShareModal } from '@/components/boutique/share-modal'
 import { ReviewsSection } from '@/components/boutique/reviews-section'
@@ -726,6 +726,20 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
               </Button>
             </div>
           )}
+
+          {/* Virtual Try-On button — "Essayer sur moi" */}
+          <div className="mb-6">
+            <Link
+              href={`/essayer-sur-moi?sku=${encodeURIComponent(product.sku)}`}
+              className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-medium transition-colors"
+            >
+              <Sparkles className="h-5 w-5" />
+              Essayer sur moi
+            </Link>
+            <p className="text-xs text-gray-400 text-center mt-1.5">
+              Uploadez votre photo et voyez le résultat en quelques secondes
+            </p>
+          </div>
 
           {/* Share with friends button */}
           {settings.shareEnabled !== false && (
