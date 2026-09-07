@@ -51,6 +51,7 @@ interface StockItem {
   sku: string
   barcode: string | null
   reference?: string | null
+  tryOnDescription?: string | null
   photos: string
   title: string | null
   brand: string
@@ -1111,6 +1112,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', supplierOrderNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
     barcode: '',
     reference: '',
+    tryOnDescription: '',
     stockType: 'boutique',
     makeOfferEnabled: false,
   })
@@ -1147,6 +1149,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         status: item.status,
         barcode: item.barcode || '',
         reference: (item as { reference?: string | null }).reference || '',
+        tryOnDescription: (item as { tryOnDescription?: string | null }).tryOnDescription || '',
         stockType: (item as { stockType?: string }).stockType || 'boutique',
         makeOfferEnabled: (item as { makeOfferEnabled?: boolean }).makeOfferEnabled === true,
       })
@@ -1161,6 +1164,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', supplierOrderNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
         barcode: prefillBarcode || '',
         reference: '',
+        tryOnDescription: '',
         stockType: 'boutique',
       })
       setPhotos([])
@@ -2150,6 +2154,24 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
                       </p>
                     </div>
                   </label>
+                </div>
+              )}
+              {/* Virtual Try-On description — only for boutique items */}
+              {form.stockType !== 'plateforme' && (
+                <div className="space-y-1.5 md:col-span-3">
+                  <Label className="text-xs flex items-center gap-1">
+                    <Sparkles className="h-3 w-3 text-purple-600" />
+                    Description essai virtuel (optionnel)
+                  </Label>
+                  <Input
+                    value={form.tryOnDescription}
+                    onChange={e => setForm({ ...form, tryOnDescription: e.target.value })}
+                    placeholder="ex: blue denim jeans, straight fit / white cotton t-shirt, short sleeves / black leather jacket"
+                    className="text-sm"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Mots-clés envoyés à l'IA pour l'essai virtuel (« Essayer sur moi »). Décris le type de vêtement, la couleur, la matière. Si vide, la marque + titre sont utilisés (moins précis).
+                  </p>
                 </div>
               )}
               <div className="space-y-1.5 md:col-span-3">

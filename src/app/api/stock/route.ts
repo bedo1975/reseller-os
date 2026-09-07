@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       purchaseInvoiceNumber, supplierOrderNumber, purchasePaymentMethod,
       warehouse, rack, shelf, bin, weight, quantity,
       description, suggestedPrice, salePrice, saleActive, photos, barcode, measurements,
-      status, platform, salePlatform, platforms, stockType, makeOfferEnabled, variantGroup, reference,
+      status, platform, salePlatform, platforms, stockType, makeOfferEnabled, variantGroup, reference, tryOnDescription,
     } = body
 
     if (!sku || !brand) {
@@ -106,14 +106,21 @@ export async function POST(req: NextRequest) {
         platform: platform || null,
         salePlatform: salePlatform || null,
         platforms: platforms || JSON.stringify([]),
+        // stockType: "boutique" (default) or "plateforme" (not visible on online store)
         stockType: stockType === 'plateforme' ? 'plateforme' : 'boutique',
+        // Make an Offer — allows clients to propose a reduced price
         makeOfferEnabled: makeOfferEnabled === true,
+        // Variant group — set by the multi-variant form to link sibling variants
         variantGroup: variantGroup || null,
+        // Description for virtual try-on — keywords sent to the AI model
+        tryOnDescription: tryOnDescription || null,
         userId: user.id,
       },
       include: { supplier: true },
     })
 
+    // Invalidate sitemap if the new item is published to the boutique
+    // (only boutique-type items appear on the storefront)
     if (item.stockType === 'boutique' && item.status === 'PUBLIE' && item.suggestedPrice && item.suggestedPrice > 0) {
       try {
         revalidatePath('/sitemap.xml')

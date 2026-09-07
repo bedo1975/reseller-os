@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client'
 // Cache key bumped when the Prisma schema changes (new models/fields) so the
 // dev server picks up the regenerated client instead of reusing an outdated
 // PrismaClient instance stored in globalThis.
-const PRISMA_CACHE_VERSION = 'v7-vton-config'
+const PRISMA_CACHE_VERSION = 'v8-tryon-description'
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient

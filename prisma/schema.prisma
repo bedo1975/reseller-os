@@ -299,6 +299,11 @@ model StockItem {
   // null = article standalone (jamais groupé comme variante, même si titre+marque identiques).
   variantGroup  String?
 
+  // Description pour l'essai virtuel (virtual try-on) — mots-clés envoyés au modèle IA
+  // pour décrire précisément le vêtement. Ex: "blue denim jeans, straight fit, five pockets"
+  // Si vide, la marque + titre sont utilisés (moins précis).
+  tryOnDescription String?
+
   // 1 StockItem peut avoir plusieurs Sales (utile pour quantité > 1)
   sales         Sale[]
   // Make an Offer — offres reçues pour cet article

@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
         stockType: 'boutique',
         suggestedPrice: { gt: 0 },
       },
-      select: { id: true, sku: true, photos: true, title: true, brand: true, category: true, subcategory: true },
+      select: { id: true, sku: true, photos: true, title: true, brand: true, category: true, subcategory: true, tryOnDescription: true },
     })
     if (!product) {
       return NextResponse.json({ error: 'Produit introuvable' }, { status: 404 })
@@ -124,7 +124,12 @@ export async function POST(req: NextRequest) {
 
     // Build the input based on the model
     let input: Record<string, unknown> = {}
-    const garmentDes = prompt || model.defaultPrompt || `${product.brand} ${product.title || ''}`.trim() || 'a clothing item'
+    // Priority: client prompt > product's tryOnDescription > model's defaultPrompt > brand + title > generic
+    const garmentDes = prompt
+      || (product as any).tryOnDescription
+      || model.defaultPrompt
+      || `${product.brand} ${product.title || ''}`.trim()
+      || 'a clothing item'
 
     if (modelId === 'cuuupid/idm-vton') {
       input = {
@@ -168,6 +173,7 @@ export async function POST(req: NextRequest) {
       model: modelId,
       version: version.slice(0, 20) + '...',
       inputKeys: Object.keys(input),
+      garmentDes: garmentDes.slice(0, 100),
     })
 
     // Call Replicate (no Prefer: wait — we return immediately and poll)

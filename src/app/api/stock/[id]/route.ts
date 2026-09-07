@@ -40,7 +40,7 @@ export async function PATCH(
       'purchaseInvoiceNumber', 'supplierOrderNumber', 'purchasePaymentMethod',
       'warehouse', 'rack', 'shelf', 'bin', 'weight', 'quantity',
       'description', 'suggestedPrice', 'salePrice', 'saleActive', 'photos', 'barcode', 'reference', 'measurements',
-      'status', 'platform', 'salePlatform', 'platforms', 'stockType', 'makeOfferEnabled', 'variantGroup',
+      'status', 'platform', 'salePlatform', 'platforms', 'stockType', 'makeOfferEnabled', 'variantGroup', 'tryOnDescription',
       'invoicePath', 'invoiceName',
     ]
     for (const key of allowed) {
