@@ -730,7 +730,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           {/* Virtual Try-On button — "Essayer sur moi" */}
           <div className="mb-6">
             <Link
-              href={`/essayer-sur-moi?sku=${encodeURIComponent(product.sku)}`}
+              href={`/essayer-sur-moi?sku=${encodeURIComponent(product.sku)}&photo=${activePhoto}`}
               className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-medium transition-colors"
             >
               <Sparkles className="h-5 w-5" />

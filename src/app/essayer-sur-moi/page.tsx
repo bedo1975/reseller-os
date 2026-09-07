@@ -73,11 +73,26 @@ function TryOnPageContent() {
   // Category state
   const [category, setCategory] = useState<string>('upper_body')
   const [prompt, setPrompt] = useState<string>('')
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number>(0)
+
+  // Reset selected photo when product changes (different SKU loaded)
+  // Also pick up the photo index from the URL (?photo=N) so the client lands
+  // on the same photo they were viewing on the product page.
+  useEffect(() => {
+    const photoParam = searchParams.get('photo')
+    const idx = photoParam ? parseInt(photoParam, 10) : 0
+    setSelectedPhotoIndex(Number.isNaN(idx) ? 0 : idx)
+    setResult(null)
+    setError(null)
+  }, [sku, searchParams])
 
   // Try-on state
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Track the prompt used in the last transformation — if the user edits the prompt
+  // after a result is shown, we display a "Rafraîchir" hint button.
+  const [lastPromptUsed, setLastPromptUsed] = useState<string>('')
 
   const handleUpload = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -120,11 +135,14 @@ function TryOnPageContent() {
     setLoading(true)
     setError(null)
     setResult(null)
+    // Remember which prompt was used for this transformation so we can show
+    // a "Rafraîchir" hint if the user edits the prompt afterwards.
+    setLastPromptUsed(prompt)
     try {
       const res = await fetch('/api/boutique/try-on', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientPhotoPath, sku, category, prompt }),
+        body: JSON.stringify({ clientPhotoPath, sku, category, prompt, photoIndex: selectedPhotoIndex }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -254,7 +272,7 @@ function TryOnPageContent() {
                 <div className="w-20 h-20 rounded-lg overflow-hidden border shrink-0 bg-muted">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={product.mainPhoto || product.photos[0] || ''}
+                    src={product.photos[selectedPhotoIndex] || product.mainPhoto || product.photos[0] || ''}
                     alt={product.brand}
                     className="w-full h-full object-cover"
                   />
@@ -267,6 +285,45 @@ function TryOnPageContent() {
                   )}
                 </div>
               </div>
+
+              {/* Photo selector — only show if product has multiple photos */}
+              {product.photos.length > 1 && (
+                <div className="mt-2">
+                  <Label className="text-xs text-gray-500 uppercase mb-1.5 block">
+                    Photo du produit ({selectedPhotoIndex + 1}/{product.photos.length})
+                  </Label>
+                  <div className="flex gap-2 flex-wrap">
+                    {product.photos.map((photo, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSelectedPhotoIndex(idx)}
+                        className={`relative w-16 h-16 rounded-md overflow-hidden border-2 transition-all ${
+                          selectedPhotoIndex === idx
+                            ? 'border-purple-500 ring-2 ring-purple-200'
+                            : 'border-gray-200 hover:border-purple-300'
+                        }`}
+                        title={`Photo ${idx + 1}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photo}
+                          alt={`Photo ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        {selectedPhotoIndex === idx && (
+                          <div className="absolute top-0.5 right-0.5 bg-purple-600 text-white rounded-full w-4 h-4 flex items-center justify-center">
+                            <Check className="h-2.5 w-2.5" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    Cliquez sur une photo pour la sélectionner comme vêtement de référence
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Client photo upload */}
@@ -387,6 +444,26 @@ function TryOnPageContent() {
                   <Check className="h-4 w-4" />
                   Transformation réussie !
                 </p>
+
+                {/* Rafraîchir hint — shows when the prompt has been edited since the last transformation */}
+                {prompt !== lastPromptUsed && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 text-amber-600 shrink-0" />
+                    <p className="text-xs text-amber-800 flex-1">
+                      Le prompt a été modifié. Cliquez pour régénérer avec la nouvelle description.
+                    </p>
+                    <Button
+                      onClick={handleTransform}
+                      size="sm"
+                      className="bg-amber-600 hover:bg-amber-700 h-8"
+                      disabled={loading}
+                    >
+                      {loading ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                      Rafraîchir
+                    </Button>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <Button onClick={handleDownload} variant="outline" className="flex-1">
                     <Download className="h-4 w-4 mr-1" />

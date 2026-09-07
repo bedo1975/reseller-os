@@ -19,7 +19,7 @@ import { db } from '@/lib/db'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { clientPhotoPath, sku, category, prompt } = body
+    const { clientPhotoPath, sku, category, prompt, photoIndex } = body
 
     if (!clientPhotoPath) {
       return NextResponse.json({ error: 'Photo requise' }, { status: 400 })
@@ -42,13 +42,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Produit introuvable' }, { status: 404 })
     }
 
-    // Parse the product photos to get the main one
+    // Parse the product photos to get the selected one
     let photos: string[] = []
     try { photos = JSON.parse(product.photos) } catch {}
     if (photos.length === 0) {
       return NextResponse.json({ error: 'Ce produit n\'a pas de photo' }, { status: 404 })
     }
-    const garmentPhoto = photos[0]  // main photo
+    // Use the photoIndex if provided and valid, otherwise default to the first photo
+    const parsedIdx = typeof photoIndex === 'string' ? parseInt(photoIndex, 10) : photoIndex
+    const idx = typeof parsedIdx === 'number' && !Number.isNaN(parsedIdx) && parsedIdx >= 0 && parsedIdx < photos.length
+      ? parsedIdx
+      : 0
+    const garmentPhoto = photos[idx]
 
     // Get the admin's AIConfig (first user with a Replicate API key)
     const config = await db.aIConfig.findFirst({

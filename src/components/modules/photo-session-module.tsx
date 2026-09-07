@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   Camera, Plus, Trash2, Loader2, Image as ImageIcon, X, Check, Link2,
-  ChevronLeft, Upload, FileImage, Calendar, Tag, Download, Sparkles,
+  ChevronLeft, Upload, FileImage, Calendar, Tag, Download, Sparkles, RefreshCw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,6 +51,7 @@ export function PhotoSessionModule() {
   const [tryonModel, setTryonModel] = useState<string>('')  // model ID from DB
   const [tryonCategory, setTryonCategory] = useState<string>('upper_body')
   const [tryonPrompt, setTryonPrompt] = useState<string>('')
+  const [lastPromptUsed, setLastPromptUsed] = useState<string>('')
   const [tryonLoading, setTryonLoading] = useState(false)
   const [tryonResult, setTryonResult] = useState<string | null>(null)  // output URL from Replicate
   const [tryonError, setTryonError] = useState<string | null>(null)
@@ -190,6 +191,7 @@ export function PhotoSessionModule() {
     setTryonLoading(true)
     setTryonError(null)
     setTryonResult(null)
+    setLastPromptUsed(tryonPrompt)
     try {
       const res = await fetch('/api/ai/virtual-tryon', {
         method: 'POST',
@@ -533,6 +535,25 @@ export function PhotoSessionModule() {
                       </div>
                     </div>
                     <p className="text-xs text-emerald-600">✓ Transformation réussie ! Voulez-vous remplacer la photo d'origine ?</p>
+
+                    {/* Rafraîchir hint — shows when the prompt has been edited since the last transformation */}
+                    {tryonPrompt !== lastPromptUsed && (
+                      <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-2.5 flex items-center gap-2">
+                        <RefreshCw className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                        <p className="text-xs text-amber-800 dark:text-amber-300 flex-1">
+                          Prompt modifié — régénérez pour appliquer la nouvelle description.
+                        </p>
+                        <Button
+                          onClick={handleVirtualTryOn}
+                          size="sm"
+                          className="bg-amber-600 hover:bg-amber-700 h-7 text-xs"
+                          disabled={tryonLoading}
+                        >
+                          {tryonLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                          Rafraîchir
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
 
