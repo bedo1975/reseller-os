@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireClient } from '@/lib/boutique-client-auth'
+import { getVtonCategory, isTryOnEnabled } from '@/lib/vton-category-mapper'
 
 /**
  * POST /api/boutique/try-on
@@ -46,11 +47,24 @@ export async function POST(req: NextRequest) {
         stockType: 'boutique',
         suggestedPrice: { gt: 0 },
       },
-      select: { id: true, sku: true, photos: true, title: true, brand: true },
+      select: { id: true, sku: true, photos: true, title: true, brand: true, category: true, subcategory: true },
     })
     if (!product) {
       return NextResponse.json({ error: 'Produit introuvable' }, { status: 404 })
     }
+
+    // Check if the product can be tried on (exclude accessories, shoes, home items)
+    if (!isTryOnEnabled(product.category, product.subcategory)) {
+      return NextResponse.json({
+        error: 'Cet article n\'est pas compatible avec l\'essai virtuel (accessoire, chaussure ou objet de maison).'
+      }, { status: 400 })
+    }
+
+    // Auto-detect the IDM-VTON category from the product's category/subcategory
+    // (the client no longer needs to select it manually)
+    const detectedCategory = getVtonCategory(product.category, product.subcategory)
+    const finalCategory = category || detectedCategory || 'upper_body'
+    console.log('[boutique-try-on] Auto-detected category:', detectedCategory, '(from:', product.category, '/', product.subcategory, ')')
 
     // Parse the product photos to get the selected one
     let photos: string[] = []
@@ -116,12 +130,12 @@ export async function POST(req: NextRequest) {
       input = {
         garm_img: garmentUrl,
         human_img: humanUrl,
-        category: category || 'upper_body',
+        category: finalCategory,
         crop: false,
         garment_des: garmentDes,
       }
     } else if (modelId.includes('flux-virtual-try-on') || modelId.includes('kolors')) {
-      const garmentType = category === 'lower_body' ? 'bottom' : category === 'dresses' ? 'dress' : 'top'
+      const garmentType = finalCategory === 'lower_body' ? 'bottom' : finalCategory === 'dresses' ? 'dress' : 'top'
       input = {
         garment_image: garmentUrl,
         model_image: humanUrl,
@@ -133,8 +147,8 @@ export async function POST(req: NextRequest) {
         human_img: humanUrl,
         garment_image: garmentUrl,
         model_image: humanUrl,
-        category: category || 'upper_body',
-        garment_type: category === 'lower_body' ? 'bottom' : category === 'dresses' ? 'dress' : 'top',
+        category: finalCategory,
+        garment_type: finalCategory === 'lower_body' ? 'bottom' : finalCategory === 'dresses' ? 'dress' : 'top',
         garment_des: garmentDes,
         crop: false,
       }

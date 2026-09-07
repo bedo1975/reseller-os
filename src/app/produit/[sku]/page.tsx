@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 import { ShareModal } from '@/components/boutique/share-modal'
 import { ReviewsSection } from '@/components/boutique/reviews-section'
 import { SizeGuideModal } from '@/components/boutique/size-guide-modal'
+import { isTryOnEnabled } from '@/lib/vton-category-mapper'
 
 const CONDITION_LABELS: Record<string, string> = {
   'neuf': 'Neuf avec étiquette',
@@ -38,6 +39,7 @@ interface Product {
   title?: string | null
   brand: string
   category: string
+  subcategory?: string | null
   size?: string | null
   color?: string | null
   condition?: string | null
@@ -727,19 +729,21 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
             </div>
           )}
 
-          {/* Virtual Try-On button — "Essayer sur moi" */}
-          <div className="mb-6">
-            <Link
-              href={`/essayer-sur-moi?sku=${encodeURIComponent(product.sku)}&photo=${activePhoto}`}
-              className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-medium transition-colors"
-            >
-              <Sparkles className="h-5 w-5" />
-              Essayer sur moi
-            </Link>
-            <p className="text-xs text-gray-400 text-center mt-1.5">
-              Uploadez votre photo et voyez le résultat en quelques secondes
-            </p>
-          </div>
+          {/* Virtual Try-On button — "Essayer sur moi" (hidden for accessories, shoes, home) */}
+          {isTryOnEnabled(product.category, product.subcategory) && (
+            <div className="mb-6">
+              <Link
+                href={`/essayer-sur-moi?sku=${encodeURIComponent(product.sku)}&photo=${activePhoto}`}
+                className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white font-medium transition-colors"
+              >
+                <Sparkles className="h-5 w-5" />
+                Essayer sur moi
+              </Link>
+              <p className="text-xs text-gray-400 text-center mt-1.5">
+                Uploadez votre photo et voyez le résultat en quelques secondes
+              </p>
+            </div>
+          )}
 
           {/* Share with friends button */}
           {settings.shareEnabled !== false && (

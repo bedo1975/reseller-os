@@ -451,18 +451,12 @@ function TryOnPageContent() {
               )}
             </div>
 
-            {/* Category selector */}
-            <div>
-              <Label className="text-xs text-gray-500 uppercase mb-2 block">Type de vêtement</Label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="upper_body">Haut (t-shirt, veste, pull…)</option>
-                <option value="lower_body">Bas (pantalon, jupe…)</option>
-                <option value="dresses">Robe / Tenue complète</option>
-              </select>
+            {/* Category info — auto-detected, no manual selector */}
+            <div className="px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-800 flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                Le type de vêtement est détecté automatiquement selon la catégorie du produit.
+              </span>
             </div>
 
             {/* Prompt field */}
