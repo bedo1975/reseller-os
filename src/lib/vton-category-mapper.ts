@@ -1,16 +1,3 @@
-/**
- * Maps a product's category + subcategory to the IDM-VTON "category" param.
- *
- * IDM-VTON accepts 3 values:
- *   - "upper_body"  → tops (t-shirts, shirts, jackets, sweaters, etc.)
- *   - "lower_body"  → bottoms (pants, jeans, shorts, skirts, etc.)
- *   - "dresses"     → dresses and full-body outfits
- *
- * For accessories (caps, bags, jewelry, etc.) or other categories that don't
- * fit the try-on model, we return null — the caller can decide to show an
- * error message or skip the try-on feature for these products.
- */
-
 // Subcategory keywords → IDM-VTON category
 // Keys are lowercase, matched against the product's subcategory (and category as fallback)
 const SUBCATEGORY_MAP: Record<string, 'upper_body' | 'lower_body' | 'dresses'> = {
@@ -74,44 +61,41 @@ export type VtonCategory = 'upper_body' | 'lower_body' | 'dresses' | null
 
 /**
  * Determines the IDM-VTON category for a product based on its category and subcategory.
- *
- * @param category    The product's top-level category (ex: "vetements", "accessoires")
- * @param subcategory The product's subcategory (ex: "tshirts", "jeans", "robes")
- * @returns           "upper_body" | "lower_body" | "dresses" | null (null = not try-on-able)
  */
 export function getVtonCategory(category?: string | null, subcategory?: string | null): VtonCategory {
-  // 1. Try to match the subcategory first (more specific)
+  // 1. Essayer de faire correspondre la sous-catégorie d'abord (plus spécifique)
   if (subcategory) {
     const sub = subcategory.toLowerCase().trim()
-    // Direct match
+    
+    // Correspondance exacte directe
     if (SUBCATEGORY_MAP[sub]) return SUBCATEGORY_MAP[sub]
-    // Partial match (subcategory contains a keyword)
-    for (const [key, value] of Object.entries(SUBCATEGORY_MAP)) {
-      if (sub.includes(key)) return value
+    
+    // Correspondance intelligente par mot entier (évite les faux positifs)
+    const sortedKeys = Object.keys(SUBCATEGORY_MAP).sort((a, b) => b.length - a.length)
+    for (const key of sortedKeys) {
+      const regex = new RegExp(`\\b${key}\\b`, 'i')
+      if (regex.test(sub)) return SUBCATEGORY_MAP[key]
     }
   }
 
-  // 2. Fall back to the top-level category
+  // 2. Repli sur la catégorie principale
   if (category) {
     const cat = category.toLowerCase().trim()
     if (CATEGORY_FALLBACK[cat] !== undefined) return CATEGORY_FALLBACK[cat]
   }
 
-  // 3. Default to upper_body if nothing matches
-  // (most clothing items are upper body, and it's better than returning null)
-  return 'upper_body'
+  // 3. Si rien ne correspond, on renvoie null au lieu de forcer 'upper_body'
+  return null
 }
 
 /**
  * Returns true if the product can be tried on (based on its category).
- * Accessories, shoes, and home items are excluded.
  */
 export function isTryOnEnabled(category?: string | null, subcategory?: string | null): boolean {
   if (!category) return true // default: enabled
   const cat = category.toLowerCase().trim()
-  // Explicitly disabled categories
+  
   if (cat === 'chaussures' || cat === 'accessoires' || cat === 'maison') {
-    // But check if the subcategory is try-on-able (ex: a skirt under "accessoires")
     if (subcategory) {
       const sub = subcategory.toLowerCase().trim()
       for (const [key] of Object.entries(SUBCATEGORY_MAP)) {
@@ -125,7 +109,6 @@ export function isTryOnEnabled(category?: string | null, subcategory?: string | 
 
 /**
  * Returns a human-readable label for the IDM-VTON category.
- * Used in the UI to show the client what type of garment was detected.
  */
 export function getVtonCategoryLabel(category: VtonCategory): string {
   switch (category) {

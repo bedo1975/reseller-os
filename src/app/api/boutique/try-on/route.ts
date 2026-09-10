@@ -5,24 +5,11 @@ import { getVtonCategory, isTryOnEnabled } from '@/lib/vton-category-mapper'
 
 /**
  * POST /api/boutique/try-on
- * Public — launches a virtual try-on for a boutique client.
- *
- * The client's uploaded photo becomes the "human_img" (the person wearing the garment).
- * The product photo (identified by SKU) becomes the "garm_img" (the garment).
- *
- * Body: {
- *   clientPhotoPath: "/uploads/tryon-temp/xxx.jpg",  // client's photo (uploaded via /upload)
- *   sku: "ART-001",                                  // product SKU from the catalog
- *   category?: "upper_body" | "lower_body" | "dresses",
- * }
- *
- * Returns: { predictionId, provider, status } | { outputUrl } | { error }
- *
- * NOTE: Requires a logged-in boutique client (boutique_client_token cookie).
+ * Lance l'essai virtuel en prenant en compte la détection auto OU le choix du client.
  */
 export async function POST(req: NextRequest) {
   try {
-    // Require a logged-in boutique client
+    // 1. Vérification de la session client
     try {
       await requireClient()
     } catch {
@@ -39,7 +26,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'SKU produit requis' }, { status: 400 })
     }
 
-    // Fetch the product from DB — must be published and visible on the boutique
+    // 2. Récupération du produit en Base de Données
     const product = await db.stockItem.findFirst({
       where: {
         sku,
@@ -53,33 +40,70 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Produit introuvable' }, { status: 404 })
     }
 
-    // Check if the product can be tried on (exclude accessories, shoes, home items)
+    // 3. Vérification de compatibilité de l'article (exclure chaussures, accessoires...)
     if (!isTryOnEnabled(product.category, product.subcategory)) {
       return NextResponse.json({
         error: 'Cet article n\'est pas compatible avec l\'essai virtuel (accessoire, chaussure ou objet de maison).'
       }, { status: 400 })
     }
 
-    // Auto-detect the IDM-VTON category from the product's category/subcategory
-    // (the client no longer needs to select it manually)
+    // 4. Détermination intelligente de la catégorie
     const detectedCategory = getVtonCategory(product.category, product.subcategory)
-    const finalCategory = category || detectedCategory || 'upper_body'
-    console.log('[boutique-try-on] Auto-detected category:', detectedCategory, '(from:', product.category, '/', product.subcategory, ')')
+    
+    // Dictionnaire pour convertir le choix texte du client en paramètre d'IA
+    const clientChoiceMap: Record<string, 'upper_body' | 'lower_body' | 'dresses'> = {
+      'haut': 'upper_body',
+      'sweatshirt': 'upper_body',
+      'sweat': 'upper_body',
+      't-shirt': 'upper_body',
+      'chemise': 'upper_body',
+      'veste': 'upper_body',
+      
+      'bas': 'lower_body',
+      'jean': 'lower_body',
+      'pantalon': 'lower_body',
+      'short': 'lower_body',
+      'jupe': 'lower_body',
+      
+      'robe': 'dresses',
+      'combinaison': 'dresses',
+      'dress': 'dresses'
+    }
 
-    // Parse the product photos to get the selected one
+    // On applique le choix du client en priorité, sinon la détection automatique
+    let finalCategory: 'upper_body' | 'lower_body' | 'dresses' | null = null
+
+    if (category) {
+      const cleanCategory = category.toLowerCase().trim()
+      finalCategory = clientChoiceMap[cleanCategory] || (cleanCategory as any) 
+    }
+
+    if (!finalCategory) {
+      finalCategory = detectedCategory
+    }
+
+    // SÉCURITÉ : Si on ne sait toujours pas, on arrête les frais au lieu de forcer un haut par défaut
+    if (!finalCategory) {
+      return NextResponse.json({ 
+        error: 'Impossible de déterminer automatiquement le type de vêtement. Veuillez préciser s\'il s\'agit d\'un Haut, d\'un Bas ou d\'une Robe.' 
+      }, { status: 400 })
+    }
+
+    console.log('[boutique-try-on] Catégorie finale retenue :', finalCategory, '(Source client:', !!category, '/ Auto:', detectedCategory, ')')
+
+    // 5. Gestion des photos du produit
     let photos: string[] = []
     try { photos = JSON.parse(product.photos) } catch {}
     if (photos.length === 0) {
       return NextResponse.json({ error: 'Ce produit n\'a pas de photo' }, { status: 404 })
     }
-    // Use the photoIndex if provided and valid, otherwise default to the first photo
     const parsedIdx = typeof photoIndex === 'string' ? parseInt(photoIndex, 10) : photoIndex
     const idx = typeof parsedIdx === 'number' && !Number.isNaN(parsedIdx) && parsedIdx >= 0 && parsedIdx < photos.length
       ? parsedIdx
       : 0
     const garmentPhoto = photos[idx]
 
-    // Get the admin's AIConfig (first user with a Replicate API key)
+    // 6. Configuration de Replicate
     const config = await db.aIConfig.findFirst({
       where: { replicateApiKey: { not: null } },
       orderBy: { createdAt: 'asc' },
@@ -90,8 +114,6 @@ export async function POST(req: NextRequest) {
       }, { status: 503 })
     }
 
-    // Fetch the first active model to get its defaultPrompt (the boutique client
-    // doesn't choose a model — the admin pre-selects which models are active).
     const model = await db.virtualTryOnModel.findFirst({
       where: { isActive: true },
       orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
@@ -103,28 +125,21 @@ export async function POST(req: NextRequest) {
     }
 
     const apiKey = config.replicateApiKey
-
-    // Construct the PUBLIC URLs — Replicate downloads them itself.
     const publicBaseUrl = process.env.NEXTAUTH_URL || `https://${req.headers.get('host')}`
-
-    // Garment (product) URL — use the garment-image endpoint to convert WebP → JPEG
     const garmentUrl = `${publicBaseUrl}/api/ai/virtual-tryon/garment-image?path=${encodeURIComponent(garmentPhoto)}`
-    // Client photo URL (already JPG — converted during upload)
     const humanUrl = `${publicBaseUrl}/api${clientPhotoPath.startsWith('/') ? clientPhotoPath : '/' + clientPhotoPath}`
 
-    // Determine which model to use (default: IDM-VTON)
     const modelId = config.vtonModelId || 'cuuupid/idm-vton'
     const defaultVersions: Record<string, string> = {
-      'cuuupid/idm-vton': 'c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4',
+      'cuuupid/idm-vton': '0513734a452173b8173e907e3a59d19a36266e55b48528559432bd21c7d7e985',
     }
     const version = config.vtonVersion || defaultVersions[modelId] || ''
     if (!version) {
       return NextResponse.json({ error: `Version manquante pour le modèle ${modelId}.` }, { status: 500 })
     }
 
-    // Build the input based on the model
+    // 7. Construction des paramètres d'entrée pour l'IA
     let input: Record<string, unknown> = {}
-    // Priority: client prompt > product's tryOnDescription > model's defaultPrompt > brand + title > generic
     const garmentDes = prompt
       || (product as any).tryOnDescription
       || model.defaultPrompt
@@ -159,7 +174,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Merge custom params
     if (config.vtonCustomParams) {
       try {
         const customParams = JSON.parse(config.vtonCustomParams)
@@ -173,11 +187,10 @@ export async function POST(req: NextRequest) {
       model: modelId,
       version: version.slice(0, 20) + '...',
       inputKeys: Object.keys(input),
-      garmentDes: garmentDes.slice(0, 100),
     })
 
-    // Call Replicate (no Prefer: wait — we return immediately and poll)
-    const createRes = await fetch('https://api.replicate.com/v1/predictions', {
+    // 8. Envoi de la requête à l'API Replicate
+    const createRes = await fetch('https://replicate.com', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -199,12 +212,8 @@ export async function POST(req: NextRequest) {
         errMsg = errText.slice(0, 300)
       }
       console.error('[boutique-try-on] Replicate API error:', createRes.status, errMsg)
-      if (createRes.status === 401) {
-        return NextResponse.json({ error: 'Configuration du service invalide.' }, { status: 503 })
-      }
-      if (createRes.status === 402) {
-        return NextResponse.json({ error: 'Service temporairement indisponible (crédits épuisés).' }, { status: 503 })
-      }
+      if (createRes.status === 401) return NextResponse.json({ error: 'Configuration du service invalide.' }, { status: 503 })
+      if (createRes.status === 402) return NextResponse.json({ error: 'Service temporairement indisponible (crédits épuisés).' }, { status: 503 })
       return NextResponse.json({ error: `Erreur: ${errMsg}` }, { status: 500 })
     }
 
