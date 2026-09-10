@@ -9,10 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from '@/components/ui/dialog'
-import {
-  Upload, Loader2, Sparkles, Check, X, Download, RefreshCw, AlertCircle, Camera, ChevronRight, ShoppingBag, Shirt, Layers, Clapperboard
+  Upload, Loader2, Sparkles, Check, X, Download, RefreshCw, AlertCircle, Camera, ChevronRight, ShoppingBag, Shirt, Layers
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -84,7 +81,7 @@ function TryOnPageContent() {
   const [dragActive, setDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Category state — initialized with an empty string to let the API use the automatic detection first
+  // Category state — initialized with empty string for automatic detection
   const [category, setCategory] = useState<string>('')
   const [prompt, setPrompt] = useState<string>('')
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number>(0)
@@ -154,7 +151,7 @@ function TryOnPageContent() {
         body: JSON.stringify({ 
           clientPhotoPath, 
           sku, 
-          category: category || undefined, // On envoie le choix s'il existe, sinon l'API gère l'auto-détection
+          category: category || undefined, 
           prompt, 
           photoIndex: selectedPhotoIndex 
         }),
@@ -272,3 +269,8 @@ function TryOnPageContent() {
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Connexion requise</h2>
             <p className="text-sm text-gray-600 mb-6">
+              Pour utiliser l'essai virtuel, vous devez être connecté à votre compte client.
+              Cela nous permet de protéger votre vie privée et de limiter l'usage du service.
+            </p>
+            <div className="flex flex-col gap-2">
+              <Link
