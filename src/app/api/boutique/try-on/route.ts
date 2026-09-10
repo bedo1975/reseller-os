@@ -42,14 +42,51 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Détermination intelligente de la catégorie
-    const detectedCategory = getVtonCategory(product.category, product.subcategory)
-    const finalCategory = category || detectedCategory
+   // 4. Détermination intelligente de la catégorie (Catalogue + Titre + Choix client)
+const detectedCategory = getVtonCategory(product.category, product.subcategory)
 
-    if (!finalCategory) {
-      return NextResponse.json({ 
-        error: 'Impossible de déterminer automatiquement le type de vêtement.' 
-      }, { status: 400 })
-    }
+// Dictionnaire pour convertir le choix texte du client ou les mots du titre
+const clientChoiceMap: Record<string, 'upper_body' | 'lower_body' | 'dresses'> = {
+  'haut': 'upper_body', 'sweatshirt': 'upper_body', 'sweat': 'upper_body', 't-shirt': 'upper_body', 'chemise': 'upper_body', 'veste': 'upper_body',
+  'bas': 'lower_body', 'jean': 'lower_body', 'pantalon': 'lower_body', 'short': 'lower_body', 'jupe': 'lower_body', 'denim': 'lower_body',
+  'robe': 'dresses', 'combinaison': 'dresses', 'dress': 'dresses'
+}
+
+let finalCategory: 'upper_body' | 'lower_body' | 'dresses' | null = null
+
+// Priorité 1 : Le choix manuel du client s'il a cliqué sur l'interface
+if (category) {
+  const cleanCategory = category.toLowerCase().trim()
+  finalCategory = clientChoiceMap[cleanCategory] || (cleanCategory as any)
+}
+
+// Priorité 2 : Si pas de choix client, on fouille le TITRE du produit à la recherche de mots-clés
+if (!finalCategory && product.title) {
+  const cleanTitle = product.title.toLowerCase()
+  // Si le titre contient "jean", "pantalon", "short", etc.
+  if (cleanTitle.includes('jean') || cleanTitle.includes('pantalon') || cleanTitle.includes('denim') || cleanTitle.includes('bas')) {
+    finalCategory = 'lower_body'
+  } else if (cleanTitle.includes('robe') || cleanTitle.includes('combinaison')) {
+    finalCategory = 'dresses'
+  } else if (cleanTitle.includes('t-shirt') || cleanTitle.includes('chemise') || cleanTitle.includes('pull') || cleanTitle.includes('veste') || cleanTitle.includes('haut')) {
+    finalCategory = 'upper_body'
+  }
+}
+
+// Priorité 3 : Si le titre ne donne rien, on utilise la détection automatique des dossiers du catalogue
+if (!finalCategory) {
+  finalCategory = detectedCategory
+}
+
+// Sécurité finale : Si vraiment on ne sait pas, on s'arrête au lieu de générer une robe
+if (!finalCategory) {
+  return NextResponse.json({ 
+    error: 'Impossible de déterminer automatiquement le type de vêtement (Haut, Bas, Robe). Veuillez vérifier sa catégorie dans le catalogue.' 
+  }, { status: 400 })
+}
+
+console.log('[boutique-try-on] Catégorie finale retenue :', finalCategory, '(Source : Titre ou catalogue)')
+
 
     // 5. Gestion des photos du produit
     let photos: string[] = []
