@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     const idx = typeof photoIndex === 'number' && photoIndex >= 0 && photoIndex < photos.length ? photoIndex : 0
     const garmentPhoto = photos[idx]
 
-    // 6. Configuration de Replicate via le SDK officiel (évite les bugs réseau de fetch)
+    // 6. Configuration de Replicate
     const config = await db.aIConfig.findFirst({
       where: { replicateApiKey: { not: null } },
       orderBy: { createdAt: 'asc' },
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Le service n\'est pas configuré.' }, { status: 503 })
     }
 
-    // Initialisation propre du client Replicate avec votre clé
+    // Initialisation du client Replicate
     const replicate = new Replicate({ auth: config.replicateApiKey })
 
     const modelId = config.vtonModelId || 'cuuupid/idm-vton'
@@ -87,18 +87,28 @@ export async function POST(req: NextRequest) {
 
     const garmentDes = prompt || (product as any).tryOnDescription || `${product.brand} ${product.title || ''}`.trim() || 'clothing'
 
-    // Construction de l'input d'IA
+    // 7. Alignement STRICT des entrées de l'IA (Correction de l'inversion)
     let input: Record<string, unknown> = {}
+    
     if (modelId === 'cuuupid/idm-vton') {
-      input = { garm_img: garmentUrl, human_img: humanUrl, category: finalCategory, crop: false, garment_des: garmentDes }
+      input = { 
+        garm_img: garmentUrl,       // Le produit (vêtement seul)
+        human_img: humanUrl,       // L'humain (la photo du client)
+        category: finalCategory,   // 'upper_body', 'lower_body' ou 'dresses'
+        crop: true,                // Force l'adaptation automatique au format 3:4 requis
+        garment_des: garmentDes 
+      }
     } else {
       const garmentType = finalCategory === 'lower_body' ? 'bottom' : finalCategory === 'dresses' ? 'dress' : 'top'
-      input = { garment_image: garmentUrl, model_image: humanUrl, garment_type: garmentType }
+      input = { 
+        garment_image: garmentUrl, // Le produit
+        model_image: humanUrl,     // L'humain
+        garment_type: garmentType 
+      }
     }
 
-    console.log('[boutique-try-on] Lancement de la prédiction Replicate via SDK.')
+    console.log('[boutique-try-on] Lancement de la prédiction avec les bons rôles d\'images.')
 
-    // Appel sécurisé via le SDK Replicate
     const prediction = await replicate.predictions.create({
       version: version,
       input: input,
