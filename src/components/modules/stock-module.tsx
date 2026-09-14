@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Plus, Search, MapPin, Barcode, Edit, Trash2, Package, ChevronLeft, ChevronRight,
   Eye, AlertCircle, Camera, Upload, RefreshCw, Sparkles, ScanEye, QrCode, Link2, Download,
-  Tag, Euro, Layers, Loader2, Printer, Wand2, Calculator, Store, ShoppingCart, Filter, Tags,
+  Tag, Euro, Layers, Loader2, Printer, Wand2, Calculator, Store, ShoppingCart, Filter, Tags, Calendar, ArrowUpDown, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -112,6 +112,12 @@ export function StockModule() {
   const [subcategoryFilter, setSubcategoryFilter] = useState<string>('all')
   // Stock type filter: 'all' | 'boutique' | 'plateforme'
   const [stockTypeFilter, setStockTypeFilter] = useState<string>('all')
+  
+  // Filtre date d'arrivée (date d'achat) + tri
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [dateSort, setDateSort] = useState('default') // 'default' | 'recent' | 'old'
+
   const [page, setPage] = useState(1)
   const [showForm, setShowForm] = useState(false)
   const [showPurchaseForm, setShowPurchaseForm] = useState(false)
@@ -204,15 +210,21 @@ export function StockModule() {
     return subs.map(s => ({ code: s.slug, value: s.label }))
   }, [categoryFilter, getBoutiqueSubcategories])
 
-  const filtered = useMemo(() => {
+    const filtered = useMemo(() => {
     if (!items) return []
-    return items.filter(i => {
+    const result = items.filter(i => {
       if (statusFilter !== 'all' && i.status !== statusFilter) return false
       if (brandFilter !== 'all' && i.brand !== brandFilter) return false
       if (categoryFilter !== 'all' && i.category !== categoryFilter) return false
       if (subcategoryFilter !== 'all' && (i as { subcategory?: string }).subcategory !== subcategoryFilter) return false
       const iStockType = (i as { stockType?: string }).stockType || 'boutique'
       if (stockTypeFilter !== 'all' && iStockType !== stockTypeFilter) return false
+      // Filtre par date d'arrivée (purchaseDate)
+      if (dateFrom || dateTo) {
+        const d = new Date(i.purchaseDate)
+        if (dateFrom && d < new Date(`${dateFrom}T00:00:00`)) return false
+        if (dateTo && d > new Date(`${dateTo}T23:59:59.999`)) return false
+      }
       if (search) {
         const q = search.toLowerCase()
         return (
@@ -225,10 +237,17 @@ export function StockModule() {
       }
       return true
     })
-  }, [items, search, statusFilter, brandFilter, categoryFilter, subcategoryFilter, stockTypeFilter])
+    // Tri par date d'arrivée
+    if (dateSort === 'recent') {
+      result.sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())
+    } else if (dateSort === 'old') {
+      result.sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime())
+    }
+    return result
+  }, [items, search, statusFilter, brandFilter, categoryFilter, subcategoryFilter, stockTypeFilter, dateFrom, dateTo, dateSort])
 
   // Quand les filtres changent, on reset la page via la clé de filtre
-  const filterKey = `${search}|${statusFilter}|${brandFilter}|${categoryFilter}|${subcategoryFilter}|${stockTypeFilter}`
+  const filterKey = `${search}|${statusFilter}|${brandFilter}|${categoryFilter}|${subcategoryFilter}|${stockTypeFilter}|${dateFrom}|${dateTo}|${dateSort}`
   const [lastFilterKey, setLastFilterKey] = useState(filterKey)
   if (filterKey !== lastFilterKey) {
     setLastFilterKey(filterKey)
@@ -500,109 +519,159 @@ export function StockModule() {
         </Card>
       )}
 
-      {/* Toolbar */}
+          {/* Toolbar — Ligne 1 : recherche + actions · Ligne 2 : filtres · Ligne 3 : dates + tri */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col lg:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <CardContent className="p-4 space-y-3">
+          {/* Ligne 1 — Recherche + boutons d'action (alignés, même hauteur) */}
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
                 placeholder="Rechercher par SKU, marque, code-barres, lot..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="pl-9"
+                className="pl-9 h-10 bg-white text-slate-900 caret-slate-900 dark:bg-slate-950 dark:text-slate-50 dark:caret-slate-50"
               />
             </div>
-            <div className="grid grid-cols-3 gap-2 lg:flex">
-              {/* Stock type filter — boutique vs plateforme */}
-              <Select value={stockTypeFilter} onValueChange={setStockTypeFilter}>
-                <SelectTrigger className="w-full lg:w-[160px]">
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-                    <SelectValue placeholder="Type de stock" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous types</SelectItem>
-                  <SelectItem value="boutique">🟢 Boutique</SelectItem>
-                  <SelectItem value="plateforme">🟣 Plateforme</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full lg:w-[150px]">
-                  <SelectValue placeholder="Statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous statuts</SelectItem>
-                  {PUBLICATION_STATUSES.map(s => (
-                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={brandFilter} onValueChange={setBrandFilter}>
-                <SelectTrigger className="w-full lg:w-[160px]">
-                  <SelectValue placeholder="Marque" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes marques ({items?.length || 0})</SelectItem>
-                  {brands.map(b => {
-                    const count = items?.filter(i => i.brand === b).length || 0
-                    return <SelectItem key={b} value={b}>{b} ({count})</SelectItem>
-                  })}
-                </SelectContent>
-              </Select>
-              <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setSubcategoryFilter('all') }}>
-                <SelectTrigger className="w-full lg:w-[160px]">
-                  <SelectValue placeholder="Catégorie" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes catégories ({items?.length || 0})</SelectItem>
-                  {categories.map(c => {
-                    const count = items?.filter(i => i.category === c.code).length || 0
-                    return <SelectItem key={c.id} value={c.code}>{c.value} ({count})</SelectItem>
-                  })}
-                </SelectContent>
-              </Select>
-              {availableSubcats.length > 0 && (
-                <Select value={subcategoryFilter} onValueChange={setSubcategoryFilter}>
-                  <SelectTrigger className="w-full lg:w-[160px]">
-                    <SelectValue placeholder="Sous-cat." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Toutes sous-cat. ({items?.filter(i => i.category === categoryFilter).length || 0})</SelectItem>
-                    {availableSubcats.map(s => {
-                      const count = items?.filter(i => i.category === categoryFilter && (i as { subcategory?: string }).subcategory === s.code).length || 0
-                      return <SelectItem key={s.code} value={s.code}>{s.value} ({count})</SelectItem>
-                    })}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-wrap gap-2">
               {can('stock', 'create') && (
-                <Button onClick={() => { setEditingItem(null); setShowForm(true) }}>
+                <Button className="h-10 shrink-0 whitespace-nowrap" onClick={() => { setEditingItem(null); setShowForm(true) }}>
                   <Plus className="h-4 w-4 mr-2" /> Nouvel article
                 </Button>
               )}
               {can('stock', 'scan') && (
                 <Button
                   variant="outline"
-                  className="border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                  className="h-10 shrink-0 whitespace-nowrap border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                   onClick={() => setShowScanner(true)}
                 >
                   <Barcode className="h-4 w-4 mr-2" /> Scanner code-barres
                 </Button>
               )}
               {can('stock', 'create') && (
-                <Button variant="outline" onClick={() => setShowLotForm(true)}>
-                  <Layers className="h-4 w-4 mr-2" /> Nouveau Lot
+                <Button variant="outline" className="h-10 shrink-0 whitespace-nowrap" onClick={() => setShowLotForm(true)}>
+                  <Layers className="h-4 w-4 mr-2" /> Nouveau lot
                 </Button>
               )}
               {can('stock', 'purchase') && (
-                <Button variant="outline" onClick={() => setShowPurchaseForm(true)}>
-                  <Plus className="h-4 w-4 mr-2" /> Achat hors stock
+                <Button variant="outline" className="h-10 shrink-0 whitespace-nowrap" onClick={() => setShowPurchaseForm(true)}>
+                  <ShoppingCart className="h-4 w-4 mr-2" /> Achat hors stock
                 </Button>
               )}
+            </div>
+          </div>
+
+          {/* Ligne 2 — Filtres : 5 par ligne sur PC, largeurs égales */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            <Select value={stockTypeFilter} onValueChange={setStockTypeFilter}>
+              <SelectTrigger className="w-full">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+                  <SelectValue placeholder="Type de stock" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous types</SelectItem>
+                <SelectItem value="boutique">🟢 Boutique</SelectItem>
+                <SelectItem value="plateforme">🟣 Plateforme</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous statuts</SelectItem>
+                {PUBLICATION_STATUSES.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={brandFilter} onValueChange={setBrandFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Marque" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes marques ({items?.length || 0})</SelectItem>
+                {brands.map(b => {
+                  const count = items?.filter(i => i.brand === b).length || 0
+                  return <SelectItem key={b} value={b}>{b} ({count})</SelectItem>
+                })}
+              </SelectContent>
+            </Select>
+            <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setSubcategoryFilter('all') }}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Catégorie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes catégories ({items?.length || 0})</SelectItem>
+                {categories.map(c => {
+                  const count = items?.filter(i => i.category === c.code).length || 0
+                  return <SelectItem key={c.id} value={c.code}>{c.value} ({count})</SelectItem>
+                })}
+              </SelectContent>
+            </Select>
+            {availableSubcats.length > 0 && (
+              <Select value={subcategoryFilter} onValueChange={setSubcategoryFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Sous-cat." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes sous-cat. ({items?.filter(i => i.category === categoryFilter).length || 0})</SelectItem>
+                  {availableSubcats.map(s => {
+                    const count = items?.filter(i => i.category === categoryFilter && (i as { subcategory?: string }).subcategory === s.code).length || 0
+                    return <SelectItem key={s.code} value={s.code}>{s.value} ({count})</SelectItem>
+                  })}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Ligne 3 — Filtre par date d'arrivée + tri */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 shrink-0">
+                <Calendar className="h-3.5 w-3.5" /> Date d'arrivée
+              </span>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                className="w-[150px] h-9 [color-scheme:light] dark:[color-scheme:dark]"
+              />
+              <span className="text-xs text-muted-foreground">→</span>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                className="w-[150px] h-9 [color-scheme:light] dark:[color-scheme:dark]"
+              />
+              {(dateFrom || dateTo) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 px-2"
+                  onClick={() => { setDateFrom(''); setDateTo('') }}
+                  title="Réinitialiser les dates"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+            <div className="sm:ml-auto">
+              <Select value={dateSort} onValueChange={setDateSort}>
+                <SelectTrigger className="w-full sm:w-[220px]">
+                  <div className="flex items-center gap-2">
+                    <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    <SelectValue placeholder="Tri" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Ordre d'ajout (défaut)</SelectItem>
+                  <SelectItem value="recent">Arrivée : récents d'abord</SelectItem>
+                  <SelectItem value="old">Arrivée : anciens d'abord</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
