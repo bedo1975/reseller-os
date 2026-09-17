@@ -42,6 +42,7 @@ export async function GET(
         createdAt: true,
         isLot: true,
         lotItems: true,
+        video: true,
       },
     })
 
@@ -74,6 +75,7 @@ export async function GET(
       description: item.description,
       photos: photos.map(p => p.startsWith('/uploads/') ? `/api${p}` : p),
       mainPhoto: photos[0] ? (photos[0].startsWith('/uploads/') ? `/api${photos[0]}` : photos[0]) : null,
+      video: item.video,
       measurements: item.measurements,
       weight: item.weight || 0,
       quantity: item.quantity ?? 1,

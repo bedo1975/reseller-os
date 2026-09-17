@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Plus, Search, MapPin, Barcode, Edit, Trash2, Package, ChevronLeft, ChevronRight,
   Eye, AlertCircle, Camera, Upload, RefreshCw, Sparkles, ScanEye, QrCode, Link2, Download,
-  Tag, Euro, Layers, Loader2, Printer, Wand2, Calculator, Store, ShoppingCart, Filter, Tags, Calendar, ArrowUpDown, X,
+  Tag, Euro, Layers, Loader2, Printer, Wand2, Calculator, Store, ShoppingCart, Filter, Tags, Calendar, ArrowUpDown, X, Video,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -51,6 +51,7 @@ interface StockItem {
   sku: string
   barcode: string | null
   reference?: string | null
+  video?: string | null
   tryOnDescription?: string | null
   photos: string
   title: string | null
@@ -1181,6 +1182,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', supplierOrderNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
     barcode: '',
     reference: '',
+    video: '',
     tryOnDescription: '',
     stockType: 'boutique',
     makeOfferEnabled: false,
@@ -1218,6 +1220,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         status: item.status,
         barcode: item.barcode || '',
         reference: (item as { reference?: string | null }).reference || '',
+        video: (item as { video?: string | null }).video || '',
         tryOnDescription: (item as { tryOnDescription?: string | null }).tryOnDescription || '',
         stockType: (item as { stockType?: string }).stockType || 'boutique',
         makeOfferEnabled: (item as { makeOfferEnabled?: boolean }).makeOfferEnabled === true,
@@ -1233,6 +1236,7 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
         platforms: '[]', platform: '', salePlatform: '', purchaseInvoiceNumber: '', supplierOrderNumber: '', purchasePaymentMethod: '', status: 'A_PHOTOGRAPHIER',
         barcode: prefillBarcode || '',
         reference: '',
+        video: '',
         tryOnDescription: '',
         stockType: 'boutique',
       })
@@ -1348,6 +1352,46 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
     setPhotos(newPhotos)
     if (url.startsWith('/uploads/')) {
       try { await fetch(`/api/upload?path=${encodeURIComponent(url)}`, { method: 'DELETE' }) } catch {}
+    }
+  }
+
+    // ─── Upload vidéo produit (1 seule · 30 s max · 30 Mo max) ───
+  const checkVideoDuration = (file: File): Promise<number> =>
+    new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file)
+      const v = document.createElement('video')
+      v.preload = 'metadata'
+      v.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(v.duration || 0) }
+      v.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Vidéo illisible')) }
+      v.src = url
+    })
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (/\.mov$/i.test(file.name) || file.type === 'video/quicktime') {
+      toast.error('Format .mov non supporté. iPhone : Réglages → Caméra → Formats → « Plus compatible » (donne du MP4).')
+      return
+    }
+    if (file.size > 30 * 1024 * 1024) { toast.error('Vidéo trop lourde : 30 Mo maximum'); return }
+    try {
+      const duration = await checkVideoDuration(file)
+      if (duration > 30) { toast.error(`Vidéo de ${Math.round(duration)} s — 30 secondes maximum`); return }
+    } catch {
+      toast.error('Impossible de lire cette vidéo (format non supporté ?)')
+      return
+    }
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res = await fetch('/api/stock/video-upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erreur')
+      setForm(f => ({ ...f, video: data.url }))  // ← adaptez à votre pattern (ex: set('video', data.url))
+      toast.success('Vidéo ajoutée')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur lors de l'upload de la vidéo")
     }
   }
 
@@ -1703,6 +1747,32 @@ function StockForm({ open, onOpenChange, item, suppliers, categories, conditions
               </p>
             )}
           </div>
+            {/* Vidéo produit (optionnelle) */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    <Video className="h-3.5 w-3.5" /> Vidéo de présentation (optionnelle)
+                  </Label>
+                  {form.video ? (
+                    <div className="space-y-2">
+                      <video src={form.video} controls playsInline preload="metadata"
+                        className="w-full max-h-64 rounded-lg border bg-black" />
+                      <Button type="button" variant="outline" size="sm" className="text-rose-600 hover:text-rose-700"
+                        onClick={() => setForm(f => ({ ...f, video: '' }))}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Retirer la vidéo
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-1.5 h-28 rounded-lg border-2 border-dashed border-border cursor-pointer hover:border-emerald-400 hover:bg-muted/30 transition-colors text-center px-4">
+                      <Video className="h-6 w-6 text-muted-foreground" />
+                      <span className="text-sm font-medium">Ajouter une courte vidéo</span>
+                      <span className="text-[11px] text-muted-foreground">MP4 ou WebM · 30 s max · 30 Mo max</span>
+                      <input type="file" accept="video/mp4,video/webm,.mp4,.webm" className="hidden" onChange={handleVideoUpload} />
+                    </label>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    iPhone : Réglages → Caméra → Formats → « Plus compatible » pour filmer directement en MP4.
+                  </p>
+                </div>
 
           {/* Identification */}
           <div className="border rounded-lg p-3 bg-muted/20">
@@ -2477,6 +2547,11 @@ function StockDetail({ open, onOpenChange, item }: {
           {photos[0] && (
             <div className="aspect-[4/3] w-full rounded-lg overflow-hidden bg-muted">
               <img src={photoUrl(photos[0])} alt={item.brand} className="w-full h-full object-cover" />
+            </div>
+          )}
+            {item.video && (
+            <div className="rounded-lg overflow-hidden bg-black">
+              <video src={item.video} controls playsInline preload="metadata" className="w-full max-h-[420px]" />
             </div>
           )}
           <div className="flex flex-wrap gap-2">

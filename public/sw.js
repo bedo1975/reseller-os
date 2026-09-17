@@ -2,7 +2,7 @@
 // v4: SELF-UNREGISTER on install — completely removes the SW and all caches
 // This forces browsers to fetch fresh chunks from the server (no stale Turbopack chunks)
 
-const CACHE_NAME = 'reseller-os-v4';
+const CACHE_NAME = 'Junashop-os-v5';
 
 self.addEventListener('install', (event) => {
   // Unregister self immediately

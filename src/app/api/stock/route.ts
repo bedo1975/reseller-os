@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       purchaseInvoiceNumber, supplierOrderNumber, purchasePaymentMethod,
       warehouse, rack, shelf, bin, weight, quantity,
       description, suggestedPrice, salePrice, saleActive, photos, barcode, measurements,
-      status, platform, salePlatform, platforms, stockType, makeOfferEnabled, variantGroup, reference, tryOnDescription,
+      status, platform, salePlatform, platforms, stockType, makeOfferEnabled, variantGroup, reference, tryOnDescription,video,
     } = body
 
     if (!sku || !brand) {
@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
         photos: photos || JSON.stringify([]),
         barcode: barcode || null,
         reference: reference || null,
+        video: video || null,
         measurements: measurements || null,
         status: status || 'A_PHOTOGRAPHIER',
         platform: platform || null,

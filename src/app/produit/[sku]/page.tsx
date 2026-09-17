@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
-import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2, BellRing, Loader2, Ruler, Tag, Mail, Send, Sparkles } from 'lucide-react'
+import { ShoppingCart, ChevronRight, Check, Package, Truck, Shield, RefreshCw, AlertCircle, Share2, BellRing, Loader2, Ruler, Tag, Mail, Send, Sparkles, Play } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShareModal } from '@/components/boutique/share-modal'
 import { ReviewsSection } from '@/components/boutique/reviews-section'
@@ -50,6 +50,7 @@ interface Product {
   description?: string | null
   photos: string[]
   mainPhoto?: string | null
+   video?: string | null
   measurements?: string | null
   weight?: number
   quantity?: number
@@ -80,6 +81,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
   const settings = useBoutiqueSettings()
   const { data, loading } = useFetch<{ product: Product; variants?: { sku: string; size: string | null; color: string | null; quantity: number; inStock: boolean }[] }>(`/api/boutique/products/${sku}`)
   const [activePhoto, setActivePhoto] = useState(0)
+   const [showVideo, setShowVideo] = useState(false)
   const [zoomed, setZoomed] = useState(false)
   const [adding, setAdding] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -194,6 +196,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
 
   useEffect(() => {
     setActivePhoto(0)
+    setShowVideo(false)
   }, [sku])
 
   // Set document.title + meta description + JSON-LD structured data for SEO
@@ -401,12 +404,27 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
         {/* Gallery */}
         <div className="flex gap-3">
           {/* Thumbnails */}
-          {photos.length > 1 && (
+                    {(photos.length > 1 || product.video) && (
             <div className="flex flex-col gap-2 w-16 shrink-0">
+              {product.video && (
+                <button
+                  type="button"
+                  onClick={() => setShowVideo(true)}
+                  className={`relative aspect-square rounded-md overflow-hidden border-2 transition-colors ${
+                    showVideo ? 'border-[#007bff]' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  title="Voir la vidéo du produit"
+                >
+                  <video src={product.video} muted preload="metadata" className="w-full h-full object-cover" />
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/30">
+                    <Play className="h-5 w-5 text-white" />
+                  </span>
+                </button>
+              )}
               {photos.map((p, i) => (
                 <button
                   key={i}
-                  onClick={() => setActivePhoto(i)}
+                  onClick={() => { setActivePhoto(i); setShowVideo(false) }}
                   className={`aspect-square rounded-md overflow-hidden border-2 transition-colors ${
                     i === activePhoto ? 'border-[#007bff]' : 'border-gray-200 hover:border-gray-300'
                   }`}
@@ -418,8 +436,15 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
             </div>
           )}
 
-          {/* Main image */}
+
+
+           {/* Main image / video */}
           <div className="flex-1">
+            {showVideo && product.video ? (
+            <div className="aspect-square bg-black rounded-lg overflow-hidden">
+              <video src={product.video} controls autoPlay muted playsInline className="w-full h-full object-contain" />
+            </div>
+            ) : (
             <div
               className="aspect-square bg-gray-50 rounded-lg overflow-hidden relative cursor-zoom-in"
               onMouseEnter={() => setZoomed(true)}
@@ -432,7 +457,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
                 e.currentTarget.style.setProperty('--zoom-y', `${y}%`)
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={photos[activePhoto]}
                 alt={product.title || `${product.brand} ${product.category}`}
@@ -443,9 +468,12 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
                 } : undefined}
               />
             </div>
-            <p className="text-xs text-gray-400 mt-2 text-center">Survolez pour zoomer</p>
+            )}
+            <p className="text-xs text-gray-400 mt-2 text-center">
+              {showVideo && product.video ? 'Vidéo du produit' : 'Survolez pour zoomer'}
+            </p>
           </div>
-        </div>
+            </div>
 
         {/* Info */}
         <div>
@@ -914,6 +942,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
+                
                   {/* Discount cards */}
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Choisissez une réduction</p>
@@ -1005,6 +1034,11 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           </DialogContent>
         </Dialog>
       )}
-    </div>
+
+      </div>
+  
   )
-}
+} 
+
+    
+ 

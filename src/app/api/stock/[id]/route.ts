@@ -39,7 +39,7 @@ export async function PATCH(
       'purchaseCost', 'purchaseDate', 'supplierId', 'lotReference', 'lotOrigin', 'lotCurrent',
       'purchaseInvoiceNumber', 'supplierOrderNumber', 'purchasePaymentMethod',
       'warehouse', 'rack', 'shelf', 'bin', 'weight', 'quantity',
-      'description', 'suggestedPrice', 'salePrice', 'saleActive', 'photos', 'barcode', 'reference', 'measurements',
+      'description', 'suggestedPrice', 'salePrice', 'saleActive', 'photos', 'barcode', 'reference', 'measurements', 'video',
       'status', 'platform', 'salePlatform', 'platforms', 'stockType', 'makeOfferEnabled', 'variantGroup', 'tryOnDescription',
       'invoicePath', 'invoiceName',
     ]
