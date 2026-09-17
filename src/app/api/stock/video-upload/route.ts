@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
     fs.writeFileSync(path.join(UPLOAD_DIR, filename), buffer)
 
-    return NextResponse.json({ url: `/uploads/stock-videos/${filename}` })
+       return NextResponse.json({ url: `/api/uploads/stock-videos/${filename}` })
   } catch (error) {
     console.error('POST /api/stock/video-upload error:', error)
     if (error instanceof Error && (error.message === 'UNAUTHORIZED' || error.message === 'FORBIDDEN')) {
