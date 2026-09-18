@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Reseller OS — Gestion multi-plateformes",
-  description: "Centralisez Vinted, Leboncoin, eBay, Vestiaire Collective, stock physique, comptabilité et rentabilité en une seule application.",
+  title: "Junashop - Seconde main",
+  description: "Vente d'articles de seconde main.",
   keywords: ["reseller", "Vinted", "Leboncoin", "eBay", "Vestiaire Collective", "revente", "stock"],
   authors: [{ name: "Reseller OS" }],
   manifest: "/manifest.json",
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Reseller OS",
+    title: "Junashop OS",
   },
 };
 

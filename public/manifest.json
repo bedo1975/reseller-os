@@ -1,7 +1,7 @@
 {
-  "name": "Reseller OS",
-  "short_name": "Reseller",
-  "description": "Gestion multi-plateformes pour revendeurs pro",
+  "name": "Junashop - Seconde main",
+  "short_name": "Junashop",
+  "description": "Plateforme de revente d'articles de seconde main",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

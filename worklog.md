@@ -6275,3 +6275,73 @@ Fix:
 - src/app/boutique/page.tsx (pagination on "Nos nouveautés")
 - scripts/make-zip.sh (new — creates a real .zip with source code)
 - download/reseller-os.zip (regenerated as a proper 33MB Zip archive)
+
+Task ID: stock-module-toolbar-filters-date
+Agent: main
+Task: Fix barre de recherche (texte invisible), réalignement boutons, filtres 4-5/ligne, filtre et tri par date d'arrivée
+
+Work Log:
+- Bug "texte invisible dans la recherche" : couleurs explicites sur l'Input de recherche
+  (text-slate-900 + caret-slate-900, dark: équivalents) — immunisé contre les variables CSS cassées
+- Toolbar refondue en 3 lignes :
+  1. Recherche + boutons d'action (Nouvel article, Scanner, Nouveau lot, Achat hors stock)
+     tous en h-10, alignés, whitespace-nowrap
+  2. Filtres en grille grid-cols-5 (lg) : type stock, statut, marque, catégorie, sous-catégorie
+  3. Filtre date d'arrivée (du → au + bouton reset X) et Select de tri
+- Nouveaux états : dateFrom, dateTo, dateSort ('default' | 'recent' | 'old')
+- Filtrage sur purchaseDate (date d'achat) + tri asc/desc, le tout côté client
+  (aucune modification d'API ni de schéma nécessaire — l'API renvoie déjà tout)
+- filterKey étendu avec dateFrom|dateTo|dateSort pour reset la pagination
+
+Stage Summary:
+- Fichiers modifiés : src/components/modules/stock-module.tsx uniquement
+- Zéro changement de schéma/API/DB — déploiement sans risque
+- Fonctionnalités existantes (scanner, lot, achat hors stock) non touchées, juste réaffichées
+---
+Task ID: video-produit-admin-boutique
+Agent: main
+Task: Ajouter une courte vidéo de présentation par article (admin + fiche produit boutique)
+
+Work Log:
+- Schema : champ `video String?` ajouté au modèle StockItem (nullable, sans risque)
+- PRISMA_CACHE_VERSION bumpée 'v4-reference-field' → 'v5-video-field' dans src/lib/db.ts
+- NOUVELLE route src/app/api/stock/video-upload/route.ts :
+  MP4/WebM uniquement, 30 Mo max, refus friendly des .mov (HEVC iPhone illisible
+  Chrome/Android → message "Réglages → Caméra → Formats → Plus compatible")
+- POST /api/stock et PATCH /api/stock/[id] : acceptent `video` (video || null)
+- StockForm : état video + handleVideoUpload (contrôle durée 30s via video element
+  + blob URL), bloc UI upload/aperçu/retrait après la zone photos
+- StockDetail : lecteur <video> sous la photo principale
+- API boutique /api/boutique/products/[sku] : video: true dans le select + transformation
+  d'URL (video: item.video → /api/uploads/... si startsWith('/uploads/'))
+- Page publique /produit/[sku] : miniature vidéo avec badge ▶ dans les thumbnails,
+  lecteur plein format dans la zone principale, état showVideo reset au changement d'URL
+
+Débogages notables (pièges rencontrés) :
+1. "Parsing ecmascript source code failed" ligne 1037 → un </div> avait été perdu lors
+   d'un collage H6 : la div Gallery n'était jamais fermée → tout le panneau Info se
+   retrouvait imbriqué DANS la galerie (structure décalée). Un </div> ajouté en fin de
+   fichier silencait le compilateur mais au mauvais endroit. Fix : déplacer la fermeture
+   à sa vraie place (après le <p> "Survolez pour zoomer") + supprimer le </div> de fin.
+2. Prod : upload OK (réponse JSON /uploads/stock-videos/...) mais vidéo invisible boutique
+   → les fichiers de public/uploads ne sont PAS servis en direct en prod (build standalone),
+   ils passent par /api/uploads/... (même pattern que les photos). Fix : transformation
+   d'URL dans l'API boutique + retour de la bonne URL depuis video-upload.
+3. Erreur TS "Property 'startsWith' does not exist on type 'never'" → cache du TS Server
+   de VS Code (le Prisma client réel connaissait bien le champ). Fix : Ctrl+Shift+P →
+   "TypeScript: Restart TS Server" + npx prisma generate.
+
+Stage Summary:
+- Vidéo fonctionnelle en local ET en prod, admin et boutique
+- Fichiers modifiés/créés :
+  - prisma/schema.prisma (+ video)
+  - src/lib/db.ts (cache version)
+  - src/app/api/stock/video-upload/route.ts (NOUVEAU)
+  - src/app/api/stock/route.ts (POST + video)
+  - src/app/api/stock/[id]/route.ts (PATCH + video)
+  - src/components/modules/stock-module.tsx (StockForm + StockDetail + interface)
+  - src/app/api/boutique/products/[sku]/route.ts (select + transformation URL)
+  - src/app/produit/[sku]/page.tsx (miniature + lecteur)
+- DB migrée via prisma db push (colonne nullable, aucune donnée touchée)
+- TODO à ne pas oublier : ajouter le backup de public/uploads dans pull.sh
+  (photos + vidéos actuellement non couvertes par la sauvegarde serveur)
