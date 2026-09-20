@@ -241,9 +241,20 @@ function AuctionPage() {
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-lg font-bold text-amber-600">{a.currentPrice.toFixed(2)} €</span>
                     <span className="text-[10px] text-gray-400">{a.bidCount} enchère{a.bidCount > 1 ? 's' : ''}</span>
-                    <span className="text-[10px] text-gray-500 font-mono">
-                      {String(h).padStart(2, '0')}:{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}
+                   
+                                        <span className="text-[10px] text-gray-500 font-mono">
+                      {(() => {
+                        const d = Math.floor(h / 24)
+                        const hh = h % 24
+                        const units: string[] = []
+                        if (d > 0) units.push(`${d}j`)
+                        if (hh > 0) units.push(`${hh}h`)
+                        if (m > 0) units.push(`${m}min`)
+                        if (s > 0 || units.length === 0) units.push(`${s}s`)
+                        return units.slice(0, 2).join(' ')
+                      })()}
                     </span>
+           
                   </div>
                 </div>
                 <ExternalLink className="h-5 w-5 text-gray-400 shrink-0" />
@@ -373,8 +384,17 @@ function AuctionPage() {
               <p className="text-xs text-gray-400 uppercase mb-2 flex items-center justify-center gap-1">
                 <Clock className="h-3 w-3" /> Temps restant
               </p>
-              <p className="text-3xl font-bold font-mono">
-                {String(hours).padStart(2, '0')}:{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+                <p className="text-2xl sm:text-3xl font-bold leading-tight">
+                {(() => {                  
+const days = Math.floor(hours / 24)                  
+const h = hours % 24                  
+const parts: string[] = []                  
+if (days > 0) parts.push(`${days} jour${days > 1 ? 's' : ''}`)                  
+if (h > 0) parts.push(`${h} heure${h > 1 ? 's' : ''}`)                  
+if (minutes > 0) parts.push(`${minutes} minute${minutes > 1 ? 's' : ''}`)                  
+if (seconds > 0 || parts.length === 0) parts.push(`${seconds} seconde${seconds > 1 ? 's' : ''}`)                  
+return parts.join(' ')
+                })()}
               </p>
             </div>
           ) : (
