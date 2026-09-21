@@ -6345,3 +6345,21 @@ Stage Summary:
 - DB migrée via prisma db push (colonne nullable, aucune donnée touchée)
 - TODO à ne pas oublier : ajouter le backup de public/uploads dans pull.sh
   (photos + vidéos actuellement non couvertes par la sauvegarde serveur)
+
+  ---
+Task ID: enchere-countdown-format
+Agent: main
+Task: Reformater les countdowns du module enchère (HH:MM:SS → jours/heures/minutes lisibles)
+
+Work Log:
+- Fiche enchère : format long intelligent avec pluriels ("9 jours 23 heures 50 minutes 30 secondes"),
+  unités à zéro masquées, compression automatique en fin de course ("45 minutes 12 secondes" → "30 secondes"),
+  font-mono retiré, taille adaptative text-2xl mobile / text-3xl desktop
+- Liste des enchères : format compact via slice(0,2) sur les 2 unités les plus significatives
+  ("9j 23h", "23h 50min", "50min 30s", "30s") — font-mono conservé pour la stabilité visuelle
+- Optionnel : fonction partagée formatCountdown() si duplication gênante
+- Changement purement cosmétique : aucun calcul de timer, ni API, ni schéma modifiés
+
+Stage Summary:
+- 1 fichier modifié (page enchère)
+- Pluralisation française correcte, affichage compact préservé en liste
