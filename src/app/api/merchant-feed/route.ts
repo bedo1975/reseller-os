@@ -41,6 +41,24 @@ function absoluteUrl(u: string): string {
   return u.startsWith('http') ? u : `${SITE_URL}${u}`
 }
 
+// Genre et tranche d'âge déduits du slug de sous-catégorie
+// ("vetements-hommes" → male · "vetements-femmes" → female
+//  "vetements-enfants" → kids · "vetements-bebe" → newborn · sinon adult/unisex)
+function detectGender(subcategory: string | null | undefined): 'male' | 'female' | 'unisex' {
+  const s = (subcategory || '').toLowerCase()
+  if (s.includes('homme')) return 'male'
+  if (s.includes('femme')) return 'female'
+  return 'unisex'
+}
+
+function detectAgeGroup(subcategory: string | null | undefined): 'adult' | 'kids' | 'newborn' {
+  const s = (subcategory || '').toLowerCase()
+  if (s.includes('bebe') || s.includes('bébé')) return 'newborn'
+  if (s.includes('enfant')) return 'kids'
+  return 'adult'
+}
+
+
 export async function GET() {
   try {
     const items = await db.stockItem.findMany({
@@ -51,9 +69,10 @@ export async function GET() {
         suggestedPrice: { gt: 0 },
       },
       select: {
-        sku: true, title: true, brand: true, category: true,
+        sku: true, title: true, brand: true, category: true, subcategory: true,
         size: true, color: true, condition: true, description: true,
         photos: true, suggestedPrice: true, salePrice: true, saleActive: true,
+        weight: true,
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -73,6 +92,10 @@ export async function GET() {
         `${item.brand} — ${titleBase}. Article de seconde main contrôlé, prêt à porter. Livraison rapide, retours 14 jours.`
 
       const condition = item.condition === 'neuf' ? 'new' : 'used'
+      
+      // Poids : champ weight de la fiche (grammes) si renseigné, sinon 300 g
+      const weightGrams = item.weight && item.weight > 0 ? item.weight : 300
+
       const onSale = item.saleActive === true && item.salePrice != null
         && item.salePrice < (item.suggestedPrice ?? 0)
 
@@ -92,7 +115,12 @@ export async function GET() {
  ${onSale ? `    <g:sale_price>${(item.salePrice as number).toFixed(2)} EUR</g:sale_price>` : ''}
     <g:brand>${escapeXml(item.brand)}</g:brand>
     <g:condition>${condition}</g:condition>
- ${item.size ? `    <g:size>${escapeXml(item.size)}</g:size>` : ''}
+     <g:shipping_weight>${(weightGrams / 1000).toFixed(2)} kg</g:shipping_weight>
+    <g:gender>${detectGender(item.subcategory)}</g:gender>
+    <g:age_group>${detectAgeGroup(item.subcategory)}</g:age_group>
+ 
+ 
+    ${item.size ? `    <g:size>${escapeXml(item.size)}</g:size>` : ''}
  ${item.color ? `    <g:color>${escapeXml(item.color)}</g:color>` : ''}
     <g:google_product_category>${escapeXml(GOOGLE_CATEGORIES[item.category] || 'Apparel & Accessories')}</g:google_product_category>
     <g:identifier_exists>no</g:identifier_exists>

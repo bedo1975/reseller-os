@@ -6363,3 +6363,17 @@ Work Log:
 Stage Summary:
 - 1 fichier modifié (page enchère)
 - Pluralisation française correcte, affichage compact préservé en liste
+
+Stage Summary (final):
+- Flux validé : 14/14 produits en stock → 14 items XML
+- Déployé en prod, URL : https://junashop.fr/api/merchant-feed
+- Config MC : flux planifié quotidien France/français, listings gratuits
+- Middleware inchangé (matcher /admin/:path* uniquement)
+- Suivi : diagnostics MC sous 48h post-revue
+
+Résultat final :
+- 14/14 produits ingérés par Merchant Center, 0 problème détecté
+- Attributs tous reconnus, aucun produit en "Action requise"
+- Prochaine étape : revue du compte Google (~3 jours) puis apparition
+  progressive dans l'onglet Shopping France
+- Flux auto-maintenu : produits PUBLIE en stock entrent/sortent seuls
