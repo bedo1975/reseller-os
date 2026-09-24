@@ -916,9 +916,13 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
               <Label className="text-xs">Transporteur</Label>
               <Select value={form.carrier} onValueChange={v => setForm({ ...form, carrier: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
+              {/*}  <SelectContent>
                   {CARRIERS.map(c => <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>)}
+                </SelectContent> */}
+                                        <SelectContent>
+                  {getByType('carrier').map(c => <SelectItem key={c.code} value={c.code}>{c.value}</SelectItem>)}
                 </SelectContent>
+
               </Select>
             </div>
             <div className="space-y-1.5">
