@@ -133,7 +133,8 @@ export async function GET(
       // This correctly handles multi-qty items (e.g. 2× the same SKU ordered in one checkout).
       const qty = (s as { qty?: number }).qty || 1
       return {
-        designation: `${s.stockItem.brand} ${s.stockItem.category} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim().replace(/\s+/g, ' '),
+       // designation: `${s.stockItem.brand} ${s.stockItem.category} ${s.stockItem.size || ''} ${s.stockItem.color || ''}`.trim().replace(/\s+/g, ' '),
+        designation : `${s.stockItem.title}`,
         description: stripHtml(s.stockItem.description || ''),
         sku: s.stockItem.sku,
         qty,

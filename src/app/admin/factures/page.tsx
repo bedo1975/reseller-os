@@ -415,7 +415,8 @@ export default function FacturesPage() {
                           {inv.sales.map((s, idx) => (
                             <div key={s.id} className={idx > 0 ? 'mt-1 pt-1 border-t border-dashed border-border/40' : ''}>
                               <div className="flex items-center gap-1.5">
-                                <span className="font-medium">{s.stockItem.brand}</span>
+                                <span className="font-medium">{s.stockItem.brand}</span> - 
+                                  <span className="font-medium">{s.stockItem.title}</span>
                                 {(s.qty || 1) > 1 && (
                                   <span className="text-[10px] text-muted-foreground">×{s.qty}</span>
                                 )}

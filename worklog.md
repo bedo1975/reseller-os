@@ -6377,3 +6377,21 @@ Résultat final :
 - Prochaine étape : revue du compte Google (~3 jours) puis apparition
   progressive dans l'onglet Shopping France
 - Flux auto-maintenu : produits PUBLIE en stock entrent/sortent seuls
+
+Task ID: sales-carrier-dynamic-list
+Agent: main
+Task: Liste transporteurs de la vente manuelle — passer de la constante en dur
+aux attributs configurables
+
+Work Log:
+- La liste déroulante du formulaire de vente utilisait CARRIERS (constante
+  codée en dur dans sales-module.tsx) au lieu des attributs Paramètres
+- Remplacé par getByType('carrier') via le hook useSettings
+- Vérifié la compatibilité des valeurs : codes identiques entre l'ancienne
+  constante et les attributs → anciennes ventes intactes
+- Toutes les occurrences de CARRIERS (formulaire + affichage ventes) migrées
+
+Stage Summary:
+- 1 fichier modifié : src/components/modules/sales-module.tsx
+- Un seul endroit pour gérer les transporteurs : Paramètres → Attributs
+- Nouveaux transporteurs automatiquement disponibles dans les ventes

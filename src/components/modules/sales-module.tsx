@@ -363,7 +363,7 @@ export function SalesModule() {
                           {group.sales.map((s, idx) => (
                             <div key={s.id} className={cn(idx > 0 && 'mt-1.5 pt-1.5 border-t border-dashed border-border/40')}>
                               <div className="flex items-center gap-1.5">
-                                <p className="font-medium">{s.stockItem.brand}</p>
+                                <p className="font-medium">{s.stockItem.title}</p>
                                 {s.stockItem.size && (
                                   <span className="text-[10px] text-muted-foreground">· {s.stockItem.size}</span>
                                 )}
@@ -916,10 +916,8 @@ function SaleForm({ open, onOpenChange, availableItems, editingSale, onSaved }: 
               <Label className="text-xs">Transporteur</Label>
               <Select value={form.carrier} onValueChange={v => setForm({ ...form, carrier: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-              {/*}  <SelectContent>
-                  {CARRIERS.map(c => <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>)}
-                </SelectContent> */}
-                                        <SelectContent>
+             
+                <SelectContent>
                   {getByType('carrier').map(c => <SelectItem key={c.code} value={c.code}>{c.value}</SelectItem>)}
                 </SelectContent>
 
