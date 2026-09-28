@@ -364,12 +364,7 @@ export function SalesModule() {
                             <div key={s.id} className={cn(idx > 0 && 'mt-1.5 pt-1.5 border-t border-dashed border-border/40')}>
                               <div className="flex items-center gap-1.5">
                                 <p className="font-medium">{s.stockItem.title}</p>
-                                {s.stockItem.size && (
-                                  <span className="text-[10px] text-muted-foreground">· {s.stockItem.size}</span>
-                                )}
-                                {s.stockItem.color && (
-                                  <span className="text-[10px] text-muted-foreground">· {s.stockItem.color}</span>
-                                )}
+                               
                               </div>
                               <p className="text-xs text-muted-foreground font-mono">{s.stockItem.sku}</p>
                             </div>
