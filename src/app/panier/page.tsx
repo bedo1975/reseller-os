@@ -10,6 +10,7 @@ import { useBoutiqueSettings } from '@/hooks/use-boutique-settings'
 interface CartItem {
   sku: string
   brand: string
+  title: string
   category: string
   size?: string | null
   color?: string | null
@@ -83,7 +84,7 @@ function CartPage() {
           const effectivePrice = data.offeredPrice
 
           // Apply the price to the matching item in the cart
-          const updatedCart = c.map(item => {
+          let updatedCart = c.map(item => {
             if (item.sku === data.sku) {
               return { ...item, offerPrice: effectivePrice, qty: 1 }
             }
@@ -95,6 +96,7 @@ function CartPage() {
             updatedCart.push({
               sku: data.sku,
               brand: data.brand,
+              title: data.title || '',
               category: data.category || 'vetements',
               size: data.size || null,
               color: data.color || null,
@@ -125,6 +127,7 @@ function CartPage() {
                 updatedCart.push({
                   sku: li.sku,
                   brand: li.brand,
+                  title: li.title || '',
                   category: li.category || 'vetements',
                   size: li.size || null,
                   color: li.color || null,
@@ -277,8 +280,9 @@ function CartPage() {
                   href={`/produit/${item.sku}`}
                   className="text-sm font-medium text-gray-900 hover:text-[#007bff] line-clamp-1"
                 >
-                  {CATEGORY_LABELS[item.category] || item.category}
-                  {item.size && ` · Taille ${item.size}`}
+                                   {[item.title || CATEGORY_LABELS[item.category] || item.category, item.size ? `Taille ${item.size}` : null]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </Link>
                 {item.color && <p className="text-xs text-gray-500 mt-0.5">{item.color}</p>}
                 <p className="text-sm font-bold text-[#007bff] mt-1">

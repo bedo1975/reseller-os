@@ -290,6 +290,7 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
         cart.push({
           sku: product.sku,
           brand: product.brand,
+          title: product.title || '',
           category: product.category,
           size: product.size,
           color: product.color,

@@ -117,6 +117,7 @@ export function BoutiqueAdminModule() {
 interface OrderItem {
   sku: string
   brand: string
+  title:  string
   category: string
   size?: string | null
   color?: string | null
@@ -187,6 +188,7 @@ function OrdersTab() {
   const [prepareItems, setPrepareItems] = useState<Array<{
     sku: string
     brand: string
+    title: string
     category: string
     size: string | null
     color: string | null
@@ -365,6 +367,7 @@ function OrdersTab() {
     setPrepareItems(order.items.map(it => ({
       sku: it.sku,
       brand: it.brand,
+      title: it.title,
       category: it.category,
       size: it.size || null,
       color: it.color || null,
@@ -636,7 +639,8 @@ function OrdersTab() {
                   <div className="space-y-1 mb-3 pb-3 border-b">
                     {order.items.map((item, i) => (
                       <div key={i} className="flex justify-between text-xs">
-                        <span>{item.brand} · {CATEGORY_LABELS[item.category] || item.category}{item.size && ` · ${item.size}`}{item.qty > 1 && ` ×${item.qty}`}</span>
+                      
+                        <span>{item.brand} - {item.title}<p> Taille : {item.size}</p> {item.qty > 1 && ` ×${item.qty}`}</span>
                         <span className="font-medium">{(item.price * item.qty).toFixed(2)} €</span>
                       </div>
                     ))}

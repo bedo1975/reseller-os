@@ -204,7 +204,7 @@ export async function GET(
       <tr>
         <td class="check-col"><span class="checkbox"></span></td>
         <td>
-          <strong>${escapeHtml(item.brand || '')}</strong> ${escapeHtml(item.category || '')}
+          <strong>${escapeHtml(item.title || '')}</strong> 
           ${item.size ? '<br><span style="font-size:11px; color:#666;">Taille : ' + escapeHtml(item.size) + '</span>' : ''}
           ${item.color ? '<br><span style="font-size:11px; color:#666;">Couleur : ' + escapeHtml(item.color) + '</span>' : ''}
           ${truncatedDesc ? '<br><span style="font-size:11px; color:#666; font-style:italic;">' + escapeHtml(truncatedDesc) + '</span>' : ''}

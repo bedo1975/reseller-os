@@ -34,6 +34,7 @@ function RelayMap(props: React.ComponentProps<typeof RelayMapInner>) {
 interface CartItem {
   sku: string
   brand: string
+  title: string
   category: string
   size?: string | null
   color?: string | null
@@ -329,7 +330,7 @@ export default function CheckoutPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer: form,
-          items: cart.map(i => ({ sku: i.sku, qty: i.qty, price: i.offerPrice ?? i.price })),
+          items: cart.map(i => ({ sku: i.sku, title: i.title, qty: i.qty, price: i.offerPrice ?? i.price })),
           shippingMethodCode: shippingMethod,
           shippingCost: shipping,
           paymentMethodCode: paymentMethod,
@@ -376,7 +377,7 @@ export default function CheckoutPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer: form,
-          items: cart.map(i => ({ sku: i.sku, qty: i.qty, price: i.offerPrice ?? i.price })),
+          items: cart.map(i => ({ sku: i.sku, title: i.title, qty: i.qty, price: i.offerPrice ?? i.price })),
           shippingMethodCode: shippingMethod,
           shippingCost: shipping,
           paymentMethodCode: paymentMethod,
@@ -612,8 +613,8 @@ export default function CheckoutPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-gray-500 uppercase">{item.brand}</p>
                     <p className="text-sm text-gray-900 truncate">
-                      {CATEGORY_LABELS[item.category] || item.category}
-                      {item.size && ` · ${item.size}`}
+                     
+                      {item.title && ` · ${item.title}`}
                     </p>
                     <p className="text-xs text-gray-500">Quantité : {item.qty}</p>
                   </div>

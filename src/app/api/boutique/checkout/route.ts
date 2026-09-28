@@ -244,6 +244,7 @@ export async function POST(req: NextRequest) {
 
       orderItems.push({
         sku: item.sku,
+        title: item.title,
         brand: stockItem.brand,
         category: stockItem.category,
         size: stockItem.size,
