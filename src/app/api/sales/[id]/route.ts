@@ -82,6 +82,7 @@ export async function PATCH(
           // Update items array with the new price
           orderUpdate.items = JSON.stringify([{
             sku: sale.stockItem.sku,
+            title: sale.stockItem.title || null,
             brand: sale.stockItem.brand,
             category: sale.stockItem.category,
             size: sale.stockItem.size || null,

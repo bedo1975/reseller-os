@@ -6395,3 +6395,45 @@ Stage Summary:
 - 1 fichier modifié : src/components/modules/sales-module.tsx
 - Un seul endroit pour gérer les transporteurs : Paramètres → Attributs
 - Nouveaux transporteurs automatiquement disponibles dans les ventes
+
+---
+Task ID: seo-jsonld-enrichi
+Agent: main
+Task: Enrichir le JSON-LD des fiches produits (Search Console : champs manquants)
+
+Work Log:
+- Ajout stripHtmlTags() : description texte sans HTML pour Google
+- JSON-LD enrichi dans src/app/produit/[sku]/page.tsx :
+  + description (vraie description ou fallback marque/taille/couleur)
+  + hasMerchantReturnPolicy : 14 jours, retour postal, gratuit (FR)
+  + shippingDetails : 3,50 EUR ou 0 si livraison gratuite activée,
+    expédition 0-1j + livraison 2-4j, destination FR
+- Les 3 messages "non critiques" de la Search Console corrigés
+- aggregateRating / review : NON ajoutés — exigent de vrais avis clients
+  (interdit de fabriquer, Google sanctionne). À brancher quand les
+  premiers avis tomberont (module ReviewsSection déjà en place)
+
+Stage Summary:
+- 1 fichier modifié : src/app/produit/[sku]/page.tsx
+- Validation : search.google.com/test/rich-results → OK
+- Bonus : les infos livraison/retour soutiennent aussi le dossier
+  de révision Merchant Center en cours
+
+  ---
+Task ID: sales-order-item-title
+Agent: main
+Task: Afficher le nom du produit dans les commandes issues du module vente
+
+Work Log:
+- Diagnostic : les commandes boutique incluent item.title, mais celles créées
+  par le module vente enregistraient les items SANS title (JSON figé sans le champ)
+- POST /api/sales : ajout title: item.title || null dans orderItems
+- PATCH /api/sales/[id] : ajout title: sale.stockItem.title || null dans la
+  resynchronisation orderUpdate.items (le title était perdu à chaque édition de prix)
+- Commandes existantes non rétro-corrigées (JSON figé en base) — sans gravité
+
+Stage Summary:
+- 2 fichiers modifiés : src/app/api/sales/route.ts + [id]/route.ts
+- Nouvelles ventes : titre présent · éditions de ventes : titre conservé
+- Reste en attente : migration du CARRIERS.find() en dur dans le PATCH
+  (libellé transporteur dans shippingMethod) vers les attributs configurables

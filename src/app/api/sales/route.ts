@@ -166,6 +166,7 @@ export async function POST(req: NextRequest) {
       // Items: array of order line items (matching BoutiqueOrder.items JSON schema)
       const orderItems = [{
         sku: item.sku,
+          title: item.title || null,
         brand: item.brand,
         category: item.category,
         size: item.size || null,
