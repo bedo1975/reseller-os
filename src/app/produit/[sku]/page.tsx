@@ -75,6 +75,11 @@ function isDescriptionHtml(s: string): boolean {
   return /<[a-z][\s\S]*>/i.test(s)
 }
 
+// Description texte pour Google (sans HTML)
+function stripHtmlTags(s: string): string {
+  return s.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 export default function ProductPage({ params }: { params: Promise<{ sku: string }> }) {
   const { sku } = use(params)
   const router = useRouter()
@@ -240,10 +245,21 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
     if (product.mainPhoto) setOg('og:image', product.mainPhoto)
 
     // JSON-LD structured data — tells Google this is a Product (rich results in search)
+       // Description texte pour Google (HTML retiré, 500 caractères max)
+    const plainDescription = product.description
+      ? stripHtmlTags(product.description).slice(0, 500)
+      : `${product.brand} · ${product.title || CATEGORY_LABELS[product.category] || product.category}${product.size ? ` · Taille ${product.size}` : ''}${product.color ? ` · ${product.color}` : ''} — seconde main contrôlée.`
+
+    // Frais de livraison : gratuits si activé et seuil atteint, sinon tarif standard
+    const freeShipping = settings.freeShippingEnabled === true
+      && (product.price ?? 0) >= (settings.freeShippingThreshold || 50)
+    const shippingRate = freeShipping ? 0 : 3.50
+
     const jsonLd = {
       '@context': 'https://schema.org',
       '@type': 'Product',
       name: productLabel,
+      description: plainDescription,
       brand: { '@type': 'Brand', name: product.brand },
       category: product.category,
       ...(product.size && { size: product.size }),
@@ -257,6 +273,24 @@ export default function ProductPage({ params }: { params: Promise<{ sku: string 
           ? 'https://schema.org/InStock'
           : 'https://schema.org/OutOfStock',
         itemCondition: `https://schema.org/${product.condition === 'neuf' ? 'NewCondition' : 'UsedCondition'}`,
+        hasMerchantReturnPolicy: {
+          '@type': 'MerchantReturnPolicy',
+          applicableCountry: 'FR',
+          returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+          merchantReturnDays: 14,
+          returnMethod: 'https://schema.org/ReturnByMail',
+          returnFees: 'https://schema.org/FreeReturn',
+        },
+        shippingDetails: {
+          '@type': 'OfferShippingDetails',
+          shippingRate: { '@type': 'MonetaryAmount', value: shippingRate, currency: 'EUR' },
+          shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'FR' },
+          deliveryTime: {
+            '@type': 'ShippingDeliveryTime',
+            handlingTime: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' },
+            transitTime: { '@type': 'QuantitativeValue', minValue: 2, maxValue: 4, unitCode: 'DAY' },
+          },
+        },
       },
     }
     let script = document.getElementById('product-jsonld') as HTMLScriptElement | null
