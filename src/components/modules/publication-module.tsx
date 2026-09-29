@@ -55,6 +55,7 @@ interface StockItem {
   barcode: string | null
   photos: string
   brand: string
+  title: string | null
   category: string
   size: string | null
   color: string | null
@@ -361,7 +362,7 @@ export function PublicationModule() {
                   <TableHead className="w-12"></TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Marque</TableHead>
-                  <TableHead className="hidden md:table-cell">Description</TableHead>
+                  <TableHead className="hidden md:table-cell">Produit</TableHead>
                   <TableHead className="hidden lg:table-cell">Taille</TableHead>
                   <TableHead className="hidden lg:table-cell">Couleur</TableHead>
                   <TableHead className="text-right">Coût</TableHead>
@@ -416,7 +417,7 @@ export function PublicationModule() {
                         )}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-xs text-muted-foreground max-w-[200px] truncate">
-                        {item.description || '—'}
+                        {item.title || '—'}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-xs">{item.size || '—'}</TableCell>
                       <TableCell className="hidden lg:table-cell text-xs">{item.color || '—'}</TableCell>

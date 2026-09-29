@@ -251,12 +251,17 @@ export function ParcelsModule() {
                             <div key={sale.id} className={cn(idx > 0 && 'mt-1 pt-1 border-t border-dashed border-border/40')}>
                               <div className="flex items-center gap-1.5">
                                 <span className="font-medium">{sale.stockItem.brand}</span>
-                                {sale.stockItem.size && (
-                                  <span className="text-[10px] text-muted-foreground">· {sale.stockItem.size}</span>
+                           {sale.stockItem.title && (
+                                  <span className="text-[10px] text-muted-foreground">· {sale.stockItem.title}</span>
                                 )}
-                                {sale.stockItem.color && (
-                                  <span className="text-[10px] text-muted-foreground">· {sale.stockItem.color}</span>
-                                )}
+                           
+                            {//    {sale.stockItem.size && (
+                            //      <span className="text-[10px] text-muted-foreground">· {sale.stockItem.size}</span>
+                            //    )}
+                            //    {sale.stockItem.color && (
+                            //      <span className="text-[10px] text-muted-foreground">· {sale.stockItem.color}</span>
+                            //    )} 
+                            }
                               </div>
                               <div className="font-mono text-[10px] text-muted-foreground">{sale.stockItem.sku}</div>
                             </div>
