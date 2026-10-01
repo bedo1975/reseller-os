@@ -488,6 +488,18 @@ function OrdersTab() {
     }
   }
 
+// Commandes déroulées (collapse) — Set des orderId ouverts
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set())
+
+  const toggleOrder = (orderId: string) => {
+    setExpandedOrders(prev => {
+      const next = new Set(prev)
+      if (next.has(orderId)) next.delete(orderId)
+      else next.add(orderId)
+      return next
+    })
+  }
+
   if (loading) {
     return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>
   }
@@ -616,125 +628,137 @@ function OrdersTab() {
           {filtered.map(order => {
             const status = STATUS_OPTIONS.find(s => s.value === order.status) || STATUS_OPTIONS[0]
             return (
-              <Card key={order.id}>
+            
+                        <Card key={order.id}>
                 <CardContent className="p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <code className="text-xs font-mono font-semibold bg-muted px-2 py-0.5 rounded">{order.orderId}</code>
-                        <Badge className={status.color}>{status.label}</Badge>
-                      </div>
-                      <p className="text-sm font-medium">{order.clientName}</p>
-                      <p className="text-xs text-muted-foreground">{order.clientEmail}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-primary">{formatEUR(order.total)}</p>
-                      <p className="text-xs text-muted-foreground">{order.items.length} article(s)</p>
-                      {order.paymentMethod && <p className="text-xs text-muted-foreground">{order.paymentMethod}</p>}
-                    </div>
-                  </div>
-
-                  {/* Items */}
-                  <div className="space-y-1 mb-3 pb-3 border-b">
-                    {order.items.map((item, i) => (
-                      <div key={i} className="flex justify-between text-xs">
-                      
-                        <span>{item.brand} - {item.title}<p> Taille : {item.size}</p> {item.qty > 1 && ` ×${item.qty}`}</span>
-                        <span className="font-medium">{(item.price * item.qty).toFixed(2)} €</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Totals (with optional coupon) */}
-                  <div className="space-y-1 mb-3 pb-3 border-b text-xs">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Sous-total</span>
-                      <span>{formatEUR(order.subtotal)}</span>
-                    </div>
-                    {order.couponCode && order.discountAmount > 0 && (
-                      <div className="flex justify-between text-green-700">
-                        <span className="flex items-center gap-1">
-                          <TicketPercent className="h-3 w-3" /> Coupon <code className="font-mono">{order.couponCode}</code>
-                        </span>
-                        <span>−{order.discountAmount.toFixed(2)} €</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Livraison ({order.shippingMethod})</span>
-                      <span>{order.shippingCost === 0 ? 'Gratuite' : formatEUR(order.shippingCost)}</span>
-                    </div>
-                    <div className="flex justify-between font-semibold pt-1">
-                      <span>Total</span>
-                      <span>{formatEUR(order.total)}</span>
-                    </div>
-                  </div>
-
-                  {/* Platform + carrier + payment badges — quick visual indicators */}
-                  <div className="flex flex-wrap gap-1 mb-3">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300" title={`Plateforme : ${platformLabel(order.platform || 'boutique')}`}>
-                      <Store className="h-3 w-3" /> {platformLabel(order.platform || 'boutique')}
+                  {/* ─── Ligne compacte (toujours visible) ─── */}
+                  <button
+                    type="button"
+                    onClick={() => toggleOrder(order.orderId)}
+                    className="w-full flex items-center gap-3 text-left group"
+                  >
+                    <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expandedOrders.has(order.orderId) ? 'rotate-180' : ''}`} />
+                    <code className="text-xs font-mono font-semibold bg-muted px-2 py-0.5 rounded shrink-0">{order.orderId}</code>
+                    <Badge className={status.color}>{status.label}</Badge>
+                    <span className="text-sm font-medium truncate">{order.clientName}</span>
+                    <span className="text-xs text-muted-foreground truncate hidden sm:inline">
+                      {order.items.length === 1
+                        ? `${order.items[0].brand}${order.items[0].title ? ` — ${order.items[0].title}` : ''}`
+                        : `${order.items[0].brand}${order.items[0].title ? ` — ${order.items[0].title}` : ''} +${order.items.length - 1} autre(s)`}
                     </span>
-                    {(() => {
-                      const c = orderCarrier(order)
-                      const carrierLabel = c === 'autre'
-                        ? 'Transporteur inconnu'
-                        : (carriers.find(x => x.code === c)?.value || c)
-                      return (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300" title={`Transporteur : ${carrierLabel}`}>
-                          <Truck className="h-3 w-3" /> {carrierLabel}
-                        </span>
-                      )
-                    })()}
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" title={`Moyen de paiement : ${order.paymentMethod || 'Aucun'}`}>
-                      <CreditCard className="h-3 w-3" /> {order.paymentMethod || 'Aucun'}
-                    </span>
-                  </div>
+                    <span className="ml-auto text-sm font-bold text-primary shrink-0">{formatEUR(order.total)}</span>
+                  </button>
 
-                  {/* Invoices */}
-                  {order.invoiceNumbers.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {order.invoiceNumbers.map(n => (
-                        <span key={n} className="font-mono text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{n}</span>
-                      ))}
+                  {/* ─── Contenu déroulant ─── */}
+                  {expandedOrders.has(order.orderId) && (
+                    <div className="mt-3 pt-3 border-t space-y-3">
+                      {/* Détails client */}
+                      <div>
+                        <p className="text-xs text-muted-foreground">{order.clientEmail}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</p>
+                      </div>
+
+                      {/* Items */}
+                      <div className="space-y-1 pb-3 border-b">
+                        {order.items.map((item, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span>{item.brand} - {item.title}<p> Taille : {item.size}</p> {item.qty > 1 && ` ×${item.qty}`}</span>
+                            <span className="font-medium">{(item.price * item.qty).toFixed(2)} €</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Totals (with optional coupon) */}
+                      <div className="space-y-1 pb-3 border-b text-xs">
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Sous-total</span>
+                          <span>{formatEUR(order.subtotal)}</span>
+                        </div>
+                        {order.couponCode && order.discountAmount > 0 && (
+                          <div className="flex justify-between text-green-700">
+                            <span className="flex items-center gap-1">
+                              <TicketPercent className="h-3 w-3" /> Coupon <code className="font-mono">{order.couponCode}</code>
+                            </span>
+                            <span>−{order.discountAmount.toFixed(2)} €</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Livraison ({order.shippingMethod})</span>
+                          <span>{order.shippingCost === 0 ? 'Gratuite' : formatEUR(order.shippingCost)}</span>
+                        </div>
+                        <div className="flex justify-between font-semibold pt-1">
+                          <span>Total</span>
+                          <span>{formatEUR(order.total)}</span>
+                        </div>
+                      </div>
+
+                      {/* Platform + carrier + payment badges */}
+                      <div className="flex flex-wrap gap-1">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300" title={`Plateforme : ${platformLabel(order.platform || 'boutique')}`}>
+                          <Store className="h-3 w-3" /> {platformLabel(order.platform || 'boutique')}
+                        </span>
+                        {(() => {
+                          const c = orderCarrier(order)
+                          const carrierLabel = c === 'autre'
+                            ? 'Transporteur inconnu'
+                            : (carriers.find(x => x.code === c)?.value || c)
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300" title={`Transporteur : ${carrierLabel}`}>
+                              <Truck className="h-3 w-3" /> {carrierLabel}
+                            </span>
+                          )
+                        })()}
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" title={`Moyen de paiement : ${order.paymentMethod || 'Aucun'}`}>
+                          <CreditCard className="h-3 w-3" /> {order.paymentMethod || 'Aucun'}
+                        </span>
+                      </div>
+
+                      {/* Invoices */}
+                      {order.invoiceNumbers.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {order.invoiceNumbers.map(n => (
+                            <span key={n} className="font-mono text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{n}</span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      <div className="flex gap-2 flex-wrap">
+                        <Button size="sm" variant="outline" onClick={() => openEdit(order)}>
+                          <Edit className="h-3.5 w-3.5 mr-1" /> Modifier statut
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                          onClick={() => window.open(`/api/boutique/admin/orders/${order.id}/preparation`, '_blank')}
+                        >
+                          <Package className="h-3.5 w-3.5 mr-1" /> Bon de préparation
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-teal-300 text-teal-700 hover:bg-teal-50"
+                          onClick={() => openPrepare(order)}
+                          disabled={order.status === 'cancelled' || order.status === 'ready_to_ship' || order.status === 'shipped' || order.status === 'delivered'}
+                          title={
+                            order.status === 'ready_to_ship' ? 'Commande déjà marquée prête'
+                            : order.status === 'shipped' ? 'Commande déjà expédiée'
+                            : order.status === 'delivered' ? 'Commande déjà livrée'
+                            : order.status === 'cancelled' ? 'Commande annulée'
+                            : 'Vérifier les articles par scan de code-barres'
+                          }
+                        >
+                          <PackageCheck className="h-3.5 w-3.5 mr-1" /> Préparer la commande
+                        </Button>
+                        {can('boutique-admin', 'delete') && (
+                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => deleteOrder(order.id)}>
+                            <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )}
-
-                  {/* Actions */}
-                  <div className="flex gap-2 flex-wrap">
-                    <Button size="sm" variant="outline" onClick={() => openEdit(order)}>
-                      <Edit className="h-3.5 w-3.5 mr-1" /> Modifier statut
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                      onClick={() => window.open(`/api/boutique/admin/orders/${order.id}/preparation`, '_blank')}
-                    >
-                      <Package className="h-3.5 w-3.5 mr-1" /> Bon de préparation
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-teal-300 text-teal-700 hover:bg-teal-50"
-                      onClick={() => openPrepare(order)}
-                      disabled={order.status === 'cancelled' || order.status === 'ready_to_ship' || order.status === 'shipped' || order.status === 'delivered'}
-                      title={
-                        order.status === 'ready_to_ship' ? 'Commande déjà marquée prête'
-                        : order.status === 'shipped' ? 'Commande déjà expédiée'
-                        : order.status === 'delivered' ? 'Commande déjà livrée'
-                        : order.status === 'cancelled' ? 'Commande annulée'
-                        : 'Vérifier les articles par scan de code-barres'
-                      }
-                    >
-                      <PackageCheck className="h-3.5 w-3.5 mr-1" /> Préparer la commande
-                    </Button>
-                    {can('boutique-admin', 'delete') && (
-                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => deleteOrder(order.id)}>
-                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer
-                      </Button>
-                    )}
-                  </div>
                 </CardContent>
               </Card>
             )

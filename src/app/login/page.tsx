@@ -78,7 +78,7 @@ export default function LoginPage() {
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-500/20 mb-3">
             <Store className="h-7 w-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Reseller OS</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Junashop OS</h1>
           <p className="text-sm text-muted-foreground mt-1">Multi-plateformes · Vinted, Leboncoin, eBay, Vestiaire</p>
         </div>
 
